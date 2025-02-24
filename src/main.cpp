@@ -52,10 +52,27 @@ const int JOYSTICK_RANGE = JOYSTICK_MAX / 2; // Half range for -100% to 100%
 /**************************************************************************
  *  Global Variables and Objects
  **************************************************************************/
+// joystick control signals
+bool joystick_control_active = false;
+bool joystick_error_flag = false;
+
+const float torque_ramp_accel = 20.0;        // torque acceleration ramp per 10ms
+const float torque_ramp_decell = 10.0;       // torque deceleration ramp per 10ms
+const float torque_max = 1000.0;             // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
+const float torque_min = -400.0;             // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
+const float torque_zero_space = 5.0;         // First 5% of joystick are zero zone in both directions
+const float torque_regen_cutoff_rpm = 300.0; // When the motor rpm is below this , cutoff any negative torque regen
+float torque_theoretical = 0.0;              // torque request before ramping
+float torque_request_internal = 0.0;         // torque request, before putting max on it
+float torque_request_calculated = 0.0;       // final torque before putting out to can
+
+// iMiev original signals
 float brake_pedal_position = 0.0;         // Scale factor: 0.39216
 float accelerator_pedal_percentage = 0.0; // Scale factor: 0.4
 char gear_selection = ' ';                // Default empty
 int torque_request = 0;
+bool brake_pedal_switch = 0;
+int motor_rpm = 0;
 
 byte torque_request_byte_0 = 0;
 byte torque_request_byte_1 = 0;
@@ -67,15 +84,18 @@ Scheduler runner;
  **************************************************************************/
 void pollCAN();
 void blinkLED();
-void printCANData();
+void printStatus();
+void control_dynamics();
 void control_brake();
+void control_acceleration();
+void pollJoystick();
 
 /**************************************************************************
  *  Task Definitions
  **************************************************************************/
 Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
-Task taskPrintStatus(1000, TASK_FOREVER, &printCANData, &runner, true);
-Task taskBrakeControl(10, TASK_FOREVER, &control_brake, &runner, true);
+Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
+Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
 
 //---------------------------------------------------------------------------
 // Blacklist Array: Uncomment an ID to block it from being forwarded.
@@ -187,7 +207,14 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     // if (physicalAcceleration < 0) {
     //     physicalAcceleration = 0;
     // }
-    physicalAcceleration = physicalAcceleration * 1.0;
+
+    // if (physicalAcceleration < 0)
+    // {
+    //     if (outFrame.data[7] == 0x10)
+    //     {
+    //         physicalAcceleration = physicalAcceleration * 3;
+    //     }
+    // }
 
     // 5) Convert back to raw: raw = physical + 2000
     rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
@@ -228,10 +255,22 @@ void pollCAN()
         // Check if this message needs manipulation.
         if (frame.id == 0x288) // Motor Control functions
         {
+            // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
+            uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
+            // Convert raw value to physical value using scale = 1 and offset = -10000.
+            // That is, physical_rpm = rawRpm - 10000.
+            motor_rpm = (int16_t)rawRpm - 10000;
+
             CANMessage outFrame;
             manipulate_0x288(frame, outFrame);
             can2.tryToSend(outFrame);
             sendFrameToUSB(outFrame, 0);
+        }
+        else if (frame.id == 0x231)
+        { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
+            // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
+            // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
+            brake_pedal_switch = ((int8_t)frame.data[4] > 0);
         }
         else
         {
@@ -284,8 +323,15 @@ void blinkLED()
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
-//   Task: Poll Joystick (Every 10ms)
+//   Control Vehicle Dynamics (Every 10ms)
 // ——————————————————————————————————————————————————————————————————————————————
+void control_dynamics()
+{
+    pollJoystick();
+    control_brake();
+    control_acceleration();
+}
+
 void pollJoystick()
 {
     rawJoystickX = analogRead(JOYSTICK_X_PIN); // Read X-axis
@@ -300,8 +346,100 @@ void pollJoystick()
     processedJoystickY = constrain(processedJoystickY, -100, 100);
 }
 
-// Task Function: Print interpreted CAN data to the monitor port.
-void printCANData()
+void control_brake()
+{
+    // brake_servo.write(processedJoystickY * 1.8);
+}
+
+void control_acceleration()
+{
+    //  Overall control principle
+    //  -5% to 5% joystick -> zero acceleration -> ramp up regen to torque min, when motor rpm is below torque_regen_cutoff_rpm put torque to zero
+    //  > 5% joystick -> acceleration -> ramp up to torque_theoretical which is depending on the joystick position
+
+    // we need motor speed additional
+    if ((joystick_error_flag == false) && (joystick_control_active == true))
+    {
+        if (processedJoystickY > torque_zero_space) // Acceleration
+        {
+            torque_theoretical = (processedJoystickY - torque_zero_space) * torque_max;
+            torque_theoretical = torque_theoretical * 100.0 / (100.0 - torque_zero_space); // Correct for reduced joystick movement
+
+            // now ramping consideration
+            if (torque_request_internal < torque_theoretical)
+            {
+                torque_request_internal = torque_request_internal + torque_ramp_accel;
+            }
+            else
+            {
+                torque_request_internal = torque_request_internal - torque_ramp_accel;
+            }
+
+            // clamp to max values
+            if (torque_request_internal > torque_max)
+            {
+                torque_request_internal = torque_max;
+            }
+            if (torque_request_internal < torque_min)
+            {
+                torque_request_internal = torque_min;
+            }
+        }
+        else // Regen
+        {
+            if (motor_rpm > torque_regen_cutoff_rpm)
+            {
+                if (torque_request_internal > 0)
+                {
+                    torque_request_internal = torque_request_internal - torque_ramp_accel;
+                }
+                else
+                {
+                    torque_request_internal = torque_request_internal - torque_ramp_decell;
+                }
+            }
+            else
+            {
+                torque_request_internal = 0.0;
+            }
+
+            if (processedJoystickY < (torque_zero_space * -1))
+            {
+                // This is to add physical braking later
+            }
+
+            // clamp to max values
+            if (torque_request_internal > torque_max)
+            {
+                torque_request_internal = torque_max;
+            }
+            if (torque_request_internal < torque_min)
+            {
+                torque_request_internal = torque_min;
+            }
+        }
+
+        // clamp to max values again for extra safety
+        torque_request_calculated = torque_request_internal;
+        if (torque_request_calculated > torque_max)
+        {
+            torque_request_calculated = torque_max;
+        }
+        if (torque_request_calculated < torque_min)
+        {
+            torque_request_calculated = torque_min;
+        }
+    }
+    else
+    {
+        torque_request_calculated = 0.0;
+    }
+}
+
+// ——————————————————————————————————————————————————————————————————————————————
+//   Print Status (Every 500ms)
+// ——————————————————————————————————————————————————————————————————————————————
+void printStatus()
 {
     MONITOR_PORT.print("Brake Pedal: ");
     MONITOR_PORT.print(brake_pedal_position, 2);
@@ -311,12 +449,6 @@ void printCANData()
     MONITOR_PORT.print(accelerator_pedal_percentage, 2);
     MONITOR_PORT.print(" | Gear: ");
     MONITOR_PORT.println(gear_selection);
-}
-
-void control_brake()
-{
-    pollJoystick();
-    brake_servo.write(processedJoystickY * 1.8);
 }
 
 /**************************************************************************
