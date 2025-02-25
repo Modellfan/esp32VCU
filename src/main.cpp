@@ -49,6 +49,14 @@ const int JOYSTICK_MIN = 0;                  // Minimum raw ADC value
 const int JOYSTICK_MAX = 4095;               // Maximum raw ADC value
 const int JOYSTICK_RANGE = JOYSTICK_MAX / 2; // Half range for -100% to 100%
 
+// ——————————————————————————————————————————————————————————————————————————————
+//   Emergency Button Configuration
+// ——————————————————————————————————————————————————————————————————————————————
+// The emergency button is connected to pin 15.
+// Using INPUT_PULLUP makes it active low (pressed = LOW).
+const int EMERGENCY_BUTTON_PIN = 18;
+bool emergencyButtonPressed = false;
+
 /**************************************************************************
  *  Global Variables and Objects
  **************************************************************************/
@@ -59,12 +67,16 @@ bool joystick_error_flag = false;
 const float torque_ramp_accel = 20.0;        // torque acceleration ramp per 10ms
 const float torque_ramp_decell = 10.0;       // torque deceleration ramp per 10ms
 const float torque_max = 1000.0;             // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
-const float torque_min = -400.0;             // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
+const float torque_min = -800.0;             // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
 const float torque_zero_space = 5.0;         // First 5% of joystick are zero zone in both directions
 const float torque_regen_cutoff_rpm = 300.0; // When the motor rpm is below this , cutoff any negative torque regen
 float torque_theoretical = 0.0;              // torque request before ramping
 float torque_request_internal = 0.0;         // torque request, before putting max on it
 float torque_request_calculated = 0.0;       // final torque before putting out to can
+
+const float brake_factor = 180;  // 100% of joystick times this factor gives the degree for the servo
+const float brake_offset = 30.0; // offset in degree. can also be negative
+float brake_calculated = 0.0;
 
 // iMiev original signals
 float brake_pedal_position = 0.0;         // Scale factor: 0.39216
@@ -83,10 +95,11 @@ Scheduler runner;
  *  Function Prototypes
  **************************************************************************/
 void pollCAN();
+void manipulateCAN();
+void passthroughCAN();
 void blinkLED();
 void printStatus();
 void control_dynamics();
-void control_brake();
 void control_acceleration();
 void pollJoystick();
 
@@ -216,6 +229,15 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     //     }
     // }
 
+    if (joystick_control_active)
+    {
+        physicalAcceleration = torque_request_calculated;
+    }
+    else
+    {
+        physicalAcceleration = 0;
+    }
+
     // 5) Convert back to raw: raw = physical + 2000
     rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
 
@@ -242,7 +264,7 @@ void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
 /**************************************************************************
  *  CAN Bus and Task Functions
  **************************************************************************/
-void pollCAN()
+void manipulateCAN()
 {
     CANMessage frame;
 
@@ -316,6 +338,103 @@ void pollCAN()
     }
 }
 
+void passthroughCAN()
+{
+    CANMessage frame;
+
+    // -------------------------------------------------------------
+    // Handle messages from CAN1
+    // -------------------------------------------------------------
+    if (can.available()) // CAN 0 in savvycan is motor can
+    {
+        can.receive(frame);
+        // Check if this message needs manipulation.
+        if (frame.id == 0x288) // Motor Control functions
+        {
+            // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
+            uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
+            // Convert raw value to physical value using scale = 1 and offset = -10000.
+            // That is, physical_rpm = rawRpm - 10000.
+            motor_rpm = (int16_t)rawRpm - 10000;
+        }
+        else
+        {
+        }
+        can2.tryToSend(frame);
+        sendFrameToUSB(frame, 0);
+    }
+
+    // -------------------------------------------------------------
+    // Handle messages from CAN2
+    // -------------------------------------------------------------
+    if (can2.available())
+    {
+        can2.receive(frame);
+
+        // Interpret messages based on their ID.
+        if (frame.id == 0x208)
+        { // Wheel Rotation, Brake Position
+            uint8_t raw_brake_value = frame.data[3];
+            brake_pedal_position = raw_brake_value * 0.39216;
+        }
+        else if (frame.id == 0x210)
+        { // Accelerator Pedal Percentage
+            uint8_t raw_accel_value = frame.data[2];
+            accelerator_pedal_percentage = raw_accel_value * 0.4;
+        }
+        else if (frame.id == 0x231)
+        { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
+            // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
+            // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
+            brake_pedal_switch = ((int8_t)frame.data[4] > 0);
+        }
+        else if (frame.id == 0x418)
+        { // Gear Shift Selection
+            switch (frame.data[0])
+            {
+            case 0x50:
+                gear_selection = 'P';
+                break;
+            case 0x52:
+                gear_selection = 'R';
+                break;
+            case 0x4E:
+                gear_selection = 'N';
+                break;
+            case 0x44:
+                gear_selection = 'D';
+                break;
+            case 0x83:
+                gear_selection = 'B';
+                break;
+            case 0x32:
+                gear_selection = 'C';
+                break;
+            default:
+                gear_selection = '?';
+                break;
+            }
+        }
+
+        // Always forward to USB (for logging / GVRET).
+        sendFrameToUSB(frame, 1);
+        can.tryToSend(frame);
+        sendFrameToUSB(frame, 2);
+    }
+}
+
+void pollCAN()
+{
+    if (emergencyButtonPressed)
+    {
+        passthroughCAN();
+    }
+    else
+    {
+        manipulateCAN();
+    }
+}
+
 // Task Function: Toggle the built-in LED.
 void blinkLED()
 {
@@ -328,7 +447,6 @@ void blinkLED()
 void control_dynamics()
 {
     pollJoystick();
-    control_brake();
     control_acceleration();
 }
 
@@ -344,11 +462,10 @@ void pollJoystick()
     // Constrain values to -100% to 100%
     processedJoystickX = constrain(processedJoystickX, -100, 100);
     processedJoystickY = constrain(processedJoystickY, -100, 100);
-}
 
-void control_brake()
-{
-    // brake_servo.write(processedJoystickY * 1.8);
+    // Read the emergency button (active low, hence pressed = LOW)
+    emergencyButtonPressed = (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
+    joystick_control_active = !emergencyButtonPressed;
 }
 
 void control_acceleration()
@@ -363,7 +480,7 @@ void control_acceleration()
         if (processedJoystickY > torque_zero_space) // Acceleration
         {
             torque_theoretical = (processedJoystickY - torque_zero_space) * torque_max;
-            torque_theoretical = torque_theoretical * 100.0 / (100.0 - torque_zero_space); // Correct for reduced joystick movement
+            torque_theoretical = torque_theoretical / (100.0 - torque_zero_space); // Correct for reduced joystick movement
 
             // now ramping consideration
             if (torque_request_internal < torque_theoretical)
@@ -387,6 +504,7 @@ void control_acceleration()
         }
         else // Regen
         {
+            torque_theoretical = 0;
             if (motor_rpm > torque_regen_cutoff_rpm)
             {
                 if (torque_request_internal > 0)
@@ -434,21 +552,48 @@ void control_acceleration()
     {
         torque_request_calculated = 0.0;
     }
+
+    if (processedJoystickY < (torque_zero_space * -1))
+    {
+        brake_calculated = processedJoystickY * -1.0 / (100.0 - torque_zero_space);
+    }
+    else
+    {
+        brake_calculated = 0;
+    }
+    brake_servo.write(brake_calculated * brake_factor + brake_offset);
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
 //   Print Status (Every 500ms)
 // ——————————————————————————————————————————————————————————————————————————————
+
 void printStatus()
 {
-    MONITOR_PORT.print("Brake Pedal: ");
+    MONITOR_PORT.print("Joystick X: ");
+    MONITOR_PORT.print(processedJoystickX);
+    MONITOR_PORT.print(" | Joystick Y: ");
+    MONITOR_PORT.print(processedJoystickY);
+    MONITOR_PORT.print(" | Brake Pedal: ");
     MONITOR_PORT.print(brake_pedal_position, 2);
-    MONITOR_PORT.print("Torque Request: ");
+    MONITOR_PORT.print(" | Torque Request: ");
     MONITOR_PORT.print(torque_request);
     MONITOR_PORT.print(" | Accelerator: ");
     MONITOR_PORT.print(accelerator_pedal_percentage, 2);
     MONITOR_PORT.print(" | Gear: ");
-    MONITOR_PORT.println(gear_selection);
+    MONITOR_PORT.print(gear_selection);
+    MONITOR_PORT.print(" | Emergency: ");
+    MONITOR_PORT.print(emergencyButtonPressed ? "PRESSED" : "NOT PRESSED");
+    MONITOR_PORT.print(" | Joystick Control: ");
+    MONITOR_PORT.print(joystick_control_active ? "ACTIVE" : "INACTIVE");
+    MONITOR_PORT.print(" | Brake Switch: ");
+    MONITOR_PORT.print(brake_pedal_switch ? "ON" : "OFF");
+    MONITOR_PORT.print(" | Motor RPM: ");
+    MONITOR_PORT.print(motor_rpm);
+    MONITOR_PORT.print(" | Torque Theoretical: ");
+    MONITOR_PORT.print(torque_theoretical);
+    MONITOR_PORT.print(" | Torque Calculated: ");
+    MONITOR_PORT.println(torque_request_calculated);
 }
 
 /**************************************************************************
@@ -474,6 +619,9 @@ void setup()
     // Configure the built-in RGB LED.
     pinMode(RGB_BUILTIN, OUTPUT);
     digitalWrite(RGB_BUILTIN, LOW);
+
+    // Configure the emergency button pin (active low).
+    pinMode(EMERGENCY_BUTTON_PIN, INPUT_PULLDOWN);
 
     // Initialize the CAN buses using the CAN manager.
     canManager_setup();
