@@ -64,27 +64,58 @@ bool emergencyButtonPressed = false;
 bool joystick_control_active = false;
 bool joystick_error_flag = false;
 
-const float torque_ramp_accel = 20.0;        // torque acceleration ramp per 10ms
-const float torque_ramp_decell = 10.0;       // torque deceleration ramp per 10ms
-const float torque_max = 1000.0;             // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
-const float torque_min = -800.0;             // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
-const float torque_zero_space = 5.0;         // First 5% of joystick are zero zone in both directions
-const float torque_regen_cutoff_rpm = 300.0; // When the motor rpm is below this , cutoff any negative torque regen
-float torque_theoretical = 0.0;              // torque request before ramping
-float torque_request_internal = 0.0;         // torque request, before putting max on it
-float torque_request_calculated = 0.0;       // final torque before putting out to can
+const float torque_ramp_accel = 20.0;             // torque acceleration ramp per 10ms
+const float torque_ramp_decell = 10.0;            // torque deceleration ramp per 10ms
+const float torque_max = 1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
+const float torque_min = -800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
+const float torque_zero_space = 5.0;              // First 5% of joystick are zero zone in both directions
+const float torque_regen_cutoff_rpm_high = 300.0; // When the motor rpm is below this , stop  cutoff any negative torque regen -> Hysteresis control
+const float torque_regen_cutoff_rpm_low = 200.0;  // When the motor rpm is below this , start cutoff remaining negative torque regen -> Hysteresis control
+const float torque_regen_cutoff_rpm_full = 10.0;  // When the motor rpm is below this , cutoff to zero -> Hysteresis control
+float torque_theoretical = 0.0;                   // torque request before ramping
+float torque_request_internal = 0.0;              // torque request, before putting max on it
+float torque_request_calculated = 0.0;            // final torque before putting out to can
 
-const float brake_factor = 180;  // 100% of joystick times this factor gives the degree for the servo
-const float brake_offset = 30.0; // offset in degree. can also be negative
-float brake_calculated = 0.0;
+// ——————————————————————————————————————————————————————————————————————————————
+//   Brake Control
+// ——————————————————————————————————————————————————————————————————————————————
+// PID Control Constants (Tune these for optimal performance)
+const float Kp = 2.0; // Proportional gain
+const float Ki = 0.1; // Integral gain
+const float Kd = 0.5; // Derivative gain
 
-// iMiev original signals
+// Servo position limits
+const float SERVO_MIN_POSITION = -180.0; // Minimum servo position
+const float SERVO_MAX_POSITION = 180.0;  // Maximum servo position
+
+// PID variables
+float brake_pedal_target = 0.0; // Desired brake pedal position (0-100%)
+float servo_position = 0.0;     // Servo output position
+
+// PID state variables
+float previous_error = 0.0;
+float integral = 0.0;
+
+// === Constants for Braking Logic ===
+const float BRAKE_RAMP_UP = 0.05;              // Rate of increase per cycle
+const float BRAKE_RAMP_DOWN = 0.1;             // Faster release to avoid brake drag
+const float PARK_BRAKE_TIME_THRESHOLD = 800.0; // Time in ms to engage park brake
+const float BRAKE_PARKING = 0.6;               // Value of target if in parking brake mode
+
+// === State Variables ===
+float brake_calculated = 0.0;      // Final brake application value
+unsigned long motor_zero_time = 0; // Time tracking for parking brake
+
+// ——————————————————————————————————————————————————————————————————————————————
+//   iMiev original signals
+// ——————————————————————————————————————————————————————————————————————————————
 float brake_pedal_position = 0.0;         // Scale factor: 0.39216
 float accelerator_pedal_percentage = 0.0; // Scale factor: 0.4
 char gear_selection = ' ';                // Default empty
 int torque_request = 0;
 bool brake_pedal_switch = 0;
 int motor_rpm = 0;
+int steering_angle = 0;
 
 byte torque_request_byte_0 = 0;
 byte torque_request_byte_1 = 0;
@@ -102,6 +133,8 @@ void printStatus();
 void control_dynamics();
 void control_acceleration();
 void pollJoystick();
+void control_brake_pedal();
+void interpreteCANframe(const CANMessage &frame);
 
 /**************************************************************************
  *  Task Definitions
@@ -261,6 +294,67 @@ void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
     outFrame.data[7] = inFrame.data[7];
 }
 
+void interpreteCANframe(const CANMessage &frame)
+{
+    // Interpret messages based on their ID.
+    if (frame.id == 0x208)
+    { // Wheel Rotation, Brake Position
+        uint8_t raw_brake_value = frame.data[3];
+        brake_pedal_position = raw_brake_value * 0.25 - 6144.5;
+    }
+    else if (frame.id == 0x210)
+    { // Accelerator Pedal Percentage
+        uint8_t raw_accel_value = frame.data[2];
+        accelerator_pedal_percentage = raw_accel_value * 0.4;
+    }
+    else if (frame.id == 0x236)
+    { // Accelerator Pedal Percentage
+        uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
+        steering_angle = rawSteering - 4096;
+    }
+    else if (frame.id == 0x231)
+    { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
+        // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
+        // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
+        brake_pedal_switch = ((int8_t)frame.data[4] > 0);
+    }
+    else if (frame.id == 0x288)
+    {
+        // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
+        uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
+        // Convert raw value to physical value using scale = 1 and offset = -10000.
+        // That is, physical_rpm = rawRpm - 10000.
+        motor_rpm = (int16_t)rawRpm - 10000;
+    }
+    else if (frame.id == 0x418)
+    { // Gear Shift Selection
+        switch (frame.data[0])
+        {
+        case 0x50:
+            gear_selection = 'P';
+            break;
+        case 0x52:
+            gear_selection = 'R';
+            break;
+        case 0x4E:
+            gear_selection = 'N';
+            break;
+        case 0x44:
+            gear_selection = 'D';
+            break;
+        case 0x83:
+            gear_selection = 'B';
+            break;
+        case 0x32:
+            gear_selection = 'C';
+            break;
+        default:
+            gear_selection = '?';
+            break;
+        }
+    }
+}
+
 /**************************************************************************
  *  CAN Bus and Task Functions
  **************************************************************************/
@@ -268,50 +362,45 @@ void manipulateCAN()
 {
     CANMessage frame;
 
+    //Note: GVRET Logging to savvycan
+    //sendFrameToUSB(outFrame, 0); log on bus=0 all messages as they are recieved or sent on motor can bus
+    //sendFrameToUSB(outFrame, 1); log on bus=1 all vehicle can messages as they are recieved
+    //sendFrameToUSB(outFrame, 2); log on bus=2 all vehicle can message as they are (filtered/manipulated) forwarded to motor can bus
+
+
     // -------------------------------------------------------------
-    // Handle messages from CAN1
+    // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
-    if (can.available()) // CAN 0 in savvycan is motor can
+    if (can.available()) //This is motor can bus
     {
         can.receive(frame);
-        // Check if this message needs manipulation.
-        if (frame.id == 0x288) // Motor Control functions
-        {
-            // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
-            uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
-            // Convert raw value to physical value using scale = 1 and offset = -10000.
-            // That is, physical_rpm = rawRpm - 10000.
-            motor_rpm = (int16_t)rawRpm - 10000;
+        interpreteCANframe(frame);
 
+        // Check if this message needs manipulation.
+        if (frame.id == 0x288) // Manipulate motor response to make torque request match
+        {
             CANMessage outFrame;
             manipulate_0x288(frame, outFrame);
             can2.tryToSend(outFrame);
             sendFrameToUSB(outFrame, 0);
         }
-        else if (frame.id == 0x231)
-        { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
-            // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
-            // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
-            brake_pedal_switch = ((int8_t)frame.data[4] > 0);
-        }
         else
         {
-            // For all other not-blacklisted IDs, forward as is.
+            // For all other forwards as is
             can2.tryToSend(frame);
             sendFrameToUSB(frame, 0);
         }
     }
 
     // -------------------------------------------------------------
-    // Handle messages from CAN2
+    // Handle messages from CAN2 - Vehicle CAN bus
     // -------------------------------------------------------------
-    if (can2.available())
+    if (can2.available()) 
     {
         can2.receive(frame);
-
-        // Always forward to USB (for logging / GVRET).
         sendFrameToUSB(frame, 1);
-
+        interpreteCANframe(frame);
+       
         // Only process messages that are not blacklisted.
         if (!isBlacklisted(frame.id))
         {
@@ -343,83 +432,30 @@ void passthroughCAN()
     CANMessage frame;
 
     // -------------------------------------------------------------
-    // Handle messages from CAN1
+    // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
-    if (can.available()) // CAN 0 in savvycan is motor can
+    if (can.available())
     {
         can.receive(frame);
-        // Check if this message needs manipulation.
-        if (frame.id == 0x288) // Motor Control functions
-        {
-            // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
-            uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
-            // Convert raw value to physical value using scale = 1 and offset = -10000.
-            // That is, physical_rpm = rawRpm - 10000.
-            motor_rpm = (int16_t)rawRpm - 10000;
-        }
-        else
-        {
-        }
+        interpreteCANframe(frame);
+
         can2.tryToSend(frame);
         sendFrameToUSB(frame, 0);
     }
 
     // -------------------------------------------------------------
-    // Handle messages from CAN2
+    // Handle messages from CAN2 - Vehicle CAN bus
     // -------------------------------------------------------------
     if (can2.available())
     {
         can2.receive(frame);
-
-        // Interpret messages based on their ID.
-        if (frame.id == 0x208)
-        { // Wheel Rotation, Brake Position
-            uint8_t raw_brake_value = frame.data[3];
-            brake_pedal_position = raw_brake_value * 0.39216;
-        }
-        else if (frame.id == 0x210)
-        { // Accelerator Pedal Percentage
-            uint8_t raw_accel_value = frame.data[2];
-            accelerator_pedal_percentage = raw_accel_value * 0.4;
-        }
-        else if (frame.id == 0x231)
-        { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
-            // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
-            // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
-            brake_pedal_switch = ((int8_t)frame.data[4] > 0);
-        }
-        else if (frame.id == 0x418)
-        { // Gear Shift Selection
-            switch (frame.data[0])
-            {
-            case 0x50:
-                gear_selection = 'P';
-                break;
-            case 0x52:
-                gear_selection = 'R';
-                break;
-            case 0x4E:
-                gear_selection = 'N';
-                break;
-            case 0x44:
-                gear_selection = 'D';
-                break;
-            case 0x83:
-                gear_selection = 'B';
-                break;
-            case 0x32:
-                gear_selection = 'C';
-                break;
-            default:
-                gear_selection = '?';
-                break;
-            }
-        }
-
+        interpreteCANframe(frame);
+        
         // Always forward to USB (for logging / GVRET).
         sendFrameToUSB(frame, 1);
-        can.tryToSend(frame);
         sendFrameToUSB(frame, 2);
+        can.tryToSend(frame);
+        
     }
 }
 
@@ -448,6 +484,7 @@ void control_dynamics()
 {
     pollJoystick();
     control_acceleration();
+    control_brake_pedal();
 }
 
 void pollJoystick()
@@ -466,6 +503,29 @@ void pollJoystick()
     // Read the emergency button (active low, hence pressed = LOW)
     emergencyButtonPressed = (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
     joystick_control_active = !emergencyButtonPressed;
+}
+
+void control_brake_pedal()
+{
+    // Compute error between target and actual position
+    float error = brake_pedal_target - (brake_pedal_position / 100);
+
+    // PID calculations
+    integral += error; // Accumulate integral term
+    float derivative = error - previous_error;
+    previous_error = error;
+
+    // Compute PID output
+    float pid_output = (Kp * error) + (Ki * integral) + (Kd * derivative);
+
+    // Apply the PID output to the servo position
+    servo_position += pid_output;
+
+    // Constrain servo position within limits
+    servo_position = constrain(servo_position, SERVO_MIN_POSITION, SERVO_MAX_POSITION);
+
+    // Write the servo position
+    brake_servo.write(servo_position);
 }
 
 void control_acceleration()
@@ -492,76 +552,90 @@ void control_acceleration()
                 torque_request_internal = torque_request_internal - torque_ramp_accel;
             }
 
-            // clamp to max values
-            if (torque_request_internal > torque_max)
-            {
-                torque_request_internal = torque_max;
-            }
-            if (torque_request_internal < torque_min)
-            {
-                torque_request_internal = torque_min;
-            }
+            // Clamp torque within safe limits
+            torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
         }
         else // Regen
         {
             torque_theoretical = 0;
-            if (motor_rpm > torque_regen_cutoff_rpm)
+            if (motor_rpm > torque_regen_cutoff_rpm_high) // Normal regen behavior above high threshold
             {
                 if (torque_request_internal > 0)
                 {
-                    torque_request_internal = torque_request_internal - torque_ramp_accel;
+                    torque_request_internal -= torque_ramp_accel;
                 }
                 else
                 {
-                    torque_request_internal = torque_request_internal - torque_ramp_decell;
+                    torque_request_internal -= torque_ramp_decell;
                 }
             }
+            else if (motor_rpm < torque_regen_cutoff_rpm_low) // Below low threshold, turn torque off smoothly
+            {
+                torque_request_internal *= 0.9; // Gradual decay instead of instant cutoff
+
+                if (abs(torque_request_internal) < torque_regen_cutoff_rpm_full)
+                {
+                    torque_request_internal = 0.0; // Fully off only when close to zero
+                }
+            }
+            // If within hysteresis band, maintain current torque
             else
             {
-                torque_request_internal = 0.0;
+                // Do nothing (hold previous torque to prevent oscillation)
             }
 
-            if (processedJoystickY < (torque_zero_space * -1))
-            {
-                // This is to add physical braking later
-            }
-
-            // clamp to max values
-            if (torque_request_internal > torque_max)
-            {
-                torque_request_internal = torque_max;
-            }
-            if (torque_request_internal < torque_min)
-            {
-                torque_request_internal = torque_min;
-            }
-        }
-
-        // clamp to max values again for extra safety
-        torque_request_calculated = torque_request_internal;
-        if (torque_request_calculated > torque_max)
-        {
-            torque_request_calculated = torque_max;
-        }
-        if (torque_request_calculated < torque_min)
-        {
-            torque_request_calculated = torque_min;
+            // Clamp torque within safe limits
+            torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
         }
     }
     else
     {
         torque_request_calculated = 0.0;
     }
+    // clamp to max values again for extra safety
+    torque_request_calculated = constrain(torque_request_internal, torque_min, torque_max);
 
     if (processedJoystickY < (torque_zero_space * -1))
     {
-        brake_calculated = processedJoystickY * -1.0 / (100.0 - torque_zero_space);
+        // Compute braking force based on joystick input
+        brake_calculated = -processedJoystickY / (100.0 - torque_zero_space);
     }
-    else
+    else if (processedJoystickY > torque_zero_space)
     {
         brake_calculated = 0;
     }
-    brake_servo.write(brake_calculated * brake_factor + brake_offset);
+    else
+    {
+        // Check if motor is at zero RPM and hold it for a set time
+        if (motor_rpm == 0)
+        {
+            if (motor_zero_time == 0)
+            {
+                motor_zero_time = millis(); // Start timing
+            }
+            else if ((millis() - motor_zero_time) > (PARK_BRAKE_TIME_THRESHOLD))
+            {
+                brake_calculated = BRAKE_PARKING; // Engage parking brake
+            }
+        }
+        else
+        {
+            motor_zero_time = 0; // Reset timer when RPM is nonzero
+        }
+    }
+
+    // Apply smooth ramping to reach target brake position
+    if (brake_pedal_target < brake_calculated)
+    {
+        brake_pedal_target += BRAKE_RAMP_UP;
+    }
+    else if (brake_pedal_target > brake_calculated)
+    {
+        brake_pedal_target -= BRAKE_RAMP_DOWN;
+    }
+
+    // Ensure brake target remains within valid limits
+    brake_pedal_target = constrain(brake_pedal_target, 0.0, 1.0);
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
