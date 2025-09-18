@@ -9,12 +9,12 @@
 inline constexpr byte MCP2515_SCK   = 12;
 inline constexpr byte MCP2515_MOSI  = 11;
 inline constexpr byte MCP2515_MISO  = 13;
-inline constexpr byte MCP2515_CS    = 10;
-inline constexpr byte MCP2515_INT   = 9;
+inline constexpr byte MCP2515_CS    = 7; //5; //10;
+inline constexpr byte MCP2515_INT   = 8; //6; //9;
 
 // Pin definitions for CAN2
-inline constexpr byte MCP2515_CS_CAN2  = 7;
-inline constexpr byte MCP2515_INT_CAN2 = 8;
+inline constexpr byte MCP2515_CS_CAN2  = 5; //7;
+inline constexpr byte MCP2515_INT_CAN2 = 6; //8;
 
 // Other settings
 inline constexpr uint32_t SPI_CLOCK        = 10 * 1000 * 1000;

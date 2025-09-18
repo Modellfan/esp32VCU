@@ -7,11 +7,15 @@
 #include <TaskScheduler.h>
 #include <ESP32Servo.h>
 
+#include "adsystem_interface.h"
+#include "system_state_control.h"
+
 // Define GVRET_PORT and MONITOR_PORT.
 // GVRET communication uses the primary Serial port.
 // Monitoring/debug output uses USBSerial1.
 #define GVRET_PORT Serial
 #define MONITOR_PORT USBSerial1
+#define ADSYS_PORT USBSerial1 // same as MONITOR_PORT
 
 // USB Serial Setup: Use a clear name for the USB CDC object.
 USBCDC USBSerial1(0); // First virtual serial port
@@ -30,8 +34,8 @@ int pos = 0;
 // ——————————————————————————————————————————————————————————————————————————————
 //   Joystick Config (Analog Inputs)
 // ——————————————————————————————————————————————————————————————————————————————
-#define JOYSTICK_X_PIN 4 // GPIO 4 for X-axis
-#define JOYSTICK_Y_PIN 5 // GPIO 5 for Y-axis
+#define JOYSTICK_X_PIN 14 //4 // GPIO 4 for X-axis
+#define JOYSTICK_Y_PIN 4 //5 // GPIO 5 for Y-axis
 
 // Raw joystick values
 int rawJoystickX = 0;
@@ -117,8 +121,21 @@ bool brake_pedal_switch = 0;
 int motor_rpm = 0;
 int steering_angle = 0;
 
+int every100 = 0;
+
 byte torque_request_byte_0 = 0;
 byte torque_request_byte_1 = 0;
+
+// status
+bool heartbeat_rx_good = false;
+// operation modes (selected by switch):
+#define OPERATION_MODE_NORMAL 0 // normal (controlled by AD system)
+#define OPERATION_MODE_ERROR  1 // error
+#define OPERATION_MODE_TEST   2 // test (controlled by ECU)
+uint8_t operation_mode = OPERATION_MODE_NORMAL;
+
+
+
 
 Scheduler runner;
 
@@ -141,6 +158,7 @@ void interpreteCANframe(const CANMessage &frame);
  **************************************************************************/
 Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
+Task taskSystemStateControl(1000, TASK_FOREVER, [](){ systemState.run(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
 
 //---------------------------------------------------------------------------
@@ -262,13 +280,20 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     //     }
     // }
 
-    if (joystick_control_active)
+    if (0 && joystick_control_active)
     {
         physicalAcceleration = torque_request_calculated;
     }
     else
     {
         physicalAcceleration = 0;
+    }
+
+    if(every100 == 0)
+    {
+        MONITOR_PORT.print("inject physicalAcceleration: ");
+        MONITOR_PORT.print(physicalAcceleration);
+        MONITOR_PORT.print("\n\n");
     }
 
     // 5) Convert back to raw: raw = physical + 2000
@@ -310,7 +335,7 @@ void interpreteCANframe(const CANMessage &frame)
     else if (frame.id == 0x236)
     { // Accelerator Pedal Percentage
         uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
-        steering_angle = rawSteering - 4096;
+        steering_angle = rawSteering - 4096; // div by 30.0 missing? -> According to https://myimiev.com/threads/can-network-reverse-engineering-creating-dbc-imiev.5788/ : Steering = (PID[0] * 256 + PID[1] - 4096) / 30.0;
     }
     else if (frame.id == 0x231)
     { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
@@ -325,6 +350,11 @@ void interpreteCANframe(const CANMessage &frame)
         // Convert raw value to physical value using scale = 1 and offset = -10000.
         // That is, physical_rpm = rawRpm - 10000.
         motor_rpm = (int16_t)rawRpm - 10000;
+    }
+    else if (frame.id == 0x346)
+    {
+        // Range
+        uint8_t rangeKm = frame.data[7];
     }
     else if (frame.id == 0x418)
     { // Gear Shift Selection
@@ -367,7 +397,6 @@ void manipulateCAN()
     //sendFrameToUSB(outFrame, 1); log on bus=1 all vehicle can messages as they are recieved
     //sendFrameToUSB(outFrame, 2); log on bus=2 all vehicle can message as they are (filtered/manipulated) forwarded to motor can bus
 
-
     // -------------------------------------------------------------
     // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
@@ -395,7 +424,7 @@ void manipulateCAN()
     // -------------------------------------------------------------
     // Handle messages from CAN2 - Vehicle CAN bus
     // -------------------------------------------------------------
-    if (can2.available()) 
+    if (can2.available())
     {
         can2.receive(frame);
         sendFrameToUSB(frame, 1);
@@ -407,6 +436,12 @@ void manipulateCAN()
             // Check if this message needs manipulation.
             if (frame.id == 0x285) // Motor Control functions
             {
+                every100++;
+                if(every100 == 100)
+                {
+                    every100 = 0;
+                }
+
                 CANMessage outFrame;
                 manipulate_0x285(frame, outFrame);
                 can.tryToSend(outFrame);
@@ -461,7 +496,7 @@ void passthroughCAN()
 
 void pollCAN()
 {
-    if (emergencyButtonPressed)
+    if (0 && emergencyButtonPressed) // always do the manipulation
     {
         passthroughCAN();
     }
@@ -501,8 +536,8 @@ void pollJoystick()
     processedJoystickY = constrain(processedJoystickY, -100, 100);
 
     // Read the emergency button (active low, hence pressed = LOW)
-    emergencyButtonPressed = (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
-    joystick_control_active = !emergencyButtonPressed;
+    emergencyButtonPressed = false; // (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
+    joystick_control_active = true; //!emergencyButtonPressed;
 }
 
 void control_brake_pedal()
@@ -644,30 +679,30 @@ void control_acceleration()
 
 void printStatus()
 {
-    MONITOR_PORT.print("Joystick X: ");
-    MONITOR_PORT.print(processedJoystickX);
-    MONITOR_PORT.print(" | Joystick Y: ");
-    MONITOR_PORT.print(processedJoystickY);
-    MONITOR_PORT.print(" | Brake Pedal: ");
-    MONITOR_PORT.print(brake_pedal_position, 2);
-    MONITOR_PORT.print(" | Torque Request: ");
-    MONITOR_PORT.print(torque_request);
-    MONITOR_PORT.print(" | Accelerator: ");
-    MONITOR_PORT.print(accelerator_pedal_percentage, 2);
-    MONITOR_PORT.print(" | Gear: ");
-    MONITOR_PORT.print(gear_selection);
-    MONITOR_PORT.print(" | Emergency: ");
-    MONITOR_PORT.print(emergencyButtonPressed ? "PRESSED" : "NOT PRESSED");
-    MONITOR_PORT.print(" | Joystick Control: ");
-    MONITOR_PORT.print(joystick_control_active ? "ACTIVE" : "INACTIVE");
-    MONITOR_PORT.print(" | Brake Switch: ");
-    MONITOR_PORT.print(brake_pedal_switch ? "ON" : "OFF");
-    MONITOR_PORT.print(" | Motor RPM: ");
-    MONITOR_PORT.print(motor_rpm);
-    MONITOR_PORT.print(" | Torque Theoretical: ");
-    MONITOR_PORT.print(torque_theoretical);
-    MONITOR_PORT.print(" | Torque Calculated: ");
-    MONITOR_PORT.println(torque_request_calculated);
+    // MONITOR_PORT.print("Joystick X: ");
+    // MONITOR_PORT.print(processedJoystickX);
+    // MONITOR_PORT.print(" | Joystick Y: ");
+    // MONITOR_PORT.print(processedJoystickY);
+    // //MONITOR_PORT.print(" | Brake Pedal: ");
+    // //MONITOR_PORT.print(brake_pedal_position, 2);
+    // MONITOR_PORT.print(" | Torque Request: ");
+    // MONITOR_PORT.print(torque_request);
+    // MONITOR_PORT.print(" | Accelerator: ");
+    // MONITOR_PORT.print(accelerator_pedal_percentage, 2);
+    // //MONITOR_PORT.print(" | Gear: ");
+    // //MONITOR_PORT.print(gear_selection);
+    // //MONITOR_PORT.print(" | Emergency: ");
+    // //MONITOR_PORT.print(emergencyButtonPressed ? "PRESSED" : "NOT PRESSED");
+    // //MONITOR_PORT.print(" | Joystick Control: ");
+    // //MONITOR_PORT.print(joystick_control_active ? "ACTIVE" : "INACTIVE");
+    // //MONITOR_PORT.print(" | Brake Switch: ");
+    // //MONITOR_PORT.print(brake_pedal_switch ? "ON" : "OFF");
+    // MONITOR_PORT.print(" | Motor RPM: ");
+    // MONITOR_PORT.print(motor_rpm);
+    // MONITOR_PORT.print(" | Torque Theoretical: ");
+    // MONITOR_PORT.print(torque_theoretical);
+    // MONITOR_PORT.print(" | Torque Calculated: ");
+    // MONITOR_PORT.println(torque_request_calculated);
 }
 
 /**************************************************************************
@@ -704,9 +739,35 @@ void setup()
     MONITOR_PORT.println("System Initialized. Starting tasks...");
 }
 
+// careful, this was behaving buggy -> individual bytes were not put out
+void AdsysUartHandler::uartSendByte(uint8_t byte)
+{
+    ADSYS_PORT.write(byte);
+}
+
+void AdsysUartHandler::uartSendBytes(std::vector<uint8_t> &bytes)
+{
+    ADSYS_PORT.write(bytes.data(), bytes.size());
+}
+
+void sendDebugMessage(const char* msg)
+{
+    MONITOR_PORT.println(msg);
+}
+
+void receive_from_adsystem()
+{
+    while(ADSYS_PORT.available() > 0)
+    {
+        adsysHandler.onByteReceived(ADSYS_PORT.read());
+    }
+}
+
 void loop()
 {
     runner.execute();
     pollCAN();
     gvret_loop();
+
+    receive_from_adsystem();
 }
