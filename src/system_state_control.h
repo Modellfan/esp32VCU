@@ -1,6 +1,8 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
+
+struct AdsysMessage;
 
 class SystemStateControl {
 public:
@@ -25,13 +27,23 @@ public:
     // Optionally, provide accessors if needed
     OperationMode getOperationMode() const { return operation_mode; }
     void setOperationMode(OperationMode mode) { operation_mode = mode; }
-    void adsysConnectionLostAction() { neopixelWrite(RGB_BUILTIN, 20, 0, 0); } // Red
-    void adsysConnectionOkAction()   { neopixelWrite(RGB_BUILTIN, 0, 20, 0); } // Green
+    void adsysConnectionLostAction();
+    void adsysConnectionOkAction();
+
+    void injectSimulatedData();
+    void setInjectSimulatedData(bool enable);
+    bool getInjectSimulatedData() const { return inject_simulated_data; }
+
+    void ADSystemMessagesCb(const AdsysMessage& msg);
 
 private:
     bool adsystem_connected;
     uint32_t last_heartbeat_time; // in milliseconds
     OperationMode operation_mode;
+    bool inject_simulated_data = false;
 };
 
 extern SystemStateControl systemState;
+
+void enableTaskInjectSimulatedData();
+void disableTaskInjectSimulatedData();

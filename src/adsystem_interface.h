@@ -12,6 +12,7 @@
 enum class AdsysMsgType : uint8_t {
     HEARTBEAT        = 0x01,
     STEERING_ANGLE   = 0x02,
+    SET_SIMULATED_DATA_INJECTION = 0xF0,
     // Add more as needed...
 };
 
@@ -22,7 +23,7 @@ struct AdsysHeartbeat {
 
 // Steering angle payload
 struct AdsysSteeringAngle {
-    int16_t angle_raw; // signed 16-bit
+    uint16_t angle_raw; // signed 16-bit
 };
 
 // Add more payload structs as needed...
@@ -50,7 +51,7 @@ public:
     void sendHeartbeat();
 
     // Helper to send steering angle
-    void sendSteeringAngle(int16_t angle);
+    void sendSteeringAngle(uint16_t angle);
 
     // Set callback for received messages
     void setMessageCallback(MessageCallback cb);

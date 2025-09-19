@@ -160,6 +160,7 @@ void interpreteCANframe(const CANMessage &frame);
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
 Task taskSystemStateControl(100, TASK_FOREVER, [](){ systemState.run(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
+Task taskInjectSimulatedData(10, TASK_FOREVER, [](){ systemState.injectSimulatedData(); }, &runner, false); // Disabled by default
 
 //---------------------------------------------------------------------------
 // Blacklist Array: Uncomment an ID to block it from being forwarded.
@@ -745,6 +746,10 @@ void setup()
     // Initialize the CAN buses using the CAN manager.
     canManager_setup();
 
+    // Set up AD System UART message callback
+    adsysHandler.setMessageCallback([&](const AdsysMessage &msg){ systemState.ADSystemMessagesCb(msg); });
+    systemState.adsysConnectionLostAction(); // set initial connection state
+   
     // Optionally, print a startup message.
     MONITOR_PORT.println("System Initialized. Starting tasks...");
 }
@@ -780,4 +785,13 @@ void loop()
     gvret_loop();
 
     receive_from_adsystem();
+}
+
+void enableTaskInjectSimulatedData()
+{
+    taskInjectSimulatedData.enable();
+}
+void disableTaskInjectSimulatedData()
+{
+    taskInjectSimulatedData.disable();
 }
