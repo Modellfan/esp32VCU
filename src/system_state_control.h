@@ -25,6 +25,8 @@ public:
     // Optionally, provide accessors if needed
     OperationMode getOperationMode() const { return operation_mode; }
     void setOperationMode(OperationMode mode) { operation_mode = mode; }
+    void adsysConnectionLostAction() { neopixelWrite(RGB_BUILTIN, 20, 0, 0); } // Red
+    void adsysConnectionOkAction()   { neopixelWrite(RGB_BUILTIN, 0, 20, 0); } // Green
 
 private:
     bool adsystem_connected;

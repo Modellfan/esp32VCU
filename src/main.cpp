@@ -156,9 +156,9 @@ void interpreteCANframe(const CANMessage &frame);
 /**************************************************************************
  *  Task Definitions
  **************************************************************************/
-Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
+//Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
-Task taskSystemStateControl(1000, TASK_FOREVER, [](){ systemState.run(); }, &runner, true);
+Task taskSystemStateControl(100, TASK_FOREVER, [](){ systemState.run(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
 
 //---------------------------------------------------------------------------
@@ -509,7 +509,17 @@ void pollCAN()
 // Task Function: Toggle the built-in LED.
 void blinkLED()
 {
-    digitalWrite(RGB_BUILTIN, !digitalRead(RGB_BUILTIN));
+    static bool ledState = false;
+    ledState = !ledState;
+
+    if(ledState)
+    {
+        neopixelWrite(RGB_BUILTIN, 0, 20, 0); // Green
+    }
+    else
+    {
+        neopixelWrite(RGB_BUILTIN, 0, 0, 0); // Off
+    }
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -727,7 +737,7 @@ void setup()
 
     // Configure the built-in RGB LED.
     pinMode(RGB_BUILTIN, OUTPUT);
-    digitalWrite(RGB_BUILTIN, LOW);
+    //digitalWrite(RGB_BUILTIN, LOW);
 
     // Configure the emergency button pin (active low).
     pinMode(EMERGENCY_BUTTON_PIN, INPUT_PULLDOWN);

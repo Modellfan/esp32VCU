@@ -9,6 +9,8 @@ SystemStateControl::SystemStateControl() {
 
 void SystemStateControl::initialize() {
     adsystem_connected = false;
+    adsysConnectionLostAction(); // Start with red LED
+
     last_heartbeat_time = millis();
     operation_mode = Idle;
 
@@ -23,9 +25,17 @@ void SystemStateControl::initialize() {
 }
 
 void SystemStateControl::updateHeartbeat(bool received) {
+    // debug signal got heartbeat
+    neopixelWrite(RGB_BUILTIN, 0, 0, 20); // Blue
+    
     if (received) {
         last_heartbeat_time = millis();
-        adsystem_connected = true;
+        if (!adsystem_connected) {
+            // Just regained connection
+            adsystem_connected = true;
+            operation_mode = Auto; // or appropriate mode
+            adsysConnectionOkAction();
+        }
     }
 }
 
@@ -34,10 +44,14 @@ bool SystemStateControl::isAdsystemConnected() const {
 }
 
 void SystemStateControl::checkHeartbeatTimeout() {
-    const uint32_t HEARTBEAT_TIMEOUT_MS = 500; // 500 ms, adjust as needed
-    if (millis() - last_heartbeat_time > HEARTBEAT_TIMEOUT_MS) {
-        adsystem_connected = false;
-        operation_mode = Error;
+    const uint32_t HEARTBEAT_TIMEOUT_MS = 5000; // 500 ms, adjust as needed
+    if (millis() > last_heartbeat_time + HEARTBEAT_TIMEOUT_MS) {
+        if(adsystem_connected) {
+            // Just lost connection
+            adsystem_connected = false;
+            operation_mode = Error;
+            adsysConnectionLostAction();
+        }
     }
 }
 
