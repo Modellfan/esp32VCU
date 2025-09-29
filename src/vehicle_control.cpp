@@ -124,6 +124,9 @@ void ActuatorControl::run() {
     bool dirA_active = digitalRead(pin_dir_a) == HIGH;
     bool dirB_active = digitalRead(pin_dir_b) == HIGH;
 
+    bool dirA_fb_active = feedbackA();
+    bool dirB_fb_active = feedbackB();
+
     if (force_both_active) {
         digitalWrite(pin_dir_a, HIGH);
         digitalWrite(pin_dir_b, HIGH);
@@ -146,34 +149,35 @@ void ActuatorControl::run() {
     }
 
     // --- Time-based Position Tracking ---
-    static uint32_t last_update_time = 0;
-    if (last_update_time == 0) last_update_time = now;
-    uint32_t dt = now - last_update_time;
-    last_update_time = now;
+    static uint32_t actuator_time_since_movement_start = now;
+    static uint8_t actuator_movementDir = 0; // 0 = none, 1 = DirA, 2 = DirB
+    static uint16_t actuator_position_since_movement_start = position_time_based;
 
-    int direction_time = 0;
-    if (control_type == ActiveControlWithFeedback || control_type == ActiveControlWithTime) {
-        if (state == MovingDirA) direction_time = 1;
-        else if (state == MovingDirB) direction_time = -1;
-    } else if (control_type == MonitoringOnly) {
-        if (dirA_active && !dirB_active) direction_time = 1;
-        else if (!dirA_active && dirB_active) direction_time = -1;
-    }
-
-    if (direction_time != 0 && dt > 0) {
-        int32_t total_range = op_range;
-        int32_t move_range = (position_steps_per_ms * dt);
-        int32_t new_position_op_range_time = position_time_based + direction_time * move_range;
-
-        if (allow_clamping_to_known_position && clamping_known_position_DirB_zero) {
-            if (new_position_op_range_time < min_position_op_range) new_position_op_range_time = min_position_op_range;
+    // simulate according to actuator controls
+    if(state == ActuatorControl::MovingDirA)
+    {
+        if(actuator_movementDir != 1)
+        {
+            actuator_movementDir = 1;
+            actuator_time_since_movement_start = now;
+            actuator_position_since_movement_start = position_time_based;
         }
-
-        position_time_based = static_cast<uint16_t>(new_position_op_range_time);
-
-        LOG_MSG("[" + String(name) + "] Time-based tracking: dt=" + String(dt) +
-                ", direction=" + String(direction_time) +
-                ", new_position_op_range_time=" + String(position_time_based));
+        position_time_based = actuator_position_since_movement_start + position_steps_per_ms * (now - actuator_time_since_movement_start);
+    }
+    else if(state == ActuatorControl::MovingDirB)
+    {
+        if(actuator_movementDir != 2)
+        {
+            actuator_movementDir = 2;
+            actuator_time_since_movement_start = now;
+            actuator_position_since_movement_start = position_time_based;
+        }
+        int32_t iactuator_position = (int32_t) actuator_position_since_movement_start - position_steps_per_ms * (now - actuator_time_since_movement_start);
+        position_time_based = iactuator_position < 0 ? 0 : (uint16_t) iactuator_position;
+    }
+    else
+    {
+        actuator_movementDir = 0;
     }
 
     // --- max_move_time_ms limit check ---
@@ -188,7 +192,7 @@ void ActuatorControl::run() {
         }
     }
     static uint32_t move_start_time = 0;
-    if (control_type == MonitoringOnly && (dirA_active || dirB_active)) {
+    if (control_type == MonitoringOnly && (dirA_fb_active || dirB_fb_active)) {
         if (move_start_time == 0) move_start_time = now;
         if (now - move_start_time > max_move_time_ms) {
             state = Error;
@@ -196,7 +200,7 @@ void ActuatorControl::run() {
             LOG_MSG("[" + String(name) + "][ERROR] Monitoring: Move time exceeded max_move_time_ms!");
         }
     }
-    if (control_type == MonitoringOnly && !dirA_active && !dirB_active) {
+    if (control_type == MonitoringOnly && !dirA_fb_active && !dirB_fb_active) {
         move_start_time = 0;
     }
 
@@ -208,7 +212,7 @@ void ActuatorControl::run() {
         state = Error;
         LOG_MSG("[" + String(name) + "][EMERGENCY] Position out of range! Sensor: " + String(position) + ", Time-based: " + String(position_time_based));
         if (control_type == MonitoringOnly) {
-            if (dirA_active || dirB_active) {
+            if (dirA_fb_active || dirB_fb_active) {
                 force_both_active = true;
                 LOG_MSG("[" + String(name) + "][EMERGENCY] Forcing both outputs HIGH to stop external controller!");
             }
@@ -259,7 +263,7 @@ void ActuatorControl::run() {
     {
         // out of target range, start movement
 
-        position_tracking_start_time_current_move = millis();
+        position_tracking_start_time_current_move = now;
 
         LOG_MSG("[" + String(name) + "] out of target range, start movement: target=" + String(target_position) + ", mode=" + String(control_type));
 
@@ -317,13 +321,15 @@ void ActuatorControl::moveDirB() {
     LOG_MSG("[" + String(name) + "] moveDirB: DirA=LOW, DirB=HIGH");
 }
 bool ActuatorControl::feedbackA() const {
+    if(pin_fb_a == 255) return false;
     bool fb = digitalRead(pin_fb_a) == HIGH;
-    LOG_MSG("[" + String(name) + "] feedbackA: " + String(fb));
+    //LOG_MSG("[" + String(name) + "] feedbackA: " + String(fb));
     return fb;
 }
 bool ActuatorControl::feedbackB() const {
+    if(pin_fb_b == 255) return false;
     bool fb = digitalRead(pin_fb_b) == HIGH;
-    LOG_MSG("[" + String(name) + "] feedbackB: " + String(fb));
+    //LOG_MSG("[" + String(name) + "] feedbackB: " + String(fb));
     return fb;
 }
 
@@ -356,26 +362,24 @@ void VehicleControl::initialize() {
     adsystem_connected = false;
     last_heartbeat_time = millis();
     operation_mode = Idle;
-    inject_simulated_data = false;
+    target_operation_mode = ECUTestControl;
+    initialization_state_operation_mode = Idle;
+    gear_selection = Gear_Other;
+    inject_simulated_data = true;
 
     brake_actuator.setPins(BRAKE_ACTUATOR_DIR_A_PIN, BRAKE_ACTUATOR_DIR_B_PIN, BRAKE_ACTUATOR_FB_A_PIN, BRAKE_ACTUATOR_FB_B_PIN);
-    brake_actuator.initialize(0, 120, 0xFFFF, 120+12, 20000, ActuatorControl::ActiveControlWithTime); // actual max position is 1800 steps; just use a low value for now
+    brake_actuator.initialize(0, 120, 0xFFFF, 120+12, 20000, ActuatorControl::ActiveControlWithTime); // actual max position is 1800 steps; just use a low value for now; 120 steps = ~10mm
     //brake_actuator.initialize(0, 120, 0xFFFF, 120+12, 20000, ActuatorControl::MonitoringOnly); // actual max position is 1800 steps; just use a low value for now
-    brake_actuator.setTimeToPositionFactor(0.052008); // 11.82 position units per mm; 4.4mm/s; 150mm length (i.e., 34091 ms for full range)
+    brake_actuator.setPositionStepsPerMs(0.052008); // 11.82 position units per mm; 4.4mm/s; 150mm length (i.e., 34091 ms for full range)
     brake_actuator.setName("Brake");
     brake_actuator.enableClampingToKnownPosition(true, true);
     brake_actuator.setHysteresisPercentOpRange(2.0, 5.0);
     steering_actuator.setPins(STEERING_ACTUATOR_DIR_A_PIN, STEERING_ACTUATOR_DIR_B_PIN, STEERING_ACTUATOR_FB_A_PIN, STEERING_ACTUATOR_FB_B_PIN);
     steering_actuator.initialize(2796+96, 5396-96, 2796-96, 5396+96, 20000, ActuatorControl::ActiveControlWithFeedback);
     //steering_actuator.initialize(2796+96, 5396-96, 2796-96, 5396+96, 20000, ActuatorControl::MonitoringOnly);
+    steering_actuator.setPositionStepsPerMs(0.16); // 0.16 position units per ms; 6.0mm/s; 165mm length (i.e., 1031 ms for full range)
     steering_actuator.setName("Steering");
-    steering_actuator.setHysteresisPercentOpRange(2.0, 3.0);
-
-    uint8_t pin_led_gear_park;
-    uint8_t pin_led_gear_drive;
-    uint8_t pin_led_gear_other;
-    uint8_t pin_led_ecu_status;
-    uint8_t pin_ecu_trigger_emergency;
+    steering_actuator.setHysteresisPercentOpRange(2.5, 3.5);
 
     pin_led_gear_park = DASHBOARD_LED_GEAR_PARK_PIN;
     pin_led_gear_drive = DASHBOARD_LED_GEAR_DRIVE_PIN;
@@ -391,13 +395,14 @@ void VehicleControl::initialize() {
     pinMode(pin_led_ecu_error, OUTPUT);
     pinMode(pin_ecu_trigger_emergency, OUTPUT);
 
-    digitalWrite(pin_ecu_trigger_emergency, HIGH);
+    digitalWrite(pin_ecu_trigger_emergency, HIGH); // not triggering emergency
+
+    // LED test pattern at initialization
     digitalWrite(pin_led_ecu_error, LOW);
     digitalWrite(pin_led_ecu_status, HIGH);
     digitalWrite(pin_led_gear_park, HIGH);
     digitalWrite(pin_led_gear_drive, HIGH);
     digitalWrite(pin_led_gear_other, HIGH);
-
     delay(500);
     digitalWrite(pin_led_ecu_error, HIGH);
     digitalWrite(pin_led_ecu_status, LOW);
@@ -410,12 +415,13 @@ void VehicleControl::initialize() {
     digitalWrite(pin_led_gear_park, HIGH);
     digitalWrite(pin_led_gear_drive, HIGH);
     digitalWrite(pin_led_gear_other, HIGH);
-
     delay(500);
+
     digitalWrite(pin_led_ecu_error, HIGH);
 
     //test();
 
+    LOG_MSG("[VehicleControl] Move brake actuator to zero position to track position.");
     brake_actuator.moveDirB();
     delay(5000);
     brake_actuator.stopActuator();
@@ -428,7 +434,6 @@ void VehicleControl::updateHeartbeat(bool received) {
         last_heartbeat_time = millis();
         if (!adsystem_connected) {
             adsystem_connected = true;
-            operation_mode = Auto;
             adsysConnectionOkAction();
         }
     }
@@ -444,7 +449,10 @@ void VehicleControl::checkHeartbeatTimeout() {
     if (current_time > last_heartbeat_time + HEARTBEAT_TIMEOUT_MS) {
         if(adsystem_connected) {
             adsystem_connected = false;
-            operation_mode = Error;
+            if(operation_mode != ADSystemControl)
+            {
+                operation_mode = Emergency; // go directly to emergency mode, since ECU can't control normal brake in mode ADSystemControl
+            }
             adsysConnectionLostAction();
         }
     }
@@ -464,6 +472,11 @@ void VehicleControl::adsysConnectionOkAction()
 // is called periodically, every 10ms by the scheduler in main.cpp
 void VehicleControl::run() {
     checkHeartbeatTimeout();
+
+    if(inject_simulated_data)
+    {
+        injectSimulatedData();
+    }
 
     const uint32_t HEARTBEAT_INTERVAL_MS = 100;
     static uint32_t last_heartbeat_sent_time = 0;
@@ -510,23 +523,113 @@ void VehicleControl::ADSystemMessagesCb(const AdsysMessage& msg)
     }
 }
 
+void VehicleControl::updateJoystickSteering(double steering)
+{
+    JoystickSteering = steering; JoystickSteeringTimestamp = millis();
+}
+void VehicleControl::updateJoystickThrottle(double throttle)
+{
+    JoystickThrottle = throttle; JoystickThrottleTimestamp = millis();
+}
+
 void VehicleControl::setInjectSimulatedData(bool enable)
 {
     inject_simulated_data = enable;
-    if (enable)
-    {
-        enableTaskInjectSimulatedData();
-    }
-    else
-    {
-        disableTaskInjectSimulatedData();
-    }
 }
 
 void VehicleControl::injectSimulatedData()
 {
     static uint16_t angle = 4096; // start at center (0 degrees)
-    static int8_t direction = 1;   // 1 = increasing angle, -1 = decreasing angle
+    static int8_t angle_direction = 1;   // 1 = increasing angle, -1 = decreasing angle
+    static uint16_t brake_position = 0;
+    static int8_t brake_direction = 1;
+
+    if(operation_mode == ADSystemControl)
+    {
+        // just oscillate between full left and full right
+        angle += angle_direction * 64;
+        if(angle >= 5396) {
+            angle = 5396;
+            angle_direction = -1;
+        } else if(angle <= 2796) {
+            angle = 2796;
+            angle_direction = 1;
+        }
+
+        // just oscillate between full pressed and full released
+        int32_t ibrake_position = brake_position + (brake_direction * 64);
+        if(ibrake_position >= 1800) {
+            ibrake_position = 1800;
+            brake_direction = -1;
+        } else if(ibrake_position <= 0) {
+            ibrake_position = 0;
+            brake_direction = 1;
+        }
+        brake_position = (uint16_t) ibrake_position;
+    }
+    else if(operation_mode == ECUTestControl)
+    {
+        static uint32_t angle_time_since_movement_start = millis();
+        static uint8_t angle_movementDir = 0; // 0 = none, 1 = DirA, 2 = DirB
+        static uint16_t angle_position_since_movement_start = angle;
+
+        // simulate according to actuator controls
+        if(steering_actuator.getState() == ActuatorControl::MovingDirA)
+        {
+            if(angle_movementDir != 1)
+            {
+                angle_movementDir = 1;
+                angle_time_since_movement_start = millis();
+                angle_position_since_movement_start = angle;
+            }
+            angle = angle_position_since_movement_start + steering_actuator.getPositionStepsPerMs() * (millis() - angle_time_since_movement_start);
+        }
+        else if(steering_actuator.getState() == ActuatorControl::MovingDirB)
+        {
+            if(angle_movementDir != 2)
+            {
+                angle_movementDir = 2;
+                angle_time_since_movement_start = millis();
+                angle_position_since_movement_start = angle;
+            }
+            angle = angle_position_since_movement_start - steering_actuator.getPositionStepsPerMs() * (millis() - angle_time_since_movement_start);
+        }
+        else
+        {
+            angle_movementDir = 0;
+        }
+
+        static uint32_t brake_time_since_movement_start = millis();
+        static uint8_t brake_movementDir = 0; // 0 = none, 1 = DirA, 2 = DirB
+        static uint16_t brake_position_since_movement_start = brake_position;
+
+        // simulate according to actuator controls
+        if(brake_actuator.getState() == ActuatorControl::MovingDirA)
+        {
+            if(brake_movementDir != 1)
+            {
+                brake_movementDir = 1;
+                brake_time_since_movement_start = millis();
+                brake_position_since_movement_start = brake_position;
+            }
+            brake_position = brake_position_since_movement_start + brake_actuator.getPositionStepsPerMs() * (millis() - brake_time_since_movement_start);
+        }
+        else if(brake_actuator.getState() == ActuatorControl::MovingDirB)
+        {
+            if(brake_movementDir != 2)
+            {
+                brake_movementDir = 2;
+                brake_time_since_movement_start = millis();
+                brake_position_since_movement_start = brake_position;
+            }
+            int32_t ibrake_position = (int32_t) brake_position_since_movement_start - brake_actuator.getPositionStepsPerMs() * (millis() - brake_time_since_movement_start);
+            brake_position = ibrake_position < 0 ? 0 : (uint16_t) ibrake_position;
+        }
+        else
+        {
+            brake_movementDir = 0;
+        }
+    }
 
     CANMessage steeringFrame = {};
     steeringFrame.id = 0x236; // Steering angle ID
@@ -534,16 +637,6 @@ void VehicleControl::injectSimulatedData()
     steeringFrame.data[1] = angle & 0xFF;
     
     interpreteCANframe(steeringFrame);
-
-    // update simulated data for next call
-    angle += direction * 64;
-    if(angle >= 5396) {
-        angle = 5396;
-        direction = -1;
-    } else if(angle <= 2796) {
-        angle = 2796;
-        direction = 1;
-    }
 }
 
 void VehicleControl::updateGearSelection(uint8_t gear) {

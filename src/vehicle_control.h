@@ -50,7 +50,7 @@ private:
     uint32_t position_timestamp; // position timestamp
     uint16_t position_time_based; // position based on time tracking
     uint16_t allowed_tolerance_time_based = 20; // allowed tolerance in time-based position tracking (in position units)
-    double position_steps_per_ms; // factor to convert position percent to time in ms
+    double position_steps_per_ms; // factor to convert movement duration to steps for time-based tracking
     uint16_t target_position;
     int32_t position_tracking_in_ms; // movement from starting position (0 ms)
     uint32_t position_tracking_start_time_current_move;
@@ -97,12 +97,12 @@ public:
         hysteresis_start = static_cast<uint16_t>(op_range * (hysteresis_percent_start / 100.0));
         hysteresis_stop = static_cast<uint16_t>(op_range * (hysteresis_percent_stop / 100.0));
     };
+    ActuatorState getState() const { return state; }
     bool getEmergency() { return emergency_triggered;};
     void setTargetPosition(uint16_t position);
     void setControlType(ControlType type) { control_type = type; }
     void calibratePosition(uint16_t known_position); // set current position to known value (e.g., 0 or 100%)
     void calibratePositionPercent(double known_position_percent); // set current position to known percent (0.0 to 100.0)
-    void setTimeToPositionFactor(double factor) { position_steps_per_ms = factor; } // factor in position steps per ms for time-based tracking
     void moveToPercentOpRange(double position_percent); // move actuator to position in percent (0.0 to 100.0)
     void moveTo(uint16_t position); // move actuator to absolute position in operation range
     void TimePositionTrackingZeroPosition() { position_tracking_in_ms = 0; }
@@ -114,6 +114,8 @@ public:
     uint16_t getMinPosition() { return min_position_op_range; }
     uint16_t getOpRange() { return op_range; }
     uint16_t getPosition() { return position; }
+    double getPositionStepsPerMs() { return position_steps_per_ms; }
+    void setPositionStepsPerMs(double steps_per_ms) { position_steps_per_ms = steps_per_ms; }
 
     // --- I/O control helpers ---
     void stopActuator();
@@ -127,8 +129,8 @@ class VehicleControl {
 public:
     enum OperationMode : uint8_t {
         Idle = 0,
-        Auto = 1,
-        Manual = 2,
+        ADSystemControl = 1,
+        ECUTestControl = 2,
         Error = 3,
         Emergency = 4,
         Test = 5
@@ -149,9 +151,8 @@ public:
     void initialize();
     void run();
 
-    // Optionally, provide accessors if needed
     OperationMode getOperationMode() const { return operation_mode; }
-    void setOperationMode(OperationMode mode) { operation_mode = mode; }
+    
     void adsysConnectionLostAction();
     void adsysConnectionOkAction();
 
@@ -161,24 +162,32 @@ public:
 
     void ADSystemMessagesCb(const AdsysMessage& msg);
 
-    void updateSteeringAngle(uint16_t rawangle) {
-        steering_actuator.updatePosition(rawangle);
-    }
+    void updateSteeringAngle(uint16_t rawangle) { steering_actuator.updatePosition(rawangle); }
     void setTargetSteeringAngle(double position_percent) {
-        steering_actuator.moveToPercentOpRange(position_percent);
+        if(operation_mode == ECUTestControl)
+        {
+            steering_actuator.moveToPercentOpRange(position_percent);
+        }
     }
 
-    void setTargetBrakePosition(double position_percent) {
-        brake_actuator.moveToPercentOpRange(position_percent);
-    }
+    void setTargetBrakePosition(double position_percent) { brake_actuator.moveToPercentOpRange(position_percent); }
     void updateGearSelection(uint8_t gear);
+    void updateJoystickSteering(double steering);
+    void updateJoystickThrottle(double throttle);
 
     void test();
 
+    void requestOperationMode(OperationMode mode) { target_operation_mode = mode; }
+    void setEmergencyMode() { operation_mode = Emergency; }
+
 private:
+    void setOperationMode(OperationMode mode) { operation_mode = mode; }
+
     bool adsystem_connected;
     uint32_t last_heartbeat_time; // in milliseconds
-    OperationMode operation_mode;
+    OperationMode operation_mode; // current operation mode
+    OperationMode target_operation_mode; // requested operation mode
+    OperationMode initialization_state_operation_mode; // keep initialization state of selected operation mode
     GearSelection gear_selection;
     bool inject_simulated_data = false;
     ActuatorControl brake_actuator;
@@ -189,10 +198,13 @@ private:
     uint8_t pin_led_ecu_status;
     uint8_t pin_led_ecu_error;
     uint8_t pin_ecu_trigger_emergency;
+
+    double JoystickSteering = 0.0;
+    double JoystickThrottle = 0.0;
+    uint32_t JoystickSteeringTimestamp = 0;
+    uint32_t JoystickThrottleTimestamp = 0;
 };
 
 extern VehicleControl vControl;
 
-void enableTaskInjectSimulatedData();
-void disableTaskInjectSimulatedData();
 void interpreteCANframe(const CANMessage &frame); // forward declaration

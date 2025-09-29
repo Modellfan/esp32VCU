@@ -5,7 +5,7 @@
 #include "USB.h"
 #include "USBCDC.h"
 #include <TaskScheduler.h>
-#include <ESP32Servo.h>
+//#include <ESP32Servo.h>
 
 #include "adsystem_interface.h"
 #include "vehicle_control.h"
@@ -27,9 +27,9 @@ USBCDC USBSerial1(0); // First virtual serial port
 // #define RGB_BUILTIN    48   // Built-in LED pin on ESP32-S3
 // #define RGB_BRIGHTNESS 0    // 0 for OFF
 
-Servo brake_servo;
-const int servoPin = 17;
-int pos = 0;
+// Servo brake_servo;
+// const int servoPin = 17;
+// int pos = 0;
 
 // ——————————————————————————————————————————————————————————————————————————————
 //   Joystick Config (Analog Inputs)
@@ -145,7 +145,6 @@ Scheduler runner;
 void pollCAN();
 void manipulateCAN();
 void passthroughCAN();
-void blinkLED();
 void printStatus();
 void control_dynamics();
 void control_acceleration();
@@ -156,11 +155,9 @@ void interpreteCANframe(const CANMessage &frame);
 /**************************************************************************
  *  Task Definitions
  **************************************************************************/
-//Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
 Task taskvControlControl(10, TASK_FOREVER, [](){ vControl.run(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
-Task taskInjectSimulatedData(10, TASK_FOREVER, [](){ vControl.injectSimulatedData(); }, &runner, false); // Disabled by default
 
 //---------------------------------------------------------------------------
 // Blacklist Array: Uncomment an ID to block it from being forwarded.
@@ -405,9 +402,9 @@ void manipulateCAN()
     // -------------------------------------------------------------
     // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
-    if (can.available()) //This is motor can bus
+    if (can_motor.available()) //This is motor can bus
     {
-        can.receive(frame);
+        can_motor.receive(frame);
         interpreteCANframe(frame);
 
         // Check if this message needs manipulation.
@@ -415,13 +412,14 @@ void manipulateCAN()
         {
             CANMessage outFrame;
             manipulate_0x288(frame, outFrame);
-            can2.tryToSend(outFrame);
+            can_vehicle.tryToSend(outFrame);
             sendFrameToUSB(outFrame, 0);
+            sendFrameToUSB(outFrame, 2);
         }
         else
         {
             // For all other forwards as is
-            can2.tryToSend(frame);
+            can_vehicle.tryToSend(frame);
             sendFrameToUSB(frame, 0);
         }
     }
@@ -429,9 +427,9 @@ void manipulateCAN()
     // -------------------------------------------------------------
     // Handle messages from CAN2 - Vehicle CAN bus
     // -------------------------------------------------------------
-    if (can2.available())
+    if (can_vehicle.available())
     {
-        can2.receive(frame);
+        can_vehicle.receive(frame);
         sendFrameToUSB(frame, 1);
         interpreteCANframe(frame);
        
@@ -445,17 +443,27 @@ void manipulateCAN()
                 if(every100 == 100)
                 {
                     every100 = 0;
+                    MONITOR_PORT.print("torque_request_internal before: ");
+                    MONITOR_PORT.print(torque_request_internal);
+                    MONITOR_PORT.print("\n");
+                    MONITOR_PORT.print("torque_theoretical: ");
+                    MONITOR_PORT.print(torque_theoretical);
+                    MONITOR_PORT.print("\n");
+                    MONITOR_PORT.print("motor_rpm: ");
+                    MONITOR_PORT.print(motor_rpm);
+                    MONITOR_PORT.print("\n");
+                    
                 }
 
                 CANMessage outFrame;
                 manipulate_0x285(frame, outFrame);
-                can.tryToSend(outFrame);
+                can_motor.tryToSend(outFrame);
                 sendFrameToUSB(outFrame, 2);
             }
             else
             {
                 // For all other not-blacklisted IDs, forward as is.
-                can.tryToSend(frame);
+                can_motor.tryToSend(frame);
                 sendFrameToUSB(frame, 2);
             }
         }
@@ -474,57 +482,33 @@ void passthroughCAN()
     // -------------------------------------------------------------
     // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
-    if (can.available())
+    if (can_motor.available())
     {
-        can.receive(frame);
+        can_motor.receive(frame);
         interpreteCANframe(frame);
 
-        can2.tryToSend(frame);
+        can_vehicle.tryToSend(frame);
         sendFrameToUSB(frame, 0);
     }
 
     // -------------------------------------------------------------
     // Handle messages from CAN2 - Vehicle CAN bus
     // -------------------------------------------------------------
-    if (can2.available())
+    if (can_vehicle.available())
     {
-        can2.receive(frame);
+        can_vehicle.receive(frame);
         interpreteCANframe(frame);
         
         // Always forward to USB (for logging / GVRET).
         sendFrameToUSB(frame, 1);
-        sendFrameToUSB(frame, 2);
-        can.tryToSend(frame);
-        
+        can_motor.tryToSend(frame);
     }
 }
 
 void pollCAN()
 {
-    if (0 && emergencyButtonPressed) // always do the manipulation
-    {
-        passthroughCAN();
-    }
-    else
-    {
-        manipulateCAN();
-    }
-}
-
-// Task Function: Toggle the built-in LED.
-void blinkLED()
-{
-    static bool ledState = false;
-    ledState = !ledState;
-
-    if(ledState)
-    {
-        neopixelWrite(RGB_BUILTIN, 0, 20, 0); // Green
-    }
-    else
-    {
-        neopixelWrite(RGB_BUILTIN, 0, 0, 0); // Off
-    }
+    // always do the manipulation
+    manipulateCAN();
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -745,12 +729,12 @@ void setup()
     //delay(10000);
 
     // Initialize Servo
-    ESP32PWM::allocateTimer(0);
-    ESP32PWM::allocateTimer(1);
-    ESP32PWM::allocateTimer(2);
-    ESP32PWM::allocateTimer(3);
-    brake_servo.setPeriodHertz(50);           // standard 50 hz servo
-    brake_servo.attach(servoPin, 1000, 2000); // attaches the servo on pin 18 to the servo object
+    // ESP32PWM::allocateTimer(0);
+    // ESP32PWM::allocateTimer(1);
+    // ESP32PWM::allocateTimer(2);
+    // ESP32PWM::allocateTimer(3);
+    // brake_servo.setPeriodHertz(50);           // standard 50 hz servo
+    // brake_servo.attach(servoPin, 1000, 2000); // attaches the servo on pin 18 to the servo object
 
     // Configure the built-in RGB LED.
     pinMode(RGB_BUILTIN, OUTPUT);
@@ -813,13 +797,4 @@ void loop()
     gvret_loop();
 
     receive_from_adsystem();
-}
-
-void enableTaskInjectSimulatedData()
-{
-    taskInjectSimulatedData.enable();
-}
-void disableTaskInjectSimulatedData()
-{
-    taskInjectSimulatedData.disable();
 }
