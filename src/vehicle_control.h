@@ -13,6 +13,7 @@
 #define BRAKE_ACTUATOR_DIR_B_PIN   35
 #define BRAKE_ACTUATOR_FB_A_PIN    255  // Optional
 #define BRAKE_ACTUATOR_FB_B_PIN    255  // Optional
+#define BRAKE_ACTUATOR_MAX_POSITION 350
 
 #define DASHBOARD_LED_ECU_STATUS_PIN 45
 #define DASHBOARD_LED_ECU_ERROR_PIN 20 // active low
@@ -49,10 +50,16 @@ private:
     uint16_t position; // position sensor based
     uint32_t position_timestamp; // position timestamp
     uint16_t position_time_based; // position based on time tracking
+
+    uint32_t actuator_time_since_movement_start = 0;
+    uint8_t actuator_movementDir = 0; // 0 = none, 1 = DirA, 2 = DirB
+    uint16_t actuator_position_since_movement_start;
+
+    uint32_t move_start_time = 0;
+
     uint16_t allowed_tolerance_time_based = 20; // allowed tolerance in time-based position tracking (in position units)
     double position_steps_per_ms; // factor to convert movement duration to steps for time-based tracking
     uint16_t target_position;
-    int32_t position_tracking_in_ms; // movement from starting position (0 ms)
     uint32_t position_tracking_start_time_current_move;
     uint32_t max_move_time_ms; // max time allowed for a move command in ms. If this is exceeded, an error state is triggered.
     bool emergency_triggered;
@@ -97,6 +104,7 @@ public:
         hysteresis_start = static_cast<uint16_t>(op_range * (hysteresis_percent_start / 100.0));
         hysteresis_stop = static_cast<uint16_t>(op_range * (hysteresis_percent_stop / 100.0));
     };
+    void setMinPosition(uint16_t pos) {min_position_op_range = pos; op_range = max_position_op_range - min_position_op_range;}
     ActuatorState getState() const { return state; }
     bool getEmergency() { return emergency_triggered;};
     void setTargetPosition(uint16_t position);
@@ -105,15 +113,17 @@ public:
     void calibratePositionPercent(double known_position_percent); // set current position to known percent (0.0 to 100.0)
     void moveToPercentOpRange(double position_percent); // move actuator to position in percent (0.0 to 100.0)
     void moveTo(uint16_t position); // move actuator to absolute position in operation range
-    void TimePositionTrackingZeroPosition() { position_tracking_in_ms = 0; }
+    void TimePositionTrackingZeroPosition() { position_time_based = 0; }
     void enableClampingToKnownPosition(bool enable, bool DirA_zero = true) { allow_clamping_to_known_position = enable; clamping_known_position_DirB_zero = DirA_zero; }
     void run();
+    void resetTimeBasedPosition(double percent) {position_time_based = min_position_op_range + op_range * percent / 100.0;}
     void updatePositionPercentOpRange(double position_percent); // position in percent (0.0 to 100.0) 0 = min_position, 100 = max_position
     void updatePosition(uint16_t position_value);
     uint16_t getMaxPosition() { return max_position_op_range; }
     uint16_t getMinPosition() { return min_position_op_range; }
     uint16_t getOpRange() { return op_range; }
     uint16_t getPosition() { return position; }
+    uint16_t getPositionTimeBased() { return position_time_based;}
     double getPositionStepsPerMs() { return position_steps_per_ms; }
     void setPositionStepsPerMs(double steps_per_ms) { position_steps_per_ms = steps_per_ms; }
 
@@ -128,12 +138,19 @@ public:
 class VehicleControl {
 public:
     enum OperationMode : uint8_t {
-        Idle = 0,
-        ADSystemControl = 1,
-        ECUTestControl = 2,
-        Error = 3,
-        Emergency = 4,
-        Test = 5
+        Idle = 0,               // no control, but monitoring, vehicle should be stationary, emergency actions enabled
+        ADSystemControl = 1,    // normal operation, controlled by AD system. Steering and brake actuator controlled directly by AD System, steering angle and other vehicle data is forwarded from vehicle CAN message. ECU controls inverter according to inputs from AD System. ECU monitors.
+        ECUTestControl = 2,     // test mode, controlled by ECU. Steering and brake actuator and motor controlled by ECU via joystick input
+        Error = 3,              // error state, try to stabilize vehicle
+        Emergency = 4,          // emergency state, trigger emergency actions (open safety circuit, switch off HV and trigger emergency brake)
+        Test = 5,               // test mode, individual test routines
+    };
+
+    enum TestMode : uint8_t {
+        Test_None = 0,
+        Test_BrakeSteeringActuatorJoystick = 1,
+        Test_InverterJoystick = 2,
+        Test_FullSystem = 3
     };
 
     enum GearSelection : uint8_t {
@@ -151,7 +168,11 @@ public:
     void initialize();
     void run();
 
+    void requestOperationMode(OperationMode mode) { target_operation_mode = mode; }
+    void setEmergencyMode() { operation_mode = Emergency; }
     OperationMode getOperationMode() const { return operation_mode; }
+
+    TestMode getTestMode() const { return test_mode; }
     
     void adsysConnectionLostAction();
     void adsysConnectionOkAction();
@@ -169,6 +190,7 @@ public:
             steering_actuator.moveToPercentOpRange(position_percent);
         }
     }
+    double getSteeringAnglePercent() {return (((double) steering_actuator.getPosition() - steering_actuator.getMinPosition()) / (double) steering_actuator.getOpRange() * 100.0);}
 
     void setTargetBrakePosition(double position_percent) { brake_actuator.moveToPercentOpRange(position_percent); }
     void updateGearSelection(uint8_t gear);
@@ -176,9 +198,6 @@ public:
     void updateJoystickThrottle(double throttle);
 
     void test();
-
-    void requestOperationMode(OperationMode mode) { target_operation_mode = mode; }
-    void setEmergencyMode() { operation_mode = Emergency; }
 
 private:
     void setOperationMode(OperationMode mode) { operation_mode = mode; }
@@ -188,6 +207,7 @@ private:
     OperationMode operation_mode; // current operation mode
     OperationMode target_operation_mode; // requested operation mode
     OperationMode initialization_state_operation_mode; // keep initialization state of selected operation mode
+    TestMode test_mode;
     GearSelection gear_selection;
     bool inject_simulated_data = false;
     ActuatorControl brake_actuator;

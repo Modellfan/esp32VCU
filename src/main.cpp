@@ -44,10 +44,11 @@ int rawJoystickY = 0;
 // Processed joystick values (-100% to 100%)
 float processedJoystickX = 0.0;
 float processedJoystickY = 0.0;
+double joystick_deadzone = 5.0; // percent
 
 // Calibration values (from your provided data)
-const int joystickX_ZERO = 1993; // X-axis center value
-const int joystickY_ZERO = 2005; // Y-axis center value
+const int joystickX_ZERO = 1900; // X-axis center value
+const int joystickY_ZERO = 1940; // Y-axis center value
 
 const int JOYSTICK_MIN = 0;                  // Minimum raw ADC value
 const int JOYSTICK_MAX = 4095;               // Maximum raw ADC value
@@ -68,10 +69,10 @@ bool emergencyButtonPressed = false;
 bool joystick_control_active = false;
 bool joystick_error_flag = false;
 
-const float torque_ramp_accel = 20.0;             // torque acceleration ramp per 10ms
-const float torque_ramp_decell = 10.0;            // torque deceleration ramp per 10ms
-const float torque_max = 1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
-const float torque_min = -800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
+const float torque_ramp_accel = 20.0; // 20.0;             // torque acceleration ramp per 10ms
+const float torque_ramp_decell = 10.0; // 10.0;            // torque deceleration ramp per 10ms
+const float torque_max = 100.0; //1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
+const float torque_min = -80.0; //-800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
 const float torque_zero_space = 5.0;              // First 5% of joystick are zero zone in both directions
 const float torque_regen_cutoff_rpm_high = 300.0; // When the motor rpm is below this , stop  cutoff any negative torque regen -> Hysteresis control
 const float torque_regen_cutoff_rpm_low = 200.0;  // When the motor rpm is below this , start cutoff remaining negative torque regen -> Hysteresis control
@@ -79,6 +80,11 @@ const float torque_regen_cutoff_rpm_full = 10.0;  // When the motor rpm is below
 float torque_theoretical = 0.0;                   // torque request before ramping
 float torque_request_internal = 0.0;              // torque request, before putting max on it
 float torque_request_calculated = 0.0;            // final torque before putting out to can
+
+uint8_t reverse_bit = 0;
+uint32_t last_reverse_toggle_time = 0;
+bool steeringControlHoldValue = true;
+bool holdingJoystickInDirectionReleased = true;
 
 // ——————————————————————————————————————————————————————————————————————————————
 //   Brake Control
@@ -93,7 +99,11 @@ const float SERVO_MIN_POSITION = -180.0; // Minimum servo position
 const float SERVO_MAX_POSITION = 180.0;  // Maximum servo position
 
 // PID variables
-float brake_pedal_target = 0.0; // Desired brake pedal position (0-100%)
+double brake_pedal_target = 0.0; // Desired brake pedal position (0-100%)
+double brake_pedal_target_test = 0.0;   // Test variable for brake pedal position
+double steering_angle_target_test = 50.0; // Test variable for steering angle
+double torque_request_test = 0.0;      // Test variable for torque request
+
 float servo_position = 0.0;     // Servo output position
 
 // PID state variables
@@ -253,7 +263,7 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     outFrame.data[5] = inFrame.data[5];
     outFrame.data[6] = inFrame.data[6];
     outFrame.data[7] = inFrame.data[7];
-
+    
     torque_request_byte_0 = inFrame.data[0];
     torque_request_byte_1 = inFrame.data[1];
 
@@ -264,6 +274,8 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     // 3) Convert to physical value using scale=1, bias=-2000
     //    physical = raw - 2000
     int16_t physicalAcceleration = (int16_t)rawAcceleration - 2000;
+
+    torque_request = physicalAcceleration;
 
     // 4) Example manipulation: ensure the physical value is never negative
     // if (physicalAcceleration < 0) {
@@ -278,14 +290,22 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     //     }
     // }
 
-    if (0 && joystick_control_active)
-    {
-        physicalAcceleration = torque_request_calculated;
-    }
-    else
+    VehicleControl::OperationMode vControlMode = vControl.getOperationMode();
+
+    if (vControlMode == VehicleControl::ECUTestControl && vControl.getTestMode() == VehicleControl::TestMode::Test_BrakeSteeringActuatorJoystick)
     {
         physicalAcceleration = 0;
     }
+    else if(vControlMode == VehicleControl::ECUTestControl && vControl.getTestMode() == VehicleControl::TestMode::Test_FullSystem)
+    {
+        //MONITOR_PORT.println("physicalAcceleration = torque_request_calculated: " + String(torque_request_calculated));
+        physicalAcceleration = torque_request_calculated;
+    }
+    else if(vControlMode == VehicleControl::OperationMode::ADSystemControl)
+    {
+        // TODO: AD system input
+    }
+
 
     if(every100 == 0)
     {
@@ -300,6 +320,11 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     // 6) Store the manipulated raw value back in big-endian format
     outFrame.data[0] = (uint8_t)((rawAcceleration >> 8) & 0xFF); // MSB
     outFrame.data[1] = (uint8_t)(rawAcceleration & 0xFF);        // LSB
+
+    if(vControlMode == VehicleControl::OperationMode::ECUTestControl && vControl.getTestMode() == VehicleControl::TestMode::Test_InverterJoystick)
+    {
+        outFrame.data[7] = reverse_bit;
+    }
 }
 
 void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
@@ -334,6 +359,7 @@ void interpreteCANframe(const CANMessage &frame)
     { // Accelerator Pedal Percentage
         uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
         vControl.updateSteeringAngle(rawSteering);
+        //MONITOR_PORT.println("Got CAN Msg Steering angle raw: " + String(rawSteering));
         steering_angle = rawSteering - 4096; // div by 30.0 missing? -> According to https://myimiev.com/threads/can-network-reverse-engineering-creating-dbc-imiev.5788/ : Steering = (PID[0] * 256 + PID[1] - 4096) / 30.0;
     }
     else if (frame.id == 0x231)
@@ -452,7 +478,7 @@ void manipulateCAN()
                     MONITOR_PORT.print("motor_rpm: ");
                     MONITOR_PORT.print(motor_rpm);
                     MONITOR_PORT.print("\n");
-                    
+
                 }
 
                 CANMessage outFrame;
@@ -517,14 +543,27 @@ void pollCAN()
 void control_dynamics()
 {
     pollJoystick();
-    //control_acceleration();
+    control_acceleration();
     control_brake_pedal();
 }
+
+double Xavg = 0;
+double Yavg = 0;
 
 void pollJoystick()
 {
     rawJoystickX = analogRead(JOYSTICK_X_PIN); // Read X-axis
     rawJoystickY = analogRead(JOYSTICK_Y_PIN); // Read Y-axis
+
+    /*
+    // in the current setup: Xavg = ~1900, Yavg = ~1940
+    double cnt = 1000;
+    Xavg = (Xavg * (cnt -1) + (double) rawJoystickX) / cnt;
+    Yavg = (Yavg * (cnt -1) + (double) rawJoystickY) / cnt;
+
+    MONITOR_PORT.println("rawJoystickX: " + String(rawJoystickX) + ", rawJoystickY: " + String(rawJoystickY));
+    MONITOR_PORT.println("running avg rawJoystickX: " + String(Xavg) + ", running avg rawJoystickY: " + String(Yavg));*/
+
 
     // Convert to -100% to 100% range
     processedJoystickX = ((rawJoystickX - joystickX_ZERO) / (float)JOYSTICK_RANGE) * 100.0;
@@ -538,7 +577,72 @@ void pollJoystick()
     emergencyButtonPressed = false; // (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
     joystick_control_active = true; //!emergencyButtonPressed;
 
-    vControl.setTargetSteeringAngle((100.0 - processedJoystickX) / 2.0); // Map -100% to 100% joystick to 0% to 100% steering
+    if(vControl.getOperationMode() == VehicleControl::OperationMode::ECUTestControl)
+    {
+        double steeringInputPercent = (processedJoystickX<=-joystick_deadzone || processedJoystickX >= joystick_deadzone)?processedJoystickX/(100.0-joystick_deadzone):0.0;
+
+        if(vControl.getTestMode() == VehicleControl::TestMode::Test_None || vControl.getTestMode() == VehicleControl::TestMode::Test_FullSystem)
+        {
+            if(steeringControlHoldValue)
+            {
+                bool holdingJoystickInDirection = (processedJoystickX > joystick_deadzone)?true:((processedJoystickX < -joystick_deadzone)?true:false);
+                
+                MONITOR_PORT.println("holdingJoystickInDirection is: " + String(holdingJoystickInDirection));
+                if(holdingJoystickInDirection)
+                {
+                    double anglePer = (processedJoystickX>0.0)?0.0:100.0;
+                    vControl.setTargetSteeringAngle(anglePer);
+                    holdingJoystickInDirectionReleased = false;
+                    MONITOR_PORT.println("Holding steering input. Set target steering angle to: " + String(anglePer));
+                }
+                else if(holdingJoystickInDirectionReleased == false)
+                {
+                    MONITOR_PORT.println("Released steering input. Set target to current steering angle. vControl.getSteeringAnglePercent():" + String(vControl.getSteeringAnglePercent()));
+                    vControl.setTargetSteeringAngle(vControl.getSteeringAnglePercent());
+                    holdingJoystickInDirectionReleased = true;
+                }
+            }
+            else
+            {
+                double anglePercent = processedJoystickX > joystick_deadzone?((processedJoystickX-joystick_deadzone)/(100.0-joystick_deadzone)):(processedJoystickX < -joystick_deadzone?((processedJoystickX+joystick_deadzone)/(100.0-joystick_deadzone)):0.0);
+                anglePercent = constrain(anglePercent, -100.0, 100.0);
+                vControl.setTargetSteeringAngle((100.0 - anglePercent) / 2.0); // Map -100% to 100% joystick to 0% to 100% steering
+            }
+        }
+        else if(vControl.getTestMode() == VehicleControl::TestMode::Test_BrakeSteeringActuatorJoystick)
+        {
+            int8_t summand = processedJoystickX > joystick_deadzone?1:(processedJoystickX < -joystick_deadzone?-1:0);
+            steering_angle_target_test += (double) summand / 2.0;
+            steering_angle_target_test = constrain(steering_angle_target_test, -100.0, 100.0);
+            vControl.setTargetSteeringAngle((100.0 - steering_angle_target_test) / 2.0); // Map -100% to 100% joystick to 0% to 100% steering
+
+            if(summand != 0)
+            {
+                MONITOR_PORT.println("steering_angle_target_test: " + String(steering_angle_target_test));
+            }
+        }
+        else if(vControl.getTestMode() == VehicleControl::TestMode::Test_InverterJoystick)
+        {
+            if(steeringInputPercent < 0)
+            {
+                torque_request_test = 0.0;
+            }
+            else if(steeringInputPercent > 0)
+            {
+                if(motor_rpm == 0 && last_reverse_toggle_time + 2000 < millis())
+                {
+                    last_reverse_toggle_time = millis();
+                    reverse_bit = 0x01 - reverse_bit; // toggle bit
+
+                    MONITOR_PORT.print("Toggling reverse bit to: ");
+                    MONITOR_PORT.print(reverse_bit);
+                    MONITOR_PORT.print("\n");
+                }
+                torque_request_test = 0.0;
+            }
+        }
+    }
+    //else if ADSystem
 }
 
 void control_brake_pedal()
@@ -563,13 +667,35 @@ void control_brake_pedal()
     // // Write the servo position
     // brake_servo.write(servo_position);
 
-    //vControl.setBrakePosition(brake_pedal_target * 100.0); // Map 0.0 to 1.0 to 0 to 100%
+    VehicleControl::OperationMode vControlMode = vControl.getOperationMode();
 
-    brake_pedal_target += processedJoystickY * (10.0/1000.0);
+    if(vControlMode == VehicleControl::OperationMode::ECUTestControl)
+    {
+        VehicleControl::TestMode vControlTestMode = vControl.getTestMode();
 
-    brake_pedal_target = constrain(brake_pedal_target, 0.0, 100.0);
+        if(vControlTestMode == VehicleControl::TestMode::Test_None || vControlTestMode == VehicleControl::TestMode::Test_FullSystem)
+        {
+            vControl.setTargetBrakePosition(brake_pedal_target * 100.0); // Map 0.0 to 1.0 to 0 to 100%
+        }
+        else if(vControlTestMode == VehicleControl::TestMode::Test_BrakeSteeringActuatorJoystick)
+        {
+            int8_t summand = processedJoystickY > torque_zero_space?1:(processedJoystickY < -torque_zero_space?-1:0);
+            brake_pedal_target_test += (double) summand / 2.0; // increase or decrease target by joystick position
+            brake_pedal_target_test = constrain(brake_pedal_target_test, 0.0, 100.0);
+            vControl.setTargetBrakePosition(brake_pedal_target_test); // Map 0 to 1 -> 0 to 100%
 
-    vControl.setTargetBrakePosition(brake_pedal_target); // Map 0 to 1 -> 0 to 100%
+            if(summand != 0)
+            {
+                MONITOR_PORT.print("brake_pedal_target_test: ");
+                MONITOR_PORT.print(brake_pedal_target_test);
+                MONITOR_PORT.print("%\n");
+            }
+        }
+    }
+    else
+    {
+        // don't control brake in ADSystemControl mode
+    }
 }
 
 void control_acceleration()
@@ -577,6 +703,32 @@ void control_acceleration()
     //  Overall control principle
     //  -5% to 5% joystick -> zero acceleration -> ramp up regen to torque min, when motor rpm is below torque_regen_cutoff_rpm put torque to zero
     //  > 5% joystick -> acceleration -> ramp up to torque_theoretical which is depending on the joystick position
+
+    VehicleControl::OperationMode vControlMode = vControl.getOperationMode();
+
+    if(vControlMode == VehicleControl::OperationMode::ECUTestControl)
+    {
+        VehicleControl::TestMode vControlTestMode = vControl.getTestMode();
+        if (vControlTestMode == VehicleControl::TestMode::Test_BrakeSteeringActuatorJoystick)
+            return;
+        else if (vControlTestMode == VehicleControl::TestMode::Test_InverterJoystick)
+        {
+            int8_t summand = processedJoystickY > torque_zero_space?5:(processedJoystickY < -torque_zero_space?-5:0);
+            torque_request_test += summand;
+            torque_request_calculated = constrain(torque_request_test, torque_min, torque_max);
+
+            if(summand != 0)
+            {
+                MONITOR_PORT.print("torque_request_test: ");
+                MONITOR_PORT.print(torque_request_test);
+                MONITOR_PORT.print("%\n");
+            }
+        }
+    }
+    else if(vControlMode == VehicleControl::OperationMode::ADSystemControl)
+    {
+        // TODO: use AD System inputs
+    }
 
     // we need motor speed additional
     if ((joystick_error_flag == false) && (joystick_control_active == true))
@@ -679,7 +831,9 @@ void control_acceleration()
     }
 
     // Ensure brake target remains within valid limits
-    brake_pedal_target = constrain(brake_pedal_target, 0.0, 1.0);
+    brake_pedal_target = constrain(brake_calculated, 0.0, 1.0);
+
+    MONITOR_PORT.println("Brake Pedal Target: " + String(brake_pedal_target * 100.0) + "%");
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -692,9 +846,11 @@ void printStatus()
     MONITOR_PORT.print(processedJoystickX);
     MONITOR_PORT.print(" | Joystick Y: ");
     MONITOR_PORT.print(processedJoystickY);
-    MONITOR_PORT.print(" | Brake Pedal: ");
+    MONITOR_PORT.print(" | Brake Pedal Target: ");
     MONITOR_PORT.print(brake_pedal_target, 2);
-    MONITOR_PORT.print(" | Torque Request: ");
+    MONITOR_PORT.print(" | Brake Pedal Position (iMiev): ");
+    MONITOR_PORT.print(brake_pedal_position, 2);
+    MONITOR_PORT.print("\nTorque Request (iMiev): ");
     MONITOR_PORT.print(torque_request);
     MONITOR_PORT.print(" | Accelerator: ");
     MONITOR_PORT.print(accelerator_pedal_percentage, 2);
@@ -726,7 +882,7 @@ void setup()
     USBSerial1.begin();
     USB.begin();
 
-    //delay(10000);
+    delay(10000);
 
     // Initialize Servo
     // ESP32PWM::allocateTimer(0);
