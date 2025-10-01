@@ -29,8 +29,8 @@ void ActuatorControl::initialize(uint16_t min_pos_op_range, uint16_t max_pos_op_
     target_position = min_pos_op_range;
     position_tracking_start_time_current_move = 0;
     emergency_triggered = false;
-    position_known_time_tracking = false;
     state = Inactive;
+    extendDriveToZeroActive = false;
 
     setHysteresisPercentOpRange(2.0, 5.0);
 
@@ -87,8 +87,10 @@ void ActuatorControl::setTargetPosition(uint16_t pos) {
 
     if(target_position != pos)
     {
-        LOG_MSG("[" + String(name) + "] target=" + String(target_position));
+        //LOG_MSG("[" + String(name) + "] target=" + String(target_position));
     }
+
+    extendDriveToZeroActive = false;
 
     target_position = pos;
 }
@@ -163,11 +165,12 @@ void ActuatorControl::run() {
             actuator_position_since_movement_start = position_time_based;
         }
         int32_t iactuator_position = (int32_t) actuator_position_since_movement_start + position_steps_per_ms * (now - actuator_time_since_movement_start);
-        position_time_based = iactuator_position < 0 ? 0 : (uint16_t) iactuator_position;LOG_MSG("position_time_based: " + String(position_time_based));
+        position_time_based = iactuator_position < 0 ? 0 : (uint16_t) iactuator_position;
+        //LOG_MSG("position_time_based: " + String(position_time_based));
         //LOG_MSG("actuator_position_since_movement_start: " + String(actuator_position_since_movement_start));
         //LOG_MSG("position_steps_per_ms: " + String(position_steps_per_ms));
         //LOG_MSG("(now - actuator_time_since_movement_start): " + String((now - actuator_time_since_movement_start)));
-        LOG_MSG("position_time_based moving DirA: " + String(position_time_based));
+        //LOG_MSG("position_time_based moving DirA: " + String(position_time_based));
     }
     else if(state == ActuatorControl::MovingDirB)
     {
@@ -182,7 +185,7 @@ void ActuatorControl::run() {
         //LOG_MSG("actuator_position_since_movement_start: " + String(actuator_position_since_movement_start));
         //LOG_MSG("position_steps_per_ms: " + String(position_steps_per_ms));
         //LOG_MSG("(now - actuator_time_since_movement_start): " + String((now - actuator_time_since_movement_start)));
-        LOG_MSG("position_time_based moving DirB: " + String(position_time_based));
+        //LOG_MSG("position_time_based moving DirB: " + String(position_time_based));
     }
     else
     {
@@ -192,7 +195,7 @@ void ActuatorControl::run() {
     // --- max_move_time_ms limit check ---
     if ((control_type == ActiveControlWithFeedback || control_type == ActiveControlWithTime) &&
         (state == MovingDirA || state == MovingDirB)) {
-        if ((now - position_tracking_start_time_current_move > max_move_time_ms) && max_move_time_ms != 0xFFFFFFFF) {
+        if ((now - position_tracking_start_time_current_move > max_move_time_ms) && max_move_time_ms != ACTUATOR_EMERGENCY_TIMEOUT_NO_CHECK) {
             stopActuator();
             state = Error;
             emergency_triggered = true;
@@ -212,8 +215,8 @@ void ActuatorControl::run() {
         move_start_time = 0;
     }
 
-    bool emergency_now_sensor = (( min_position_emergency_trigger != 0xFFFF && position <= min_position_emergency_trigger) || ( max_position_emergency_trigger != 0xFFFF && position >= max_position_emergency_trigger));
-    bool emergency_now_time = (( min_position_emergency_trigger != 0xFFFF && position_time_based <= min_position_emergency_trigger) || ( max_position_emergency_trigger != 0xFFFF && position_time_based >= max_position_emergency_trigger));
+    bool emergency_now_sensor = (( min_position_emergency_trigger != ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK && position <= min_position_emergency_trigger) || ( max_position_emergency_trigger != ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK && position >= max_position_emergency_trigger));
+    bool emergency_now_time = (( min_position_emergency_trigger != ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK && position_time_based <= min_position_emergency_trigger) || ( max_position_emergency_trigger != ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK && position_time_based >= max_position_emergency_trigger));
 
     if (emergency_now_sensor || emergency_now_time) {
         emergency_triggered = true;
@@ -230,8 +233,8 @@ void ActuatorControl::run() {
         return;
     } else {
         if (emergency_triggered &&
-            (position > min_position_emergency_trigger || min_position_emergency_trigger == 0xFFFF) && (position < max_position_emergency_trigger || max_position_emergency_trigger == 0xFFFF) &&
-            (position_time_based > min_position_emergency_trigger || min_position_emergency_trigger == 0xFFFF) && (position_time_based < max_position_emergency_trigger || max_position_emergency_trigger == 0xFFFF)) {
+            (position > min_position_emergency_trigger || min_position_emergency_trigger == ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK) && (position < max_position_emergency_trigger || max_position_emergency_trigger == ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK) &&
+            (position_time_based > min_position_emergency_trigger || min_position_emergency_trigger == ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK) && (position_time_based < max_position_emergency_trigger || max_position_emergency_trigger == ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK)) {
             emergency_triggered = false;
             if (state == Error) state = Inactive;
             force_both_active = false;
@@ -246,9 +249,31 @@ void ActuatorControl::run() {
             state = Inactive;
             LOG_MSG("[" + String(name) + "] Target reached (sensor-based), stopped.");
         } else if (state == MovingDirB && position <= (target_position + hysteresis_stop)) {
-            stopActuator();
-            state = Inactive;
-            LOG_MSG("[" + String(name) + "] Target reached (sensor-based), stopped.");
+            if(extendDriveToZeroActive == true)
+            {
+                if(extendDriveToZeroStarted == false)
+                {
+                    extendDriveToZeroStartTime = now;
+                    extendDriveToZeroStarted = true;
+                }
+
+                if(now >= (extendDriveToZeroStartTime + EXTEND_DRIVE_TO_ZERO_TIME_MS) || now < extendDriveToZeroStartTime)
+                {
+                    extendDriveToZeroStarted = false;
+                    extendDriveToZeroActive = false;
+                    extendDriveToZeroStartTime = 0;
+
+                    stopActuator();
+                    state = Inactive;
+                    LOG_MSG("[" + String(name) + "] Target reached (sensor-based), stopped.");
+                }
+            }
+            else
+            {
+                stopActuator();
+                state = Inactive;
+                LOG_MSG("[" + String(name) + "] Target reached (sensor-based), stopped.");
+            }
         }
     } else if (control_type == ActiveControlWithTime) {
         if (state == MovingDirA && position_time_based >= (target_position - hysteresis_stop)) {
@@ -256,9 +281,31 @@ void ActuatorControl::run() {
             state = Inactive;
             LOG_MSG("[" + String(name) + "] Target reached (time-based), stopped.");
         } else if (state == MovingDirB && position_time_based <= (target_position + hysteresis_stop)) {
-            stopActuator();
-            state = Inactive;
-            LOG_MSG("[" + String(name) + "] Target reached (time-based), stopped.");
+            if(extendDriveToZeroActive == true)
+            {
+                if(extendDriveToZeroStarted == false)
+                {
+                    extendDriveToZeroStartTime = now;
+                    extendDriveToZeroStarted = true;
+                }
+
+                if(now >= (extendDriveToZeroStartTime + EXTEND_DRIVE_TO_ZERO_TIME_MS) || now < extendDriveToZeroStartTime)
+                {
+                    extendDriveToZeroStarted = false;
+                    extendDriveToZeroActive = false;
+                    extendDriveToZeroStartTime = 0;
+
+                    stopActuator();
+                    state = Inactive;
+                    LOG_MSG("[" + String(name) + "] Target reached (time-based), stopped.");
+                }
+            }
+            else
+            {
+                stopActuator();
+                state = Inactive;
+                LOG_MSG("[" + String(name) + "] Target reached (time-based), stopped.");
+            }
         }
     } else if (control_type == MonitoringOnly) {
         // Do not control outputs in MonitoringOnly mode, except for emergency above!
@@ -266,48 +313,44 @@ void ActuatorControl::run() {
     }
 
     // --- Actuator Start Movement ---
-    if(state == Inactive && ((static_cast<int32_t>(position) <= static_cast<int32_t>(target_position) - static_cast<int32_t>(hysteresis_start)) ||
-       (static_cast<int32_t>(position) >= static_cast<int32_t>(target_position) + static_cast<int32_t>(hysteresis_start)) ))
+    if(state == Inactive/* && (!extendDriveToZeroActive || target_position != 0)*/)
     {
-        // out of target range, start movement
-
-        position_tracking_start_time_current_move = now;
-
-        LOG_MSG("[" + String(name) + "] out of target range, start movement: target=" + String(target_position) + ", mode=" + String(control_type));
-
         if (control_type == ActiveControlWithFeedback) {
-            if ((target_position - hysteresis_start) > position) {
+            if (position < (target_position - hysteresis_start)) {
                 state = MovingDirA;
                 moveDirA();
-                LOG_MSG("[" + String(name) + "] Moving DirA (sensor-based)");
-            } else if ((target_position + hysteresis_start) < position) {
+                position_tracking_start_time_current_move = now;
+                //LOG_MSG("[" + String(name) + "] Moving DirA (sensor-based)");
+            } else if (position > (target_position + hysteresis_start)) {
                 state = MovingDirB;
                 moveDirB();
-                LOG_MSG("[" + String(name) + "] Moving DirB (sensor-based)");
-            } else {
-                state = Inactive;
-                stopActuator();
-                LOG_MSG("[" + String(name) + "] Already at target (sensor-based)");
+                position_tracking_start_time_current_move = now;
+                //LOG_MSG("[" + String(name) + "] Moving DirB (sensor-based)");
             }
         } else if (control_type == ActiveControlWithTime) {
-            if ((target_position - hysteresis_start) > position_time_based) {
+            if (position_time_based < (target_position - hysteresis_start)) {
                 state = MovingDirA;
                 moveDirA();
-                position_known_time_tracking = true;
-                LOG_MSG("[" + String(name) + "] Moving DirA (time-based)");
-            } else if ((target_position + hysteresis_start) < position_time_based) {
+                position_tracking_start_time_current_move = now;
+                //LOG_MSG("[" + String(name) + "] Moving DirA (time-based)");
+            } else if (position_time_based > (target_position + hysteresis_start)) {
                 state = MovingDirB;
                 moveDirB();
-                position_known_time_tracking = true;
-                LOG_MSG("[" + String(name) + "] Moving DirB (time-based)");
-            } else {
-                state = Inactive;
-                stopActuator();
-                position_known_time_tracking = false;
-                LOG_MSG("[" + String(name) + "] Already at target (time-based)");
+                position_tracking_start_time_current_move = now;
+                //LOG_MSG("[" + String(name) + "] Moving DirB (time-based)");
             }
         }
+        if(state != Inactive)
+        {
+            LOG_MSG("[" + String(name) + "] out of target range, start movement: target=" + String(target_position) + ", mode=" + String(control_type));
+        }
     }
+}
+
+void ActuatorControl::activateExtendDriveToZero()
+{
+    extendDriveToZeroStarted = false;
+    extendDriveToZeroActive = true;
 }
 
 void ActuatorControl::stopActuator() {
@@ -315,21 +358,24 @@ void ActuatorControl::stopActuator() {
     digitalWrite(pin_dir_a, LOW);
     digitalWrite(pin_dir_b, LOW);
     state = Inactive;
-    LOG_MSG("[" + String(name) + "] stopActuator: Outputs set LOW.");
+    extendDriveToZeroActive = false;
+    //LOG_MSG("[" + String(name) + "] stopActuator: Outputs set LOW.");
 }
 void ActuatorControl::moveDirA() {
     if(pin_dir_a == 255 || pin_dir_b == 255) return;
     digitalWrite(pin_dir_a, HIGH);
     digitalWrite(pin_dir_b, LOW);
     state = MovingDirA;
-    LOG_MSG("[" + String(name) + "] moveDirA: DirA=HIGH, DirB=LOW");
+    extendDriveToZeroActive = false;
+    //LOG_MSG("[" + String(name) + "] moveDirA: DirA=HIGH, DirB=LOW");
 }
 void ActuatorControl::moveDirB() {
     if(pin_dir_a == 255 || pin_dir_b == 255) return;
     digitalWrite(pin_dir_a, LOW);
     digitalWrite(pin_dir_b, HIGH);
     state = MovingDirB;
-    LOG_MSG("[" + String(name) + "] moveDirB: DirA=LOW, DirB=HIGH");
+    extendDriveToZeroActive = false;
+    //LOG_MSG("[" + String(name) + "] moveDirB: DirA=LOW, DirB=HIGH");
 }
 bool ActuatorControl::feedbackA() const {
     if(pin_fb_a == 255) return false;
@@ -380,20 +426,20 @@ void VehicleControl::initialize() {
     inject_simulated_data = false;
 
     brake_actuator.setPins(BRAKE_ACTUATOR_DIR_A_PIN, BRAKE_ACTUATOR_DIR_B_PIN, BRAKE_ACTUATOR_FB_A_PIN, BRAKE_ACTUATOR_FB_B_PIN);
-    brake_actuator.initialize(0, BRAKE_ACTUATOR_MAX_POSITION, 0xFFFF, BRAKE_ACTUATOR_MAX_POSITION+100, 0xFFFFFFFF/*20000*/, ActuatorControl::ActiveControlWithTime); // actual max position is 1800 steps; just use a low value for now; 120 steps = ~10mm
+    brake_actuator.initialize(BRAKE_ACTUATOR_MIN_POSITION, BRAKE_ACTUATOR_MAX_POSITION, BRAKE_ACTUATOR_MIN_POSITION_EMERGENCY, BRAKE_ACTUATOR_MAX_POSITION_EMERGENCY, ACTUATOR_EMERGENCY_TIMEOUT_NO_CHECK/*20000*/, ActuatorControl::ActiveControlWithTime); // actual max position is 1800 steps; just use a low value for now; 120 steps = ~10mm
     //brake_actuator.initialize(0, 120, 0xFFFF, 120+12, 20000, ActuatorControl::MonitoringOnly); // actual max position is 1800 steps; just use a low value for now
     //brake_actuator.setPositionStepsPerMs(0.052008); // 11.82 position units per mm; 4.4mm/s; 150mm length (i.e., 34091 ms for full range)
-    brake_actuator.setPositionStepsPerMs(0.52915);
+    brake_actuator.setPositionStepsPerMs(BRAKE_ACTUATOR_POSITION_STEPS_PER_MS);
     brake_actuator.setName("Brake");
     brake_actuator.enableClampingToKnownPosition(true, true);
     brake_actuator.setHysteresisPercentOpRange(3.0, 2.0);
     steering_actuator.setPins(STEERING_ACTUATOR_DIR_A_PIN, STEERING_ACTUATOR_DIR_B_PIN, STEERING_ACTUATOR_FB_A_PIN, STEERING_ACTUATOR_FB_B_PIN);
-    steering_actuator.initialize(2796+192, 5396-192, 2796, 5396, 0xFFFFFFFF/*20000*/, ActuatorControl::ActiveControlWithFeedback);
+    steering_actuator.initialize(STEERING_ACTUATOR_MIN_POSITION, STEERING_ACTUATOR_MAX_POSITION, STEERING_ACTUATOR_MIN_POSITION_EMERGENCY, STEERING_ACTUATOR_MAX_POSITION_EMERGENCY, ACTUATOR_EMERGENCY_TIMEOUT_NO_CHECK/*20000*/, ActuatorControl::ActiveControlWithFeedback);
     //steering_actuator.initialize(2796+96, 5396-96, 2796-96, 5396+96, 20000, ActuatorControl::MonitoringOnly);
-    steering_actuator.setPositionStepsPerMs(0.0); // 0.16 position units per ms; 6.0mm/s; 165mm length (i.e., 1031 ms for full range)
+    steering_actuator.setPositionStepsPerMs(0.0);
     steering_actuator.resetTimeBasedPosition(50.0);
     steering_actuator.setName("Steering");
-    steering_actuator.setHysteresisPercentOpRange(2.5, 2.0);
+    steering_actuator.setHysteresisPercentOpRange(5.0, 3.0);
 
     pin_led_gear_park = DASHBOARD_LED_GEAR_PARK_PIN;
     pin_led_gear_drive = DASHBOARD_LED_GEAR_DRIVE_PIN;
@@ -441,29 +487,26 @@ void VehicleControl::initialize() {
     uint32_t brakeCalibrateStartTime = millis();
     setTargetSteeringAngle(50.0);
 
-    while(millis() < brakeCalibrateStartTime + 5000)
+    while(millis() < brakeCalibrateStartTime + BRAKE_ACTUATOR_INITIAL_DRIVE_BACK_TIME_MS)
     {
         delay(10);
+        steering_actuator.resetTimeBasedPosition(50.0);
         steering_actuator.run();
     }
     brake_actuator.stopActuator();
     brake_actuator.TimePositionTrackingZeroPosition();
-    brake_actuator.moveTo(190);
-    while((brake_actuator.getState() != ActuatorControl::ActuatorState::Inactive) || (steering_actuator.getState() != ActuatorControl::ActuatorState::Inactive))
+    while(steering_actuator.getState() != ActuatorControl::ActuatorState::Inactive)
     {
-        if((brake_actuator.getState() == ActuatorControl::ActuatorState::Error) || (steering_actuator.getState() == ActuatorControl::ActuatorState::Error))
+        if(steering_actuator.getState() == ActuatorControl::ActuatorState::Error)
         {
             break;
         }
         delay(10);
         steering_actuator.run();
-        brake_actuator.run();
+        steering_actuator.resetTimeBasedPosition(50.0);
     }
-    brake_actuator.setMinPosition(180);
 
     LOG_MSG("[VehicleControl] Initialized.");
-
-    sleep(10);
 }
 
 void VehicleControl::updateHeartbeat(bool received) {
@@ -504,6 +547,19 @@ void VehicleControl::adsysConnectionLostAction() {
 void VehicleControl::adsysConnectionOkAction()
 {
     neopixelWrite(RGB_BUILTIN, 0, 20, 0); // Green
+}
+
+void VehicleControl::setTargetBrakePosition(double position_percent)
+{
+    brake_actuator.moveToPercentOpRange(position_percent);
+    
+    if(position_percent == 0.0)
+    {
+        // manually activate driving back, even when position is thought to be zero
+        brake_actuator.moveDirB();
+        // extend 1 second to recalibrate to zero during run time
+        brake_actuator.activateExtendDriveToZero();
+    }
 }
 
 // is called periodically, every 10ms by the scheduler in main.cpp
@@ -608,6 +664,13 @@ void VehicleControl::ADSystemMessagesCb(const AdsysMessage& msg)
             setInjectSimulatedData(enable);
         }
     }
+}
+
+void VehicleControl::setEmergencyMode()
+{
+    digitalWrite(pin_ecu_trigger_emergency, LOW);
+    digitalWrite(pin_led_ecu_error, LOW);
+    operation_mode = Emergency;
 }
 
 void VehicleControl::updateJoystickSteering(double steering)

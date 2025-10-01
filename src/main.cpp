@@ -69,10 +69,10 @@ bool emergencyButtonPressed = false;
 bool joystick_control_active = false;
 bool joystick_error_flag = false;
 
-const float torque_ramp_accel = 20.0; // 20.0;             // torque acceleration ramp per 10ms
-const float torque_ramp_decell = 10.0; // 10.0;            // torque deceleration ramp per 10ms
-const float torque_max = 100.0; //1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
-const float torque_min = -80.0; //-800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
+const float torque_ramp_accel = 20.0;             // torque acceleration ramp per 10ms
+const float torque_ramp_decell = 10.0;            // torque deceleration ramp per 10ms
+const float torque_max = 1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
+const float torque_min = -800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
 const float torque_zero_space = 5.0;              // First 5% of joystick are zero zone in both directions
 const float torque_regen_cutoff_rpm_high = 300.0; // When the motor rpm is below this , stop  cutoff any negative torque regen -> Hysteresis control
 const float torque_regen_cutoff_rpm_low = 200.0;  // When the motor rpm is below this , start cutoff remaining negative torque regen -> Hysteresis control
@@ -80,6 +80,13 @@ const float torque_regen_cutoff_rpm_full = 10.0;  // When the motor rpm is below
 float torque_theoretical = 0.0;                   // torque request before ramping
 float torque_request_internal = 0.0;              // torque request, before putting max on it
 float torque_request_calculated = 0.0;            // final torque before putting out to can
+double vehicle_speed_limit = 5.0; // km/h
+double vehicle_speed_limit_emergency = 15.0;
+double vehicle_speed = 0.0; // in km/h, read from iMiev via CAN
+double vehicle_speed_target = 0.0;
+double vehicle_speed_ramp_up = 0.01;    // 1 km/h per second at 10ms refresh rate
+double vehicle_speed_ramp_down = 0.01;  // 1 km/h per second at 10ms refresh rate
+
 
 uint8_t reverse_bit = 0;
 uint32_t last_reverse_toggle_time = 0;
@@ -114,7 +121,7 @@ float integral = 0.0;
 const float BRAKE_RAMP_UP = 0.05;              // Rate of increase per cycle
 const float BRAKE_RAMP_DOWN = 0.1;             // Faster release to avoid brake drag
 const float PARK_BRAKE_TIME_THRESHOLD = 800.0; // Time in ms to engage park brake
-const float BRAKE_PARKING = 0.6;               // Value of target if in parking brake mode
+const float BRAKE_PARKING = 0.8;               // Value of target if in parking brake mode
 
 // === State Variables ===
 float brake_calculated = 0.0;      // Final brake application value
@@ -355,6 +362,16 @@ void interpreteCANframe(const CANMessage &frame)
         uint8_t raw_accel_value = frame.data[2];
         accelerator_pedal_percentage = raw_accel_value * 0.4;
     }
+    else if (frame.id == 0x215)
+    { // Vehicle speed
+        uint16_t raw_vehicle_speed_value = (frame.data[0] << 8) + frame.data[1];
+        vehicle_speed = (double) raw_vehicle_speed_value * 0.0078125;
+        if(vehicle_speed >= vehicle_speed_limit_emergency)
+        {
+            //vControl.setEmergencyMode();
+            MONITOR_PORT.println("vehicle speed larger than vehicle_speed_emergency. Opened safety circuit.");
+        }
+    }
     else if (frame.id == 0x236)
     { // Accelerator Pedal Percentage
         uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
@@ -587,13 +604,13 @@ void pollJoystick()
             {
                 bool holdingJoystickInDirection = (processedJoystickX > joystick_deadzone)?true:((processedJoystickX < -joystick_deadzone)?true:false);
                 
-                MONITOR_PORT.println("holdingJoystickInDirection is: " + String(holdingJoystickInDirection));
+                //MONITOR_PORT.println("holdingJoystickInDirection is: " + String(holdingJoystickInDirection));
                 if(holdingJoystickInDirection)
                 {
                     double anglePer = (processedJoystickX>0.0)?0.0:100.0;
                     vControl.setTargetSteeringAngle(anglePer);
                     holdingJoystickInDirectionReleased = false;
-                    MONITOR_PORT.println("Holding steering input. Set target steering angle to: " + String(anglePer));
+                    //MONITOR_PORT.println("Holding steering input. Set target steering angle to: " + String(anglePer));
                 }
                 else if(holdingJoystickInDirectionReleased == false)
                 {
@@ -733,10 +750,27 @@ void control_acceleration()
     // we need motor speed additional
     if ((joystick_error_flag == false) && (joystick_control_active == true))
     {
-        if (processedJoystickY > torque_zero_space) // Acceleration
+        if (processedJoystickY > torque_zero_space) // Acceleration or hold max speed
         {
-            torque_theoretical = (processedJoystickY - torque_zero_space) * torque_max;
-            torque_theoretical = torque_theoretical / (100.0 - torque_zero_space); // Correct for reduced joystick movement
+            double vehicle_speed_input = (processedJoystickY - joystick_deadzone) * vehicle_speed_limit;
+
+            if(vehicle_speed_target < vehicle_speed_input - 0.1)
+            {
+                vehicle_speed_target += vehicle_speed_ramp_up; 
+            }
+            else if (vehicle_speed_target > vehicle_speed_input + 0.1)
+            {
+                vehicle_speed_target -= vehicle_speed_ramp_down;
+            }
+            vehicle_speed_target = constrain(vehicle_speed_target, 0.0, vehicle_speed_limit);
+
+            double save_prev_value = torque_request_internal;
+
+            double vdiff_m_per_s = (vehicle_speed_target - vehicle_speed) / 3.6; // km/h to m/s -> factor 1000/3600
+            double mass = 1000;
+            double sign = vdiff_m_per_s/abs(vdiff_m_per_s);
+
+            torque_theoretical = sign * 200.0 * vdiff_m_per_s * vdiff_m_per_s * mass / 100.0 / 5.0; // 100: 10ms steps, 5: torque to reach target in 5 seconds
 
             // now ramping consideration
             if (torque_request_internal < torque_theoretical)
@@ -748,11 +782,23 @@ void control_acceleration()
                 torque_request_internal = torque_request_internal - torque_ramp_accel;
             }
 
+            // debug speed limiter
+            // MONITOR_PORT.println("v in:" + String(vehicle_speed_input) + " | v target: " + String(vdiff_m_per_s) + " | v target: " + String(vdiff_m_per_s) + " | torque_theoretical: " + String(torque_theoretical) + " | torque req internal: " + String(torque_request_internal));
+
+            // limit speed
+            if(vehicle_speed > vehicle_speed_limit)
+            {
+                torque_request_internal -= torque_ramp_accel;
+            }
+
             // Clamp torque within safe limits
             torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
         }
         else // Regen
         {
+            vehicle_speed_target -= vehicle_speed_ramp_down;
+            vehicle_speed_target = constrain(vehicle_speed_target, 0.0, vehicle_speed_limit);
+
             torque_theoretical = 0;
             if (motor_rpm > torque_regen_cutoff_rpm_high) // Normal regen behavior above high threshold
             {
@@ -794,7 +840,7 @@ void control_acceleration()
     if (processedJoystickY < (torque_zero_space * -1))
     {
         // Compute braking force based on joystick input
-        brake_calculated = -processedJoystickY / (100.0 - torque_zero_space);
+        brake_calculated = BRAKE_PARKING + ((1-BRAKE_PARKING) * (-processedJoystickY / (100.0 - torque_zero_space)));
     }
     else if (processedJoystickY > torque_zero_space)
     {
@@ -833,7 +879,7 @@ void control_acceleration()
     // Ensure brake target remains within valid limits
     brake_pedal_target = constrain(brake_calculated, 0.0, 1.0);
 
-    MONITOR_PORT.println("Brake Pedal Target: " + String(brake_pedal_target * 100.0) + "%");
+    //MONITOR_PORT.println("Brake Pedal Target: " + String(brake_pedal_target * 100.0) + "%");
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -867,7 +913,8 @@ void printStatus()
     MONITOR_PORT.print(" | Torque Theoretical: ");
     MONITOR_PORT.print(torque_theoretical);
     MONITOR_PORT.print(" | Torque Calculated: ");
-    MONITOR_PORT.println(torque_request_calculated);
+    MONITOR_PORT.print(torque_request_calculated);
+    MONITOR_PORT.println(" | Vehicle speed: " + String(vehicle_speed));
 }
 
 /**************************************************************************

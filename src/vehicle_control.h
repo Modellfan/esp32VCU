@@ -8,12 +8,27 @@
 #define STEERING_ACTUATOR_DIR_B_PIN   36
 #define STEERING_ACTUATOR_FB_A_PIN    255  // Optional
 #define STEERING_ACTUATOR_FB_B_PIN    255  // Optional
+#define STEERING_ACTUATOR_MIN_POSITION 2796+(192*2)
+#define STEERING_ACTUATOR_MAX_POSITION 5396-(192*2)
+#define STEERING_ACTUATOR_MIN_POSITION_EMERGENCY 2796
+#define STEERING_ACTUATOR_MAX_POSITION_EMERGENCY 5396
 
 #define BRAKE_ACTUATOR_DIR_A_PIN   3
 #define BRAKE_ACTUATOR_DIR_B_PIN   35
 #define BRAKE_ACTUATOR_FB_A_PIN    255  // Optional
 #define BRAKE_ACTUATOR_FB_B_PIN    255  // Optional
-#define BRAKE_ACTUATOR_MAX_POSITION 350
+
+#define ACTUATOR_EMERGENCY_TIMEOUT_NO_CHECK 0xFFFFFFFF
+#define ACTUATOR_EMERGENCY_POSITION_LIMIT_NO_CHECK 0xFFFF
+
+#define BRAKE_ACTUATOR_MM_TO_STEPS_FACTOR 34596.0/150.0
+#define BRAKE_ACTUATOR_MIN_POSITION 0 // has to be zero, is used for driving further back (DirB) when 0 position is reached to recalibrate 0 position
+#define BRAKE_ACTUATOR_MAX_POSITION_MM 32.0 // represents 100% braking
+#define BRAKE_ACTUATOR_MAX_POSITION BRAKE_ACTUATOR_MAX_POSITION_MM*BRAKE_ACTUATOR_MM_TO_STEPS_FACTOR // ~34596 is full scale 150mm
+#define BRAKE_ACTUATOR_MIN_POSITION_EMERGENCY 0xFFFF // no check for running over zero position; motor has stop switches. Use driving longer to recalibrate during run time when setting to zero position
+#define BRAKE_ACTUATOR_MAX_POSITION_EMERGENCY BRAKE_ACTUATOR_MAX_POSITION+100
+//#define BRAKE_ACTUATOR_POSITION_STEPS_PER_MS 0.052008 (estimation for sensor steps: 11.82 steps per mm; 4.4 mm/s under nominal load -> best estimation: ~0.052008 steps per ms)
+#define BRAKE_ACTUATOR_POSITION_STEPS_PER_MS 1 // USING 1 HERE TO MINIMIZE ROUNDING ERRORS IN TIME-BASED APPROACH -> this scales a step by factor 19.22781 compared to hall sensor steps; 1 step then represents a propagation of 4.4 um. The full scale would be 1800*19.22=~34596 steps
 
 #define DASHBOARD_LED_ECU_STATUS_PIN 45
 #define DASHBOARD_LED_ECU_ERROR_PIN 20 // active low
@@ -21,6 +36,9 @@
 #define DASHBOARD_LED_GEAR_PARK_PIN 21
 #define DASHBOARD_LED_GEAR_DRIVE_PIN 47
 #define DASHBOARD_LED_GEAR_OTHER_PIN 37
+
+#define EXTEND_DRIVE_TO_ZERO_TIME_MS 1000
+#define BRAKE_ACTUATOR_INITIAL_DRIVE_BACK_TIME_MS 7000
 
 
 struct AdsysMessage;
@@ -32,7 +50,7 @@ public:
         Inactive = 0,
         MovingDirA = 1,
         MovingDirB = 2,
-        Error = 3
+        Error = 3,
     };
     enum ControlType : uint8_t {
         ActiveControlWithFeedback = 0,
@@ -50,6 +68,10 @@ private:
     uint16_t position; // position sensor based
     uint32_t position_timestamp; // position timestamp
     uint16_t position_time_based; // position based on time tracking
+
+    bool extendDriveToZeroActive = false;
+    bool extendDriveToZeroStarted = false;
+    uint32_t extendDriveToZeroStartTime;
 
     uint32_t actuator_time_since_movement_start = 0;
     uint8_t actuator_movementDir = 0; // 0 = none, 1 = DirA, 2 = DirB
@@ -126,6 +148,7 @@ public:
     uint16_t getPositionTimeBased() { return position_time_based;}
     double getPositionStepsPerMs() { return position_steps_per_ms; }
     void setPositionStepsPerMs(double steps_per_ms) { position_steps_per_ms = steps_per_ms; }
+    void activateExtendDriveToZero();
 
     // --- I/O control helpers ---
     void stopActuator();
@@ -169,7 +192,7 @@ public:
     void run();
 
     void requestOperationMode(OperationMode mode) { target_operation_mode = mode; }
-    void setEmergencyMode() { operation_mode = Emergency; }
+    void setEmergencyMode();
     OperationMode getOperationMode() const { return operation_mode; }
 
     TestMode getTestMode() const { return test_mode; }
@@ -192,7 +215,7 @@ public:
     }
     double getSteeringAnglePercent() {return (((double) steering_actuator.getPosition() - steering_actuator.getMinPosition()) / (double) steering_actuator.getOpRange() * 100.0);}
 
-    void setTargetBrakePosition(double position_percent) { brake_actuator.moveToPercentOpRange(position_percent); }
+    void setTargetBrakePosition(double position_percent);
     void updateGearSelection(uint8_t gear);
     void updateJoystickSteering(double steering);
     void updateJoystickThrottle(double throttle);
