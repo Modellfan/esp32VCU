@@ -87,6 +87,8 @@ double vehicle_speed_target = 0.0;
 double vehicle_speed_ramp_up = 0.01;    // 1 km/h per second at 10ms refresh rate
 double vehicle_speed_ramp_down = 0.01;  // 1 km/h per second at 10ms refresh rate
 
+int16_t ADSystemPhysicalAccelerationRequest = 0;
+
 
 uint8_t reverse_bit = 0;
 uint32_t last_reverse_toggle_time = 0;
@@ -310,8 +312,11 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     }
     else if(vControlMode == VehicleControl::OperationMode::ADSystemControl)
     {
-        // TODO: AD system input
+        physicalAcceleration = ADSystemPhysicalAccelerationRequest;
     }
+
+    // 5) Convert back to raw: raw = physical + 2000
+        rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
 
 
     if(every100 == 0)
@@ -320,9 +325,6 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
         MONITOR_PORT.print(physicalAcceleration);
         MONITOR_PORT.print("\n\n");
     }
-
-    // 5) Convert back to raw: raw = physical + 2000
-    rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
 
     // 6) Store the manipulated raw value back in big-endian format
     outFrame.data[0] = (uint8_t)((rawAcceleration >> 8) & 0xFF); // MSB
@@ -352,10 +354,22 @@ void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
 void interpreteCANframe(const CANMessage &frame)
 {
     // Interpret messages based on their ID.
-    if (frame.id == 0x208)
-    { // Wheel Rotation, Brake Position
+    if (frame.id == 0x200)
+    { // Wheel Rotation front
+        uint16_t RPM_fl_raw = frame.data[0]; // front left
+        uint16_t RPM_fr_raw = frame.data[0]; // front right
+
+        adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_CAN_FRAME, &(frame.data[0]), 8);
+    }
+    else if (frame.id == 0x208)
+    { // Wheel Rotation rear, Brake Position
         uint8_t raw_brake_value = frame.data[3];
         brake_pedal_position = raw_brake_value * 0.25 - 6144.5;
+
+        uint16_t RPM_rl_raw = frame.data[0]; // rear left
+        uint16_t RPM_rr_raw = frame.data[0]; // rear right
+
+        adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_CAN_FRAME, &(frame.data[0]), 8);
     }
     else if (frame.id == 0x210)
     { // Accelerator Pedal Percentage
@@ -364,13 +378,16 @@ void interpreteCANframe(const CANMessage &frame)
     }
     else if (frame.id == 0x215)
     { // Vehicle speed
-        uint16_t raw_vehicle_speed_value = (frame.data[0] << 8) + frame.data[1];
+        uint16_t raw_vehicle_speed_value_uint16 = (frame.data[0] << 8) + frame.data[1];
+        int16_t raw_vehicle_speed_value = *(int16_t *) &raw_vehicle_speed_value_uint16; // reinterprete as int16_t
         vehicle_speed = (double) raw_vehicle_speed_value * 0.0078125;
-        if(vehicle_speed >= vehicle_speed_limit_emergency)
+        if(vehicle_speed >= vehicle_speed_limit_emergency || vehicle_speed <= -vehicle_speed_limit_emergency)
         {
             //vControl.setEmergencyMode();
             MONITOR_PORT.println("vehicle speed larger than vehicle_speed_emergency. Opened safety circuit.");
         }
+
+        adsysHandler.sendMessage(AdsysMsgType::SPEED, &(frame.data[0]), 2);
     }
     else if (frame.id == 0x236)
     { // Accelerator Pedal Percentage
@@ -392,11 +409,23 @@ void interpreteCANframe(const CANMessage &frame)
         // Convert raw value to physical value using scale = 1 and offset = -10000.
         // That is, physical_rpm = rawRpm - 10000.
         motor_rpm = (int16_t)rawRpm - 10000;
+
+        adsysHandler.sendMessage(AdsysMsgType::RPM_MOTOR, &(frame.data[2]), 2);
     }
     else if (frame.id == 0x346)
     {
         // Range
         uint8_t rangeKm = frame.data[7];
+        adsysHandler.sendMessage(AdsysMsgType::BATTERY_RANGE, &(frame.data[7]), 1);
+    }
+    else if (frame.id == 0x374)
+    {
+        // Battery SoC
+        uint16_t SoCRaw = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
+        int32_t SoCOffset = -1056;
+        double SoCFactor = 0.25;
+        double SoCValuePercent = (SoCRaw + SoCOffset) * SoCFactor;
+        adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, &(frame.data[0]), 2);
     }
     else if (frame.id == 0x418)
     { // Gear Shift Selection
@@ -427,6 +456,7 @@ void interpreteCANframe(const CANMessage &frame)
             gear_selection = '?';
             break;
         }
+        adsysHandler.sendMessage(AdsysMsgType::GEAR_SELECTION, &(frame.data[0]), 1);
     }
 }
 
@@ -660,6 +690,22 @@ void pollJoystick()
         }
     }
     //else if ADSystem
+    else if(vControl.getOperationMode() == VehicleControl::OperationMode::ADSystemControl)
+    {
+        int16_t ADSystemJoystickXVal = (int16_t)(processedJoystickX * 16384);
+        int16_t ADSystemJoystickYVal = (int16_t)(processedJoystickY * 16384);
+
+        uint16_t ADSystemJoystickXVal_uint16 = *(uint16_t *) &ADSystemJoystickXVal;
+        uint16_t ADSystemJoystickYVal_uint16 = *(uint16_t *) &ADSystemJoystickYVal;
+        
+        uint8_t buf[4] = {};
+        buf[0] = (uint8_t) (ADSystemJoystickXVal >> 8);
+        buf[1] = (uint8_t) (ADSystemJoystickXVal & 0xFF);
+        buf[2] = (uint8_t) (ADSystemJoystickYVal >> 8);
+        buf[3] = (uint8_t) (ADSystemJoystickYVal & 0xFF);
+
+        adsysHandler.sendMessage(AdsysMsgType::JOYSTICK_POS_PERCENT, buf, 4);
+    }
 }
 
 void control_brake_pedal()
@@ -1000,4 +1046,47 @@ void loop()
     gvret_loop();
 
     receive_from_adsystem();
+}
+
+void setVehicleSpeedLimit(double speed)
+{
+    if(speed <= vehicle_speed_limit_emergency)
+    {
+        vehicle_speed_limit = speed;
+    }
+}
+
+void setVehicleSpeedLimitEmergency(double speed)
+{
+    vehicle_speed_limit_emergency = speed;
+}
+
+void setTargetVehicleSpeed(double speed)
+{
+    if(speed <= vehicle_speed_limit && speed < vehicle_speed_limit_emergency)
+    {
+        vehicle_speed_target = speed;
+    }
+}
+
+double readVehicleSpeedLimit()
+{
+    return vehicle_speed_limit;
+}
+
+double readVehicleSpeedLimitEmergency()
+{
+    return vehicle_speed_limit_emergency;
+}
+
+double readTargetVehicleSpeed()
+{
+    return vehicle_speed_target;
+}
+
+void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation)
+{
+    //MONITOR_PORT.println("Received physical acceleration request: " + String(ADSystemPhysicalAccerealation) + "; Value would have been set but for testing it is hard coded to zero.");
+    ADSystemPhysicalAccerealation = 0;
+    //ADSystemPhysicalAccelerationRequest = constrain(ADSystemPhysicalAccerealation, torque_min, torque_max);;
 }

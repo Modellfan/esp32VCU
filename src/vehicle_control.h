@@ -246,8 +246,18 @@ private:
     double JoystickThrottle = 0.0;
     uint32_t JoystickSteeringTimestamp = 0;
     uint32_t JoystickThrottleTimestamp = 0;
+    uint32_t PhysicalAccelerationRequestLastReceivedTime = 0;
 };
 
 extern VehicleControl vControl;
 
 void interpreteCANframe(const CANMessage &frame); // forward declaration
+
+void setVehicleSpeedLimit(double speed);
+void setVehicleSpeedLimitEmergency(double speed);
+void setTargetVehicleSpeed(double speed);
+double readVehicleSpeedLimit();
+double readVehicleSpeedLimitEmergency();
+double readTargetVehicleSpeed();
+void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation);
+

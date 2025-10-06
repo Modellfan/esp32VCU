@@ -419,7 +419,7 @@ void VehicleControl::initialize() {
     adsystem_connected = false;
     last_heartbeat_time = millis();
     operation_mode = Idle;
-    target_operation_mode = ECUTestControl;
+    target_operation_mode = ADSystemControl; //ECUTestControl;
     initialization_state_operation_mode = Idle;
     test_mode = Test_FullSystem;
     gear_selection = Gear_Other;
@@ -534,10 +534,20 @@ void VehicleControl::checkHeartbeatTimeout() {
                 operation_mode = Emergency; // go directly to emergency mode, since ECU can't control normal brake in mode ADSystemControl
             }
             adsysConnectionLostAction();
+            setPhysicalAccelerationRequest(0);
         }
     }
     if (current_time < last_heartbeat_time) {
         last_heartbeat_time = current_time;
+    }
+
+    if(current_time > PhysicalAccelerationRequestLastReceivedTime + HEARTBEAT_TIMEOUT_MS)
+    {
+        setPhysicalAccelerationRequest(0); // safety measure
+    }
+
+    if (current_time < PhysicalAccelerationRequestLastReceivedTime) {
+        PhysicalAccelerationRequestLastReceivedTime = current_time;
     }
 }
 
@@ -572,7 +582,7 @@ void VehicleControl::run()
         injectSimulatedData();
     }
 
-    if(operation_mode == OperationMode::ADSystemControl)
+    if(operation_mode == OperationMode::ADSystemControl || true)
     {
         const uint32_t HEARTBEAT_INTERVAL_MS = 100;
         static uint32_t last_heartbeat_sent_time = 0;
@@ -649,13 +659,17 @@ void VehicleControl::ADSystemMessagesCb(const AdsysMessage& msg)
             updateHeartbeat(heartbeat_received);
         }
         break;
-    case AdsysMsgType::TORQUE_REQUEST:
+    case AdsysMsgType::PHYSICAL_ACCELERATION_REQUEST:
         if (msg.payload.size() >= 2) {
-            int16_t torque_request = (static_cast<int16_t>(msg.payload[0]) << 8) | static_cast<int16_t>(msg.payload[1]);
+            uint16_t physical_acceleration_request_uint16 = ((msg.payload[0]) << 8) | (msg.payload[1]);
+            int16_t physical_acceleration_request = *(int16_t*) (&physical_acceleration_request_uint16);
             // Process torque_request as needed
-            LOG_MSG("[VehicleControl] Received Torque Request: " + String(torque_request));
+            LOG_MSG("[VehicleControl] Received physical acceleration Request: " + String(physical_acceleration_request));
 
-            double Y_inject = static_cast<double>(torque_request) / 0xFFFF * 100.0; // Convert to percentage (-100% to +100%)
+            //double Y_inject = static_cast<double>(torque_request) / 0xFFFF * 100.0; // Convert to percentage (-100% to +100%)
+
+            setPhysicalAccelerationRequest(physical_acceleration_request);
+            PhysicalAccelerationRequestLastReceivedTime = millis();
         }
         break;
     case AdsysMsgType::SET_SIMULATED_DATA_INJECTION:
