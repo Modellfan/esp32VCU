@@ -7,6 +7,8 @@
 // GVRET Protocol definitions
 #define CFG_BUILD_NUM 7010
 
+extern bool gvretEnabled;
+
 enum GVRET_STATE {
     IDLE,
     GET_COMMAND,
@@ -190,6 +192,12 @@ inline void gvret_loop() {
 
 // sendFrameToUSB: Send a standard CAN frame to USB using the GVRET protocol.
 inline void sendFrameToUSB(const CANMessage &msg, int busNum) {
+
+    if(!gvretEnabled)
+    {
+        return;
+    }
+
     uint8_t buff[20];
     uint32_t now = micros();
     buff[0] = 0xF1;

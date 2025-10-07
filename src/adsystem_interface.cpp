@@ -25,6 +25,16 @@ void AdsysUartHandler::onByteReceived(uint8_t byte) {
     }
 }
 
+void AdsysUartHandler::onBytesReceived(uint8_t *bytes, size_t numBytes) {
+    std::vector<uint8_t> bytesV(bytes, bytes+numBytes);
+    rxBuffer.insert(rxBuffer.end(), bytesV.begin(), bytesV.end());
+
+    // Try to process buffer if at least 4 bytes (start, type, payload, checksum)
+    if (rxBuffer.size() >= 4) {
+        processBuffer();
+    }
+}
+
 // Process rxBuffer for complete messages
 void AdsysUartHandler::processBuffer() {
     while (rxBuffer.size() >= 4) {

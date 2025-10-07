@@ -10,12 +10,24 @@
 #include "adsystem_interface.h"
 #include "vehicle_control.h"
 
+#define GVRET_ENABLED 0
+bool gvretEnabled = GVRET_ENABLED;
+
+#define RX_TMP_BUF_SIZE 256
+uint8_t rxTmpBuf[RX_TMP_BUF_SIZE] = {};
+
+uint32_t totalBytesReceivedADSystem = 0;
+
 // Define GVRET_PORT and MONITOR_PORT.
 // GVRET communication uses the primary Serial port.
 // Monitoring/debug output uses USBSerial1.
-#define GVRET_PORT Serial
+//#define GVRET_PORT Serial
+//#define MONITOR_PORT Serial // USBSerial1
+//#define ADSYS_PORT USBSerial1
+
+#define GVRET_PORT USBSerial1 //Serial
 #define MONITOR_PORT USBSerial1
-#define ADSYS_PORT USBSerial1 // same as MONITOR_PORT
+#define ADSYS_PORT Serial // try hardware serial for AD System serial port
 
 // USB Serial Setup: Use a clear name for the USB CDC object.
 USBCDC USBSerial1(0); // First virtual serial port
@@ -139,6 +151,13 @@ int torque_request = 0;
 bool brake_pedal_switch = 0;
 int motor_rpm = 0;
 int steering_angle = 0;
+
+double RPM_fl = 0.;
+double RPM_fr = 0.;
+double RPM_rl = 0.;
+double RPM_rr = 0.;
+uint8_t rangeKm = 0;
+double SoCValuePercent = 0.;
 
 int every100 = 0;
 
@@ -356,20 +375,24 @@ void interpreteCANframe(const CANMessage &frame)
     // Interpret messages based on their ID.
     if (frame.id == 0x200)
     { // Wheel Rotation front
-        uint16_t RPM_fl_raw = frame.data[0]; // front left
-        uint16_t RPM_fr_raw = frame.data[0]; // front right
-
-        adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_CAN_FRAME, &(frame.data[0]), 8);
+        uint16_t RPM_fl_raw = (frame.data[2] << 8) + frame.data[3]; // front left
+        uint16_t RPM_fr_raw = (frame.data[4] << 8) + frame.data[5]; // front right
+        RPM_fl = ((double) RPM_fl_raw - 49152.) / 19.;
+        RPM_fr = ((double) RPM_fr_raw - 49152.) / 19.;
+        
+        adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_LR, &(frame.data[2]), 4);
     }
     else if (frame.id == 0x208)
     { // Wheel Rotation rear, Brake Position
         uint8_t raw_brake_value = frame.data[3];
         brake_pedal_position = raw_brake_value * 0.25 - 6144.5;
 
-        uint16_t RPM_rl_raw = frame.data[0]; // rear left
-        uint16_t RPM_rr_raw = frame.data[0]; // rear right
+        uint16_t RPM_rr_raw = (frame.data[4] << 8) + frame.data[5]; // front right
+        uint16_t RPM_rl_raw = (frame.data[6] << 8) + frame.data[7]; // front left
+        RPM_rr = ((double) RPM_rr_raw - 49152.) / 19.;
+        RPM_rl = ((double) RPM_rl_raw - 49152.) / 19.;
 
-        adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_CAN_FRAME, &(frame.data[0]), 8);
+        adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_RL, &(frame.data[4]), 4);
     }
     else if (frame.id == 0x210)
     { // Accelerator Pedal Percentage
@@ -392,6 +415,8 @@ void interpreteCANframe(const CANMessage &frame)
     else if (frame.id == 0x236)
     { // Accelerator Pedal Percentage
         uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
+        adsysHandler.sendMessage(AdsysMsgType::STEERING_ANGLE, &(frame.data[0]), 2);
+
         vControl.updateSteeringAngle(rawSteering);
         //MONITOR_PORT.println("Got CAN Msg Steering angle raw: " + String(rawSteering));
         steering_angle = rawSteering - 4096; // div by 30.0 missing? -> According to https://myimiev.com/threads/can-network-reverse-engineering-creating-dbc-imiev.5788/ : Steering = (PID[0] * 256 + PID[1] - 4096) / 30.0;
@@ -415,17 +440,19 @@ void interpreteCANframe(const CANMessage &frame)
     else if (frame.id == 0x346)
     {
         // Range
-        uint8_t rangeKm = frame.data[7];
+        rangeKm = frame.data[7];
         adsysHandler.sendMessage(AdsysMsgType::BATTERY_RANGE, &(frame.data[7]), 1);
     }
     else if (frame.id == 0x374)
-    {
-        // Battery SoC
-        uint16_t SoCRaw = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
-        int32_t SoCOffset = -1056;
-        double SoCFactor = 0.25;
-        double SoCValuePercent = (SoCRaw + SoCOffset) * SoCFactor;
-        adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, &(frame.data[0]), 2);
+    {        
+        uint16_t SoCRaw = (uint16_t)(frame.data[1]);
+        int32_t SoCOffset = -10;
+        double SoCFactor = 0.5;
+        SoCValuePercent = (SoCRaw + SoCOffset) * SoCFactor;
+        
+        adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, &(frame.data[1]), 1);
+
+        //MONITOR_PORT.println("SoCRaw: " + String(SoCRaw) + " | SoCValuePercent: " + String(SoCValuePercent));
     }
     else if (frame.id == 0x418)
     { // Gear Shift Selection
@@ -960,7 +987,8 @@ void printStatus()
     MONITOR_PORT.print(torque_theoretical);
     MONITOR_PORT.print(" | Torque Calculated: ");
     MONITOR_PORT.print(torque_request_calculated);
-    MONITOR_PORT.println(" | Vehicle speed: " + String(vehicle_speed));
+    MONITOR_PORT.println(" | Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr));
+    MONITOR_PORT.println("Total bytes received from AD System: " + String(totalBytesReceivedADSystem));
 }
 
 /**************************************************************************
@@ -969,11 +997,14 @@ void printStatus()
 void setup()
 {
     // Initialize the primary Serial port for GVRET communication.
-    Serial.begin(1000000);
+    Serial.begin(115200);
 
     // Initialize USB CDC for monitoring/debug output.
     USBSerial1.begin();
+    //USBSerial1.setRxBufferSize(1024);
     USB.begin();
+
+    gvretEnabled = GVRET_ENABLED;
 
     //delay(10000);
 
@@ -1033,17 +1064,36 @@ void sendDebugMessage(StringSumHelper& msg)
 
 void receive_from_adsystem()
 {
-    while(ADSYS_PORT.available() > 0)
+    int numBytes = ADSYS_PORT.available();
+    //MONITOR_PORT.println("Bytes in Rx buffer: " + String(numBytes));
+
+    if(numBytes <= 0)
     {
-        adsysHandler.onByteReceived(ADSYS_PORT.read());
+        return;
     }
+
+    do
+    {
+        size_t readNum = (numBytes > RX_TMP_BUF_SIZE)? RX_TMP_BUF_SIZE : numBytes;
+        ADSYS_PORT.readBytes(rxTmpBuf, readNum);
+        adsysHandler.onBytesReceived(rxTmpBuf, readNum);
+
+        MONITOR_PORT.println("Rx " + String(readNum) + " byte(s)");
+
+        numBytes -= readNum;
+        totalBytesReceivedADSystem += readNum;
+    } while(numBytes >= RX_TMP_BUF_SIZE);
 }
 
 void loop()
 {
     runner.execute();
     pollCAN();
-    gvret_loop();
+
+    if(gvretEnabled)
+    {
+        gvret_loop();
+    }
 
     receive_from_adsystem();
 }
