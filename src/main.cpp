@@ -975,7 +975,7 @@ void setup()
     USBSerial1.begin();
     USB.begin();
 
-    delay(10000);
+    //delay(10000);
 
     // Initialize Servo
     // ESP32PWM::allocateTimer(0);

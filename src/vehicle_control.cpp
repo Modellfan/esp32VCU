@@ -481,7 +481,7 @@ void VehicleControl::initialize() {
 
     //test();
 
-    LOG_MSG("[VehicleControl] Move brake actuator to zero position to track position.");
+    /*LOG_MSG("[VehicleControl] Move brake actuator to zero position to track position.");
     brake_actuator.moveDirB();
     
     uint32_t brakeCalibrateStartTime = millis();
@@ -504,7 +504,7 @@ void VehicleControl::initialize() {
         delay(10);
         steering_actuator.run();
         steering_actuator.resetTimeBasedPosition(50.0);
-    }
+    }*/
 
     LOG_MSG("[VehicleControl] Initialized.");
 }
