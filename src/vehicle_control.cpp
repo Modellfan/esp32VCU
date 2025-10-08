@@ -825,3 +825,13 @@ void VehicleControl::updateGearSelection(uint8_t gear) {
             break;
     }
 }
+
+void VehicleControl::sendStatus()
+{
+    uint8_t ecu_has_emergency = (operation_mode==VehicleControl::OperationMode::Emergency)?(1<<8):0;
+    uint8_t veh_ignitionState = getIgnitionState()?(1<<7):0;
+    
+    uint8_t state = ecu_has_emergency | veh_ignitionState;
+
+    adsysHandler.sendMessage(AdsysMsgType::ECU_VEH_STATE, &state, 1);
+}

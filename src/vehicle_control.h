@@ -220,6 +220,8 @@ public:
     void updateJoystickSteering(double steering);
     void updateJoystickThrottle(double throttle);
 
+    void sendStatus();
+    
     void test();
 
 private:
@@ -261,3 +263,4 @@ double readVehicleSpeedLimitEmergency();
 double readTargetVehicleSpeed();
 void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation);
 
+bool getIgnitionState();

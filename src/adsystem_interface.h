@@ -22,6 +22,9 @@ enum class AdsysMsgType : uint8_t {
     RPM_REAR_RL  = 0x15, // 2x uint16_t offset -49152 factor 1/19. Right wheel and left wheel
     RPM_MOTOR           = 0x16, // uint16_t offset -10000, factor 1
     SPEED               = 0x17, // int16_t, speed in km/h, offset 0, factor 0.0078125
+    ECU_VEH_STATE       = 0x50, /* send in 1 s intervals, uint8_t bit array with following values: 
+    | ECU has Emergency | Vehicle Ignition State | t.b.d. | t.b.d. | t.b.d. | t.b.d. | t.b.d. | t.b.d. |
+                                */
     SET_SIMULATED_DATA_INJECTION = 0xF0, // payload 0x00 for disable, 0x01 for enable
     // Add more as needed...
 };

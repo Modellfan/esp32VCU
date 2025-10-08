@@ -60,6 +60,7 @@ void AdsysUartHandler::processBuffer() {
         for (size_t i = 0; i < msgLen; ++i) sum += rxBuffer[i];
         if (sum != 0) {
             // Invalid, drop start byte and retry
+            sendDebugMessage("Dropped message: ID: 0x" +String(type, HEX));
             rxBuffer.erase(rxBuffer.begin());
             continue;
         }

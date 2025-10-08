@@ -152,6 +152,8 @@ bool brake_pedal_switch = 0;
 int motor_rpm = 0;
 int steering_angle = 0;
 
+bool ignitionState = 0;
+
 double RPM_fl = 0.;
 double RPM_fr = 0.;
 double RPM_rl = 0.;
@@ -194,7 +196,8 @@ void interpreteCANframe(const CANMessage &frame);
  *  Task Definitions
  **************************************************************************/
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
-Task taskvControlControl(10, TASK_FOREVER, [](){ vControl.run(); }, &runner, true);
+Task taskvControlRun(10, TASK_FOREVER, [](){ vControl.run(); }, &runner, true);
+Task taskvControlSendStatus(1000, TASK_FOREVER, [](){ vControl.sendStatus(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
 
 //---------------------------------------------------------------------------
@@ -373,7 +376,12 @@ void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
 void interpreteCANframe(const CANMessage &frame)
 {
     // Interpret messages based on their ID.
-    if (frame.id == 0x200)
+    if (frame.id == 0x101)
+    {
+        // Key
+        ignitionState = (frame.data[0] == 0x04)?true:false;
+    }
+    else if (frame.id == 0x200)
     { // Wheel Rotation front
         uint16_t RPM_fl_raw = (frame.data[2] << 8) + frame.data[3]; // front left
         uint16_t RPM_fr_raw = (frame.data[4] << 8) + frame.data[5]; // front right
@@ -381,6 +389,9 @@ void interpreteCANframe(const CANMessage &frame)
         RPM_fr = ((double) RPM_fr_raw - 49152.) / 19.;
         
         adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_LR, &(frame.data[2]), 4);
+
+        //MONITOR_PORT.println("0x200: d[2]: 0x" + String(frame.data[2], HEX) + " | d[3]: 0x" + String(frame.data[3], HEX) + " | d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX));
+        //MONITOR_PORT.println("0x200: uint16_t RPM_fl_raw: " + String(RPM_fl_raw) + " |  uint16_t RPM_fr_raw: " + String(RPM_fr_raw) + " | RPM_fl: " + String(RPM_fl) + " | RPM_fr: " + String(RPM_fr));
     }
     else if (frame.id == 0x208)
     { // Wheel Rotation rear, Brake Position
@@ -392,6 +403,9 @@ void interpreteCANframe(const CANMessage &frame)
         RPM_rr = ((double) RPM_rr_raw - 49152.) / 19.;
         RPM_rl = ((double) RPM_rl_raw - 49152.) / 19.;
 
+        //MONITOR_PORT.println("0x208: d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX) + " | d[6]: 0x" + String(frame.data[6], HEX) + " | d[7]: 0x" + String(frame.data[7], HEX));
+        //MONITOR_PORT.println("0x208: uint16_t RPM_rl_raw: " + String(RPM_rl_raw) + " |  uint16_t RPM_rr_raw: " + String(RPM_rr_raw) + " | RPM_rl: " + String(RPM_rl) + " | RPM_rr: " + String(RPM_rr));
+  
         adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_RL, &(frame.data[4]), 4);
     }
     else if (frame.id == 0x210)
@@ -987,7 +1001,7 @@ void printStatus()
     MONITOR_PORT.print(torque_theoretical);
     MONITOR_PORT.print(" | Torque Calculated: ");
     MONITOR_PORT.print(torque_request_calculated);
-    MONITOR_PORT.println(" | Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr));
+    MONITOR_PORT.println(" | Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr) + " | ignitionState: " + String(ignitionState));
     MONITOR_PORT.println("Total bytes received from AD System: " + String(totalBytesReceivedADSystem));
 }
 
@@ -1005,6 +1019,8 @@ void setup()
     USB.begin();
 
     gvretEnabled = GVRET_ENABLED;
+
+    ignitionState = false;
 
     //delay(10000);
 
@@ -1078,7 +1094,7 @@ void receive_from_adsystem()
         ADSYS_PORT.readBytes(rxTmpBuf, readNum);
         adsysHandler.onBytesReceived(rxTmpBuf, readNum);
 
-        MONITOR_PORT.println("Rx " + String(readNum) + " byte(s)");
+        //MONITOR_PORT.println("Rx " + String(readNum) + " byte(s)");
 
         numBytes -= readNum;
         totalBytesReceivedADSystem += readNum;
@@ -1139,4 +1155,9 @@ void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation)
     //MONITOR_PORT.println("Received physical acceleration request: " + String(ADSystemPhysicalAccerealation) + "; Value would have been set but for testing it is hard coded to zero.");
     ADSystemPhysicalAccerealation = 0;
     //ADSystemPhysicalAccelerationRequest = constrain(ADSystemPhysicalAccerealation, torque_min, torque_max);;
+}
+
+bool getIgnitionState()
+{
+    return ignitionState;
 }
