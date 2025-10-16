@@ -25,6 +25,7 @@ enum class AdsysMsgType : uint8_t {
     ECU_VEH_STATE       = 0x50, /* send in 1 s intervals, uint8_t bit array with following values: 
     | ECU has Emergency | Vehicle Ignition State | t.b.d. | t.b.d. | t.b.d. | t.b.d. | t.b.d. | t.b.d. |
                                 */
+    ECU_RUN_TIME_MS     = 0x60, // run time of ECU since last boot in ms uint32_t
     SET_SIMULATED_DATA_INJECTION = 0xF0, // payload 0x00 for disable, 0x01 for enable
     // Add more as needed...
 };

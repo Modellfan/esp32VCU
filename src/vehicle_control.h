@@ -182,6 +182,14 @@ public:
         Gear_Other = 0xFF
     };
 
+    enum EmergencyReason : uint8_t {
+        None = 0,
+        LostCommsWhileDriving = (1<<0),
+        SteeringAngleOutOfRangeLeft = (1<<1),
+        SteeringAngleOutOfRangeRight = (1<<2),
+        VehicleSpeedOverEmergencySpeedLimit = (1<<3),
+    };
+
     VehicleControl();
 
     void updateHeartbeat(bool received);
@@ -249,6 +257,9 @@ private:
     uint32_t JoystickSteeringTimestamp = 0;
     uint32_t JoystickThrottleTimestamp = 0;
     uint32_t PhysicalAccelerationRequestLastReceivedTime = 0;
+
+    EmergencyReason emergencyReasonCur = EmergencyReason::None;
+    EmergencyReason emergencyReasonPrev = EmergencyReason::None;
 };
 
 extern VehicleControl vControl;
@@ -264,3 +275,4 @@ double readTargetVehicleSpeed();
 void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation);
 
 bool getIgnitionState();
+bool getVehicleMoving();

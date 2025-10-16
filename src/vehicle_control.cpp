@@ -525,16 +525,23 @@ bool VehicleControl::isAdsystemConnected() const {
 
 void VehicleControl::checkHeartbeatTimeout() {
     const uint32_t HEARTBEAT_TIMEOUT_MS = 500;
+    const uint32_t HEARTBEAT_TIMEOUT_DEBUG_MESSAGE_MS = 150;
     uint32_t current_time = millis();
     if (current_time > last_heartbeat_time + HEARTBEAT_TIMEOUT_MS) {
         if(adsystem_connected) {
             adsystem_connected = false;
             if(operation_mode != ADSystemControl)
             {
+                LOG_MSG("Heartbeat timeout. Trigger emergency.");
                 operation_mode = Emergency; // go directly to emergency mode, since ECU can't control normal brake in mode ADSystemControl
             }
             adsysConnectionLostAction();
             setPhysicalAccelerationRequest(0);
+        }
+    }
+    if (current_time > last_heartbeat_time + HEARTBEAT_TIMEOUT_DEBUG_MESSAGE_MS) {
+        if(adsystem_connected) {
+            LOG_MSG("Expected heartbeat not received in time. (last >=150ms)");
         }
     }
     if (current_time < last_heartbeat_time) {
@@ -543,6 +550,7 @@ void VehicleControl::checkHeartbeatTimeout() {
 
     if(current_time > PhysicalAccelerationRequestLastReceivedTime + HEARTBEAT_TIMEOUT_MS)
     {
+        LOG_MSG("Expected physicalAccelerationRequest from AD System not received in time. (last >=500ms). Override with 0.");
         setPhysicalAccelerationRequest(0); // safety measure
     }
 
@@ -591,6 +599,9 @@ void VehicleControl::run()
             adsysHandler.sendHeartbeat();
             last_heartbeat_sent_time = current_time;
         }
+        uint32_t now = millis();
+        uint8_t now_big_end[] = {(uint8_t) (now >> 24), (uint8_t) (now >> 16), (uint8_t) (now >> 8), (uint8_t) (now >> 0)};
+        adsysHandler.sendMessage(AdsysMsgType::ECU_RUN_TIME_MS, now_big_end, 4);
     }
 
     brake_actuator.run();
@@ -646,6 +657,23 @@ void VehicleControl::run()
             LOG_MSG("steering position (sensor): " + String(steering_actuator.getPosition()));
         }
         break;
+    case Emergency:
+        if((emergencyReasonCur & EmergencyReason::LostCommsWhileDriving) != EmergencyReason::None)
+        {
+            // check conditions to reset emergency flag
+            if(!getVehicleMoving())
+            {
+                if(target_operation_mode == OperationMode::ADSystemControl)
+                {
+
+                }
+                else
+                {
+                    
+                }
+            }
+        }
+        break;
     };
 }
 
@@ -664,7 +692,7 @@ void VehicleControl::ADSystemMessagesCb(const AdsysMessage& msg)
             uint16_t physical_acceleration_request_uint16 = ((msg.payload[0]) << 8) | (msg.payload[1]);
             int16_t physical_acceleration_request = *(int16_t*) (&physical_acceleration_request_uint16);
             // Process torque_request as needed
-            LOG_MSG("[VehicleControl] Received physical acceleration Request: " + String(physical_acceleration_request));
+            //LOG_MSG("[VehicleControl] Received physical acceleration Request: " + String(physical_acceleration_request));
 
             //double Y_inject = static_cast<double>(torque_request) / 0xFFFF * 100.0; // Convert to percentage (-100% to +100%)
 
@@ -828,8 +856,8 @@ void VehicleControl::updateGearSelection(uint8_t gear) {
 
 void VehicleControl::sendStatus()
 {
-    uint8_t ecu_has_emergency = (operation_mode==VehicleControl::OperationMode::Emergency)?(1<<8):0;
-    uint8_t veh_ignitionState = getIgnitionState()?(1<<7):0;
+    uint8_t ecu_has_emergency = (operation_mode==VehicleControl::OperationMode::Emergency)?(1<<7):0;
+    uint8_t veh_ignitionState = getIgnitionState()?(1<<6):0;
     
     uint8_t state = ecu_has_emergency | veh_ignitionState;
 

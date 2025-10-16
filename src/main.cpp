@@ -107,6 +107,9 @@ uint32_t last_reverse_toggle_time = 0;
 bool steeringControlHoldValue = true;
 bool holdingJoystickInDirectionReleased = true;
 
+uint32_t last_gear_switched_time = 0;
+const uint32_t gear_switch_safety_delay_ms = 5000;
+
 // ——————————————————————————————————————————————————————————————————————————————
 //   Brake Control
 // ——————————————————————————————————————————————————————————————————————————————
@@ -160,8 +163,6 @@ double RPM_rl = 0.;
 double RPM_rr = 0.;
 uint8_t rangeKm = 0;
 double SoCValuePercent = 0.;
-
-int every100 = 0;
 
 byte torque_request_byte_0 = 0;
 byte torque_request_byte_1 = 0;
@@ -337,16 +338,14 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
         physicalAcceleration = ADSystemPhysicalAccelerationRequest;
     }
 
+    // safety measure
+    if(millis() < last_gear_switched_time + gear_switch_safety_delay_ms) // caution: fails after 49.7 days of continuous run time (will override physicalAcceleration to zero until last_gear_switched_time + gear_switch_safety_delay_ms is reached again or gear was switched again)
+    {
+        physicalAcceleration = 0;
+    }
+
     // 5) Convert back to raw: raw = physical + 2000
         rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
-
-
-    if(every100 == 0)
-    {
-        MONITOR_PORT.print("inject physicalAcceleration: ");
-        MONITOR_PORT.print(physicalAcceleration);
-        MONITOR_PORT.print("\n\n");
-    }
 
     // 6) Store the manipulated raw value back in big-endian format
     outFrame.data[0] = (uint8_t)((rawAcceleration >> 8) & 0xFF); // MSB
@@ -473,6 +472,13 @@ void interpreteCANframe(const CANMessage &frame)
 
         vControl.updateGearSelection(frame.data[0]);
 
+        if(gear_selection != frame.data[0])
+        {
+            // gear was switched
+            last_gear_switched_time = millis();
+            setPhysicalAccelerationRequest(0); // safety measure
+        }
+
         switch (frame.data[0])
         {
         case 0x50:
@@ -553,22 +559,6 @@ void manipulateCAN()
             // Check if this message needs manipulation.
             if (frame.id == 0x285) // Motor Control functions
             {
-                every100++;
-                if(every100 == 100)
-                {
-                    every100 = 0;
-                    MONITOR_PORT.print("torque_request_internal before: ");
-                    MONITOR_PORT.print(torque_request_internal);
-                    MONITOR_PORT.print("\n");
-                    MONITOR_PORT.print("torque_theoretical: ");
-                    MONITOR_PORT.print(torque_theoretical);
-                    MONITOR_PORT.print("\n");
-                    MONITOR_PORT.print("motor_rpm: ");
-                    MONITOR_PORT.print(motor_rpm);
-                    MONITOR_PORT.print("\n");
-
-                }
-
                 CANMessage outFrame;
                 manipulate_0x285(frame, outFrame);
                 can_motor.tryToSend(outFrame);
@@ -1153,11 +1143,16 @@ double readTargetVehicleSpeed()
 void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation)
 {
     //MONITOR_PORT.println("Received physical acceleration request: " + String(ADSystemPhysicalAccerealation) + "; Value would have been set but for testing it is hard coded to zero.");
-    ADSystemPhysicalAccerealation = 0;
-    //ADSystemPhysicalAccelerationRequest = constrain(ADSystemPhysicalAccerealation, torque_min, torque_max);;
+    //ADSystemPhysicalAccerealation = 0;
+    ADSystemPhysicalAccelerationRequest = constrain(ADSystemPhysicalAccerealation, torque_min, torque_max);;
 }
 
 bool getIgnitionState()
 {
     return ignitionState;
+}
+
+bool getVehicleMoving()
+{
+    return (vehicle_speed>1.0)?true:false;
 }
