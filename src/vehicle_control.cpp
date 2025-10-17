@@ -441,6 +441,8 @@ void VehicleControl::initialize() {
     steering_actuator.setName("Steering");
     steering_actuator.setHysteresisPercentOpRange(5.0, 3.0);
 
+    vehicle_state = {0, 0, Gear_Other, 0};
+
     pin_led_gear_park = DASHBOARD_LED_GEAR_PARK_PIN;
     pin_led_gear_drive = DASHBOARD_LED_GEAR_DRIVE_PIN;
     pin_led_gear_other = DASHBOARD_LED_GEAR_OTHER_PIN;
@@ -599,9 +601,6 @@ void VehicleControl::run()
             adsysHandler.sendHeartbeat();
             last_heartbeat_sent_time = current_time;
         }
-        uint32_t now = millis();
-        uint8_t now_big_end[] = {(uint8_t) (now >> 24), (uint8_t) (now >> 16), (uint8_t) (now >> 8), (uint8_t) (now >> 0)};
-        adsysHandler.sendMessage(AdsysMsgType::ECU_RUN_TIME_MS, now_big_end, 4);
     }
 
     brake_actuator.run();
@@ -852,14 +851,33 @@ void VehicleControl::updateGearSelection(uint8_t gear) {
             digitalWrite(pin_led_gear_other, HIGH);
             break;
     }
+
+    VehicleStateUpdateGearSelection(gear);
 }
 
 void VehicleControl::sendStatus()
 {
+    vehicle_state.callCounter250ms++;
+    if(vehicle_state.callCounter250ms >= 4)
+    {
+        vehicle_state.callCounter250ms = 0;
+
+        // send messages (1 second interval)
+        adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, (uint8_t *) (&vehicle_state.batterySoC), 1);
+        adsysHandler.sendMessage(AdsysMsgType::BATTERY_RANGE, (uint8_t *) (&vehicle_state.rangeKm), 1);
+        adsysHandler.sendMessage(AdsysMsgType::GEAR_SELECTION, (uint8_t *) (&vehicle_state.gearSelection), 1);
+    }
+
+    // send messages (250ms interval)
+
     uint8_t ecu_has_emergency = (operation_mode==VehicleControl::OperationMode::Emergency)?(1<<7):0;
     uint8_t veh_ignitionState = getIgnitionState()?(1<<6):0;
     
     uint8_t state = ecu_has_emergency | veh_ignitionState;
 
     adsysHandler.sendMessage(AdsysMsgType::ECU_VEH_STATE, &state, 1);
+
+    uint32_t now = millis();
+    uint8_t now_big_end[] = {(uint8_t) (now >> 24), (uint8_t) (now >> 16), (uint8_t) (now >> 8), (uint8_t) (now >> 0)};
+    adsysHandler.sendMessage(AdsysMsgType::ECU_RUN_TIME_MS, now_big_end, 4);
 }

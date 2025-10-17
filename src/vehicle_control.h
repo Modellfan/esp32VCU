@@ -179,7 +179,7 @@ public:
     enum GearSelection : uint8_t {
         Gear_Park = 0x50,
         Gear_Drive = 0x44,
-        Gear_Other = 0xFF
+        Gear_Other = '?',
     };
 
     enum EmergencyReason : uint8_t {
@@ -188,6 +188,14 @@ public:
         SteeringAngleOutOfRangeLeft = (1<<1),
         SteeringAngleOutOfRangeRight = (1<<2),
         VehicleSpeedOverEmergencySpeedLimit = (1<<3),
+    };
+
+    struct VehicleState
+    {
+        uint8_t batterySoC;
+        uint8_t rangeKm;
+        uint8_t gearSelection;
+        uint8_t callCounter250ms;
     };
 
     VehicleControl();
@@ -228,6 +236,12 @@ public:
     void updateJoystickSteering(double steering);
     void updateJoystickThrottle(double throttle);
 
+    void VehicleStateUpdateBatterySoC(uint8_t soc) { vehicle_state.batterySoC = soc; };
+    void VehicleStateUpdateRangeKm(uint8_t range) { vehicle_state.rangeKm = range; };
+    void VehicleStateUpdateGearSelection(uint8_t gear) { vehicle_state.gearSelection = gear; };
+
+    void VehicleStateIgnitionChangedToOff() { vehicle_state.gearSelection = Gear_Other; vehicle_state.batterySoC = 0; vehicle_state.rangeKm = 0;};
+
     void sendStatus();
     
     void test();
@@ -260,6 +274,8 @@ private:
 
     EmergencyReason emergencyReasonCur = EmergencyReason::None;
     EmergencyReason emergencyReasonPrev = EmergencyReason::None;
+
+    struct VehicleState vehicle_state = {0, 0, Gear_Other, 0};
 };
 
 extern VehicleControl vControl;

@@ -153,7 +153,7 @@ unsigned long motor_zero_time = 0; // Time tracking for parking brake
 // ——————————————————————————————————————————————————————————————————————————————
 float brake_pedal_position = 0.0;         // Scale factor: 0.39216
 float accelerator_pedal_percentage = 0.0; // Scale factor: 0.4
-char gear_selection = ' ';                // Default empty
+char gear_selection = '?';                // Default empty
 int torque_request = 0;
 bool brake_pedal_switch = 0;
 int motor_rpm = 0;
@@ -200,9 +200,11 @@ void interpreteCANframe(const CANMessage &frame);
 /**************************************************************************
  *  Task Definitions
  **************************************************************************/
+#if(INIT_USB_SERIAL==1)
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
+#endif
 Task taskvControlRun(10, TASK_FOREVER, [](){ vControl.run(); }, &runner, true);
-Task taskvControlSendStatus(1000, TASK_FOREVER, [](){ vControl.sendStatus(); }, &runner, true);
+Task taskvControlSendStatus(250, TASK_FOREVER, [](){ vControl.sendStatus(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
 
 //---------------------------------------------------------------------------
@@ -390,6 +392,14 @@ void interpreteCANframe(const CANMessage &frame)
     if (frame.id == 0x101)
     {
         // Key
+        bool newIgnitionState = (frame.data[0] == 0x04)?true:false;
+        if(ignitionState != newIgnitionState)
+        {
+            if(!newIgnitionState)
+            {
+                vControl.VehicleStateIgnitionChangedToOff();
+            }
+        }
         ignitionState = (frame.data[0] == 0x04)?true:false;
     }
     else if (frame.id == 0x200)
@@ -399,7 +409,7 @@ void interpreteCANframe(const CANMessage &frame)
         RPM_fl = ((double) RPM_fl_raw - 49152.) / 19.;
         RPM_fr = ((double) RPM_fr_raw - 49152.) / 19.;
         
-        adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_LR, &(frame.data[2]), 4);
+        //adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_LR, &(frame.data[2]), 4);
 
         //LOG_MSG("0x200: d[2]: 0x" + String(frame.data[2], HEX) + " | d[3]: 0x" + String(frame.data[3], HEX) + " | d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX));
         //LOG_MSG("0x200: uint16_t RPM_fl_raw: " + String(RPM_fl_raw) + " |  uint16_t RPM_fr_raw: " + String(RPM_fr_raw) + " | RPM_fl: " + String(RPM_fl) + " | RPM_fr: " + String(RPM_fr));
@@ -417,7 +427,7 @@ void interpreteCANframe(const CANMessage &frame)
         //LOG_MSG("0x208: d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX) + " | d[6]: 0x" + String(frame.data[6], HEX) + " | d[7]: 0x" + String(frame.data[7], HEX));
         //LOG_MSG("0x208: uint16_t RPM_rl_raw: " + String(RPM_rl_raw) + " |  uint16_t RPM_rr_raw: " + String(RPM_rr_raw) + " | RPM_rl: " + String(RPM_rl) + " | RPM_rr: " + String(RPM_rr));
   
-        adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_RL, &(frame.data[4]), 4);
+        //adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_RL, &(frame.data[4]), 4);
     }
     else if (frame.id == 0x210)
     { // Accelerator Pedal Percentage
@@ -460,13 +470,14 @@ void interpreteCANframe(const CANMessage &frame)
         // That is, physical_rpm = rawRpm - 10000.
         motor_rpm = (int16_t)rawRpm - 10000;
 
-        adsysHandler.sendMessage(AdsysMsgType::RPM_MOTOR, &(frame.data[2]), 2);
+        //adsysHandler.sendMessage(AdsysMsgType::RPM_MOTOR, &(frame.data[2]), 2);
     }
     else if (frame.id == 0x346)
     {
         // Range
         rangeKm = frame.data[7];
-        adsysHandler.sendMessage(AdsysMsgType::BATTERY_RANGE, &(frame.data[7]), 1);
+        vControl.VehicleStateUpdateRangeKm(rangeKm);
+        //adsysHandler.sendMessage(AdsysMsgType::BATTERY_RANGE, &(frame.data[7]), 1);
     }
     else if (frame.id == 0x374)
     {        
@@ -475,47 +486,48 @@ void interpreteCANframe(const CANMessage &frame)
         double SoCFactor = 0.5;
         SoCValuePercent = (SoCRaw + SoCOffset) * SoCFactor;
         
-        adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, &(frame.data[1]), 1);
+        vControl.VehicleStateUpdateBatterySoC(frame.data[1]);
+        //adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, &(frame.data[1]), 1);
 
         //LOG_MSG("SoCRaw: " + String(SoCRaw) + " | SoCValuePercent: " + String(SoCValuePercent));
     }
     else if (frame.id == 0x418)
     { // Gear Shift Selection
 
-        vControl.updateGearSelection(frame.data[0]);
-
         if(gear_selection != frame.data[0])
         {
             // gear was switched
             last_gear_switched_time = millis();
             setPhysicalAccelerationRequest(0); // safety measure
-        }
 
-        switch (frame.data[0])
-        {
-        case 0x50:
-            gear_selection = 'P';
-            break;
-        case 0x52:
-            gear_selection = 'R';
-            break;
-        case 0x4E:
-            gear_selection = 'N';
-            break;
-        case 0x44:
-            gear_selection = 'D';
-            break;
-        case 0x83:
-            gear_selection = 'B';
-            break;
-        case 0x32:
-            gear_selection = 'C';
-            break;
-        default:
-            gear_selection = '?';
-            break;
+            switch (frame.data[0])
+            {
+            case 0x50:
+                gear_selection = 'P';
+                break;
+            case 0x52:
+                gear_selection = 'R';
+                break;
+            case 0x4E:
+                gear_selection = 'N';
+                break;
+            case 0x44:
+                gear_selection = 'D';
+                break;
+            case 0x83:
+                gear_selection = 'B';
+                break;
+            case 0x32:
+                gear_selection = 'C';
+                break;
+            default:
+                gear_selection = '?';
+                break;
+            }
+
+            vControl.updateGearSelection(gear_selection);
+            adsysHandler.sendMessage(AdsysMsgType::GEAR_SELECTION, (uint8_t *) &gear_selection, 1);
         }
-        adsysHandler.sendMessage(AdsysMsgType::GEAR_SELECTION, &(frame.data[0]), 1);
     }
 }
 
@@ -731,7 +743,7 @@ void pollJoystick()
         buf[2] = (uint8_t) (ADSystemJoystickYVal >> 8);
         buf[3] = (uint8_t) (ADSystemJoystickYVal & 0xFF);
 
-        adsysHandler.sendMessage(AdsysMsgType::JOYSTICK_POS_PERCENT, buf, 4);
+        //adsysHandler.sendMessage(AdsysMsgType::JOYSTICK_POS_PERCENT, buf, 4);
     }
 }
 
