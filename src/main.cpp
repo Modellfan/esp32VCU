@@ -339,7 +339,15 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     }
     else if(vControlMode == VehicleControl::OperationMode::ADSystemControl)
     {
-        physicalAcceleration = ADSystemPhysicalAccelerationRequest;
+        // safety measure
+        if(vControl.isAdsystemConnected())
+        {
+            physicalAcceleration = ADSystemPhysicalAccelerationRequest;
+        }
+        else
+        {
+            physicalAcceleration = 0;
+        }
     }
 
     // safety measure
