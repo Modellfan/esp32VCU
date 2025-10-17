@@ -31,27 +31,31 @@ inline void canManager_setup() {
     SPI.begin(MCP2515_SCK, MCP2515_MISO, MCP2515_MOSI);
 
     // Configure ACAN2515 for CAN1.
-    MONITOR_PORT.println("Configuring ACAN2515 CAN 1...");
+    //MONITOR_PORT.println("Configuring ACAN2515 CAN 1...");
     ACAN2515Settings settings(QUARTZ_FREQUENCY, 500UL * 1000UL);
     settings.mRequestedMode = ACAN2515Settings::NormalMode;
     const uint16_t errorCode = can_motor.begin(settings, []{ can_motor.isr(); });
     if (errorCode == 0)
-        MONITOR_PORT.println("CAN Initialized Successfully!");
+    {
+        //MONITOR_PORT.println("CAN Initialized Successfully!");
+    }
     else {
-        MONITOR_PORT.print("Configuration error: 0x");
-        MONITOR_PORT.println(errorCode, HEX);
+        //MONITOR_PORT.print("Configuration error: 0x");
+        //MONITOR_PORT.println(errorCode, HEX);
     }
     
     // Configure ACAN2515 for can_vehicle.
-    MONITOR_PORT.println("Configuring ACAN2515 can_vehicle...");
+    //MONITOR_PORT.println("Configuring ACAN2515 can_vehicle...");
     ACAN2515Settings settings2(QUARTZ_FREQUENCY, 500UL * 1000UL);
     settings2.mRequestedMode = ACAN2515Settings::NormalMode;
     const uint16_t errorCode2 = can_vehicle.begin(settings2, []{ can_vehicle.isr(); });
     if (errorCode2 == 0)
-        MONITOR_PORT.println("CAN Initialized Successfully!");
+    {
+        //MONITOR_PORT.println("CAN Initialized Successfully!");
+    }
     else {
-        MONITOR_PORT.print("Configuration error: 0x");
-        MONITOR_PORT.println(errorCode2, HEX);
+        //MONITOR_PORT.print("Configuration error: 0x");
+        //MONITOR_PORT.println(errorCode2, HEX);
     }
 }
 

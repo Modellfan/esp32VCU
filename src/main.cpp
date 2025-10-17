@@ -10,29 +10,33 @@
 #include "adsystem_interface.h"
 #include "vehicle_control.h"
 
-#define GVRET_ENABLED 0
-bool gvretEnabled = GVRET_ENABLED;
+#define INIT_USB_SERIAL 0
+
+#if(INIT_USB_SERIAL==1)
+#define USBSERIAL_PRINTLN(x) USBSerial1.println(x)
+#else
+#define USBSERIAL_PRINTLN(x)
+#endif
+
+#define LOG_MAIN 0
+#if (LOG_MAIN==1)
+    #define LOG_MSG(x) sendDebugMessage(x)
+#else
+    #define LOG_MSG(x)
+#endif
 
 #define RX_TMP_BUF_SIZE 256
 uint8_t rxTmpBuf[RX_TMP_BUF_SIZE] = {};
 
 uint32_t totalBytesReceivedADSystem = 0;
 
-// Define GVRET_PORT and MONITOR_PORT.
-// GVRET communication uses the primary Serial port.
-// Monitoring/debug output uses USBSerial1.
-//#define GVRET_PORT Serial
-//#define MONITOR_PORT Serial // USBSerial1
-//#define ADSYS_PORT USBSerial1
-
-#define GVRET_PORT USBSerial1 //Serial
-#define MONITOR_PORT USBSerial1
 #define ADSYS_PORT Serial // try hardware serial for AD System serial port
 
+#if(INIT_USB_SERIAL==1)
 // USB Serial Setup: Use a clear name for the USB CDC object.
 USBCDC USBSerial1(0); // First virtual serial port
+#endif
 
-#include "gvret.h"
 #include "canmanager.h"
 
 // RGB LED Config (ESP32-S3 Built-in)
@@ -330,7 +334,7 @@ void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
     }
     else if(vControlMode == VehicleControl::ECUTestControl && vControl.getTestMode() == VehicleControl::TestMode::Test_FullSystem)
     {
-        //MONITOR_PORT.println("physicalAcceleration = torque_request_calculated: " + String(torque_request_calculated));
+        //LOG_MSG("physicalAcceleration = torque_request_calculated: " + String(torque_request_calculated));
         physicalAcceleration = torque_request_calculated;
     }
     else if(vControlMode == VehicleControl::OperationMode::ADSystemControl)
@@ -389,8 +393,8 @@ void interpreteCANframe(const CANMessage &frame)
         
         adsysHandler.sendMessage(AdsysMsgType::RPM_FRONT_LR, &(frame.data[2]), 4);
 
-        //MONITOR_PORT.println("0x200: d[2]: 0x" + String(frame.data[2], HEX) + " | d[3]: 0x" + String(frame.data[3], HEX) + " | d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX));
-        //MONITOR_PORT.println("0x200: uint16_t RPM_fl_raw: " + String(RPM_fl_raw) + " |  uint16_t RPM_fr_raw: " + String(RPM_fr_raw) + " | RPM_fl: " + String(RPM_fl) + " | RPM_fr: " + String(RPM_fr));
+        //LOG_MSG("0x200: d[2]: 0x" + String(frame.data[2], HEX) + " | d[3]: 0x" + String(frame.data[3], HEX) + " | d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX));
+        //LOG_MSG("0x200: uint16_t RPM_fl_raw: " + String(RPM_fl_raw) + " |  uint16_t RPM_fr_raw: " + String(RPM_fr_raw) + " | RPM_fl: " + String(RPM_fl) + " | RPM_fr: " + String(RPM_fr));
     }
     else if (frame.id == 0x208)
     { // Wheel Rotation rear, Brake Position
@@ -402,8 +406,8 @@ void interpreteCANframe(const CANMessage &frame)
         RPM_rr = ((double) RPM_rr_raw - 49152.) / 19.;
         RPM_rl = ((double) RPM_rl_raw - 49152.) / 19.;
 
-        //MONITOR_PORT.println("0x208: d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX) + " | d[6]: 0x" + String(frame.data[6], HEX) + " | d[7]: 0x" + String(frame.data[7], HEX));
-        //MONITOR_PORT.println("0x208: uint16_t RPM_rl_raw: " + String(RPM_rl_raw) + " |  uint16_t RPM_rr_raw: " + String(RPM_rr_raw) + " | RPM_rl: " + String(RPM_rl) + " | RPM_rr: " + String(RPM_rr));
+        //LOG_MSG("0x208: d[4]: 0x" + String(frame.data[4], HEX) + " | d[5]: 0x" + String(frame.data[5], HEX) + " | d[6]: 0x" + String(frame.data[6], HEX) + " | d[7]: 0x" + String(frame.data[7], HEX));
+        //LOG_MSG("0x208: uint16_t RPM_rl_raw: " + String(RPM_rl_raw) + " |  uint16_t RPM_rr_raw: " + String(RPM_rr_raw) + " | RPM_rl: " + String(RPM_rl) + " | RPM_rr: " + String(RPM_rr));
   
         adsysHandler.sendMessage(AdsysMsgType::RPM_REAR_RL, &(frame.data[4]), 4);
     }
@@ -420,7 +424,7 @@ void interpreteCANframe(const CANMessage &frame)
         if(vehicle_speed >= vehicle_speed_limit_emergency || vehicle_speed <= -vehicle_speed_limit_emergency)
         {
             //vControl.setEmergencyMode();
-            MONITOR_PORT.println("vehicle speed larger than vehicle_speed_emergency. Opened safety circuit.");
+            LOG_MSG("vehicle speed larger than vehicle_speed_emergency. Opened safety circuit.");
         }
 
         adsysHandler.sendMessage(AdsysMsgType::SPEED, &(frame.data[0]), 2);
@@ -431,7 +435,7 @@ void interpreteCANframe(const CANMessage &frame)
         adsysHandler.sendMessage(AdsysMsgType::STEERING_ANGLE, &(frame.data[0]), 2);
 
         vControl.updateSteeringAngle(rawSteering);
-        //MONITOR_PORT.println("Got CAN Msg Steering angle raw: " + String(rawSteering));
+        //LOG_MSG("Got CAN Msg Steering angle raw: " + String(rawSteering));
         steering_angle = rawSteering - 4096; // div by 30.0 missing? -> According to https://myimiev.com/threads/can-network-reverse-engineering-creating-dbc-imiev.5788/ : Steering = (PID[0] * 256 + PID[1] - 4096) / 30.0;
     }
     else if (frame.id == 0x231)
@@ -465,7 +469,7 @@ void interpreteCANframe(const CANMessage &frame)
         
         adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, &(frame.data[1]), 1);
 
-        //MONITOR_PORT.println("SoCRaw: " + String(SoCRaw) + " | SoCValuePercent: " + String(SoCValuePercent));
+        //LOG_MSG("SoCRaw: " + String(SoCRaw) + " | SoCValuePercent: " + String(SoCValuePercent));
     }
     else if (frame.id == 0x418)
     { // Gear Shift Selection
@@ -514,11 +518,6 @@ void manipulateCAN()
 {
     CANMessage frame;
 
-    //Note: GVRET Logging to savvycan
-    //sendFrameToUSB(outFrame, 0); log on bus=0 all messages as they are recieved or sent on motor can bus
-    //sendFrameToUSB(outFrame, 1); log on bus=1 all vehicle can messages as they are recieved
-    //sendFrameToUSB(outFrame, 2); log on bus=2 all vehicle can message as they are (filtered/manipulated) forwarded to motor can bus
-
     // -------------------------------------------------------------
     // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
@@ -533,14 +532,11 @@ void manipulateCAN()
             CANMessage outFrame;
             manipulate_0x288(frame, outFrame);
             can_vehicle.tryToSend(outFrame);
-            sendFrameToUSB(outFrame, 0);
-            sendFrameToUSB(outFrame, 2);
         }
         else
         {
             // For all other forwards as is
             can_vehicle.tryToSend(frame);
-            sendFrameToUSB(frame, 0);
         }
     }
 
@@ -550,7 +546,6 @@ void manipulateCAN()
     if (can_vehicle.available())
     {
         can_vehicle.receive(frame);
-        sendFrameToUSB(frame, 1);
         interpreteCANframe(frame);
        
         // Only process messages that are not blacklisted.
@@ -562,19 +557,17 @@ void manipulateCAN()
                 CANMessage outFrame;
                 manipulate_0x285(frame, outFrame);
                 can_motor.tryToSend(outFrame);
-                sendFrameToUSB(outFrame, 2);
             }
             else
             {
                 // For all other not-blacklisted IDs, forward as is.
                 can_motor.tryToSend(frame);
-                sendFrameToUSB(frame, 2);
             }
         }
         else
         {
             // Optionally log that the message was blacklisted/dropped.
-            // MONITOR_PORT.println("Dropping blacklisted CAN id: 0x" + String(frame.id, HEX));
+            // LOG_MSG("Dropping blacklisted CAN id: 0x" + String(frame.id, HEX));
         }
     }
 }
@@ -592,7 +585,6 @@ void passthroughCAN()
         interpreteCANframe(frame);
 
         can_vehicle.tryToSend(frame);
-        sendFrameToUSB(frame, 0);
     }
 
     // -------------------------------------------------------------
@@ -603,8 +595,6 @@ void passthroughCAN()
         can_vehicle.receive(frame);
         interpreteCANframe(frame);
         
-        // Always forward to USB (for logging / GVRET).
-        sendFrameToUSB(frame, 1);
         can_motor.tryToSend(frame);
     }
 }
@@ -639,8 +629,8 @@ void pollJoystick()
     Xavg = (Xavg * (cnt -1) + (double) rawJoystickX) / cnt;
     Yavg = (Yavg * (cnt -1) + (double) rawJoystickY) / cnt;
 
-    MONITOR_PORT.println("rawJoystickX: " + String(rawJoystickX) + ", rawJoystickY: " + String(rawJoystickY));
-    MONITOR_PORT.println("running avg rawJoystickX: " + String(Xavg) + ", running avg rawJoystickY: " + String(Yavg));*/
+    LOG_MSG("rawJoystickX: " + String(rawJoystickX) + ", rawJoystickY: " + String(rawJoystickY));
+    LOG_MSG("running avg rawJoystickX: " + String(Xavg) + ", running avg rawJoystickY: " + String(Yavg));*/
 
 
     // Convert to -100% to 100% range
@@ -665,17 +655,17 @@ void pollJoystick()
             {
                 bool holdingJoystickInDirection = (processedJoystickX > joystick_deadzone)?true:((processedJoystickX < -joystick_deadzone)?true:false);
                 
-                //MONITOR_PORT.println("holdingJoystickInDirection is: " + String(holdingJoystickInDirection));
+                //LOG_MSG("holdingJoystickInDirection is: " + String(holdingJoystickInDirection));
                 if(holdingJoystickInDirection)
                 {
                     double anglePer = (processedJoystickX>0.0)?0.0:100.0;
                     vControl.setTargetSteeringAngle(anglePer);
                     holdingJoystickInDirectionReleased = false;
-                    //MONITOR_PORT.println("Holding steering input. Set target steering angle to: " + String(anglePer));
+                    //LOG_MSG("Holding steering input. Set target steering angle to: " + String(anglePer));
                 }
                 else if(holdingJoystickInDirectionReleased == false)
                 {
-                    MONITOR_PORT.println("Released steering input. Set target to current steering angle. vControl.getSteeringAnglePercent():" + String(vControl.getSteeringAnglePercent()));
+                    LOG_MSG("Released steering input. Set target to current steering angle. vControl.getSteeringAnglePercent():" + String(vControl.getSteeringAnglePercent()));
                     vControl.setTargetSteeringAngle(vControl.getSteeringAnglePercent());
                     holdingJoystickInDirectionReleased = true;
                 }
@@ -696,7 +686,7 @@ void pollJoystick()
 
             if(summand != 0)
             {
-                MONITOR_PORT.println("steering_angle_target_test: " + String(steering_angle_target_test));
+                LOG_MSG("steering_angle_target_test: " + String(steering_angle_target_test));
             }
         }
         else if(vControl.getTestMode() == VehicleControl::TestMode::Test_InverterJoystick)
@@ -712,9 +702,7 @@ void pollJoystick()
                     last_reverse_toggle_time = millis();
                     reverse_bit = 0x01 - reverse_bit; // toggle bit
 
-                    MONITOR_PORT.print("Toggling reverse bit to: ");
-                    MONITOR_PORT.print(reverse_bit);
-                    MONITOR_PORT.print("\n");
+                    LOG_MSG("Toggling reverse bit to: " + String(reverse_bit));
                 }
                 torque_request_test = 0.0;
             }
@@ -780,9 +768,7 @@ void control_brake_pedal()
 
             if(summand != 0)
             {
-                MONITOR_PORT.print("brake_pedal_target_test: ");
-                MONITOR_PORT.print(brake_pedal_target_test);
-                MONITOR_PORT.print("%\n");
+                LOG_MSG("brake_pedal_target_test: " + String(brake_pedal_target_test) + "%");
             }
         }
     }
@@ -813,9 +799,7 @@ void control_acceleration()
 
             if(summand != 0)
             {
-                MONITOR_PORT.print("torque_request_test: ");
-                MONITOR_PORT.print(torque_request_test);
-                MONITOR_PORT.print("%\n");
+                LOG_MSG("torque_request_test: " + String(torque_request_test) + "%");
             }
         }
     }
@@ -860,7 +844,7 @@ void control_acceleration()
             }
 
             // debug speed limiter
-            // MONITOR_PORT.println("v in:" + String(vehicle_speed_input) + " | v target: " + String(vdiff_m_per_s) + " | v target: " + String(vdiff_m_per_s) + " | torque_theoretical: " + String(torque_theoretical) + " | torque req internal: " + String(torque_request_internal));
+            // LOG_MSG("v in:" + String(vehicle_speed_input) + " | v target: " + String(vdiff_m_per_s) + " | v target: " + String(vdiff_m_per_s) + " | torque_theoretical: " + String(torque_theoretical) + " | torque req internal: " + String(torque_request_internal));
 
             // limit speed
             if(vehicle_speed > vehicle_speed_limit)
@@ -956,7 +940,7 @@ void control_acceleration()
     // Ensure brake target remains within valid limits
     brake_pedal_target = constrain(brake_calculated, 0.0, 1.0);
 
-    //MONITOR_PORT.println("Brake Pedal Target: " + String(brake_pedal_target * 100.0) + "%");
+    //LOG_MSG("Brake Pedal Target: " + String(brake_pedal_target * 100.0) + "%");
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -965,34 +949,12 @@ void control_acceleration()
 
 void printStatus()
 {
-    MONITOR_PORT.print("Joystick X: ");
-    MONITOR_PORT.print(processedJoystickX);
-    MONITOR_PORT.print(" | Joystick Y: ");
-    MONITOR_PORT.print(processedJoystickY);
-    MONITOR_PORT.print(" | Brake Pedal Target: ");
-    MONITOR_PORT.print(brake_pedal_target, 2);
-    MONITOR_PORT.print(" | Brake Pedal Position (iMiev): ");
-    MONITOR_PORT.print(brake_pedal_position, 2);
-    MONITOR_PORT.print("\nTorque Request (iMiev): ");
-    MONITOR_PORT.print(torque_request);
-    MONITOR_PORT.print(" | Accelerator: ");
-    MONITOR_PORT.print(accelerator_pedal_percentage, 2);
-    MONITOR_PORT.print(" | Gear: ");
-    MONITOR_PORT.print(gear_selection);
-    //MONITOR_PORT.print(" | Emergency: ");
-    //MONITOR_PORT.print(emergencyButtonPressed ? "PRESSED" : "NOT PRESSED");
-    //MONITOR_PORT.print(" | Joystick Control: ");
-    //MONITOR_PORT.print(joystick_control_active ? "ACTIVE" : "INACTIVE");
-    //MONITOR_PORT.print(" | Brake Switch: ");
-    //MONITOR_PORT.print(brake_pedal_switch ? "ON" : "OFF");
-    MONITOR_PORT.print(" | Motor RPM: ");
-    MONITOR_PORT.print(motor_rpm);
-    MONITOR_PORT.print(" | Torque Theoretical: ");
-    MONITOR_PORT.print(torque_theoretical);
-    MONITOR_PORT.print(" | Torque Calculated: ");
-    MONITOR_PORT.print(torque_request_calculated);
-    MONITOR_PORT.println(" | Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr) + " | ignitionState: " + String(ignitionState));
-    MONITOR_PORT.println("Total bytes received from AD System: " + String(totalBytesReceivedADSystem));
+    LOG_MSG("Joystick X: " + String(processedJoystickX) + " | Joystick Y: " + String(processedJoystickY));
+    LOG_MSG("Brake Pedal Target: " + String(brake_pedal_target) + "% | Brake Pedal Position: " + String(brake_pedal_position));
+    LOG_MSG("Torque Request (iMiev): " + String(torque_request) + " | Gear: " + String(gear_selection) + " | Motor RPM: " + String(motor_rpm) + " | Vehicle Speed: " + String(vehicle_speed) + " km/h");
+    LOG_MSG("Torque Theoretical: " + String(torque_theoretical) + " | Torque Calculated: " + String(torque_request_calculated));
+    LOG_MSG("Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr) + " | ignitionState: " + String(ignitionState));
+    LOG_MSG("Total bytes received from AD System: " + String(totalBytesReceivedADSystem));
 }
 
 /**************************************************************************
@@ -1000,15 +962,14 @@ void printStatus()
  **************************************************************************/
 void setup()
 {
-    // Initialize the primary Serial port for GVRET communication.
     Serial.begin(115200);
 
+#if(INIT_USB_SERIAL==1)
     // Initialize USB CDC for monitoring/debug output.
     USBSerial1.begin();
     //USBSerial1.setRxBufferSize(1024);
     USB.begin();
-
-    gvretEnabled = GVRET_ENABLED;
+#endif
 
     ignitionState = false;
 
@@ -1039,7 +1000,7 @@ void setup()
     vControl.adsysConnectionLostAction(); // set initial connection state
    
     // Optionally, print a startup message.
-    MONITOR_PORT.println("System Initialized. Starting tasks...");
+    LOG_MSG("System Initialized. Starting tasks...");
 }
 
 // careful, this was behaving buggy -> individual bytes were not put out
@@ -1056,22 +1017,22 @@ void AdsysUartHandler::uartSendBytes(std::vector<uint8_t> &bytes)
 
 void sendDebugMessage(const char* msg)
 {
-    MONITOR_PORT.println(msg);
+    USBSERIAL_PRINTLN(msg);
 }
 
 void sendDebugMessage(const String& msg)
 {
-    MONITOR_PORT.println(msg);
+    USBSERIAL_PRINTLN(msg);
 }
 void sendDebugMessage(StringSumHelper& msg)
 {
-    MONITOR_PORT.println(msg);
+    USBSERIAL_PRINTLN(msg);
 }
 
 void receive_from_adsystem()
 {
     int numBytes = ADSYS_PORT.available();
-    //MONITOR_PORT.println("Bytes in Rx buffer: " + String(numBytes));
+    //LOG_MSG("Bytes in Rx buffer: " + String(numBytes));
 
     if(numBytes <= 0)
     {
@@ -1084,7 +1045,7 @@ void receive_from_adsystem()
         ADSYS_PORT.readBytes(rxTmpBuf, readNum);
         adsysHandler.onBytesReceived(rxTmpBuf, readNum);
 
-        //MONITOR_PORT.println("Rx " + String(readNum) + " byte(s)");
+        //LOG_MSG("Rx " + String(readNum) + " byte(s)");
 
         numBytes -= readNum;
         totalBytesReceivedADSystem += readNum;
@@ -1095,11 +1056,6 @@ void loop()
 {
     runner.execute();
     pollCAN();
-
-    if(gvretEnabled)
-    {
-        gvret_loop();
-    }
 
     receive_from_adsystem();
 }
@@ -1142,7 +1098,7 @@ double readTargetVehicleSpeed()
 
 void setPhysicalAccelerationRequest(int16_t ADSystemPhysicalAccerealation)
 {
-    //MONITOR_PORT.println("Received physical acceleration request: " + String(ADSystemPhysicalAccerealation) + "; Value would have been set but for testing it is hard coded to zero.");
+    //LOG_MSG("Received physical acceleration request: " + String(ADSystemPhysicalAccerealation) + "; Value would have been set but for testing it is hard coded to zero.");
     //ADSystemPhysicalAccerealation = 0;
     ADSystemPhysicalAccelerationRequest = constrain(ADSystemPhysicalAccerealation, torque_min, torque_max);;
 }

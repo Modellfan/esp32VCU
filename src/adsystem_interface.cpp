@@ -1,6 +1,13 @@
 #include "adsystem_interface.h"
 #include <Arduino.h>
 
+#define LOG_ADSYS 0
+#if (LOG_ADSYS==1)
+    #define LOG_MSG(x) sendDebugMessage(x)
+#else
+    #define LOG_MSG(x)
+#endif
+
 AdsysUartHandler adsysHandler;
 
 // Constructor
@@ -60,7 +67,7 @@ void AdsysUartHandler::processBuffer() {
         for (size_t i = 0; i < msgLen; ++i) sum += rxBuffer[i];
         if (sum != 0) {
             // Invalid, drop start byte and retry
-            sendDebugMessage("Dropped message: ID: 0x" +String(type, HEX));
+            LOG_MSG("Dropped message: ID: 0x" +String(type, HEX));
             rxBuffer.erase(rxBuffer.begin());
             continue;
         }

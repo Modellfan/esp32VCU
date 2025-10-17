@@ -4,7 +4,7 @@
 #include <ACAN2515_CANMessage.h>
 //#include "main.h"
 
-#define LOG_VEHICLE_CONTROL 1
+#define LOG_VEHICLE_CONTROL 0
 #if (LOG_VEHICLE_CONTROL==1)
     #define LOG_MSG(x) sendDebugMessage(x)
 #else
