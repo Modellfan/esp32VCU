@@ -1,7 +1,7 @@
 #include "adsystem_interface.h"
 #include <Arduino.h>
 
-#define LOG_ADSYS 0
+#define LOG_ADSYS 1
 #if (LOG_ADSYS==1)
     #define LOG_MSG(x) sendDebugMessage(x)
 #else
@@ -11,7 +11,7 @@
 AdsysUartHandler adsysHandler;
 
 // Constructor
-AdsysUartHandler::AdsysUartHandler() : messageCallback(nullptr) {}
+AdsysUartHandler::AdsysUartHandler() : messageCallback(nullptr) { droppedMessagesCount = 0; heartbeat_state = 0; }
 
 // Calculate checksum so that sum of all bytes including checksum is 0
 uint8_t AdsysUartHandler::calcChecksum(const uint8_t* data, size_t length) {
@@ -44,6 +44,7 @@ void AdsysUartHandler::onBytesReceived(uint8_t *bytes, size_t numBytes) {
 
 // Process rxBuffer for complete messages
 void AdsysUartHandler::processBuffer() {
+    LOG_MSG("EnpB rxBSz: " + String(rxBuffer.size()));
     while (rxBuffer.size() >= 4) {
         // Look for start byte
         if (rxBuffer[0] != ADSYS_UART_START_BYTE) {
@@ -52,8 +53,11 @@ void AdsysUartHandler::processBuffer() {
         }
 
         // At least start (1 byte) + type (1 byte) + length of payload (1 byte) + payload (min 1) + checksum (1 byte)
-        if (rxBuffer.size() < 5) return;
-
+        if (rxBuffer.size() < 5)
+        {
+            LOG_MSG("ExpB");
+            return;
+        }
         // Determine payload length by type
         uint8_t type = rxBuffer[1];
         size_t payloadLen = rxBuffer[2];
@@ -91,6 +95,7 @@ void AdsysUartHandler::processBuffer() {
             rxBuffer.erase(rxBuffer.begin());
         }
     }
+    LOG_MSG("ExpB");
 }
 
 // Send a message (payload is raw bytes)

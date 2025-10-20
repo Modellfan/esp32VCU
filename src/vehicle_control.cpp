@@ -585,6 +585,7 @@ void VehicleControl::setTargetBrakePosition(double position_percent)
 // is called periodically, every 10ms by the scheduler in main.cpp
 void VehicleControl::run()
 {
+    LOG_MSG("EnVCR");
     checkHeartbeatTimeout();
 
     if(inject_simulated_data)
@@ -674,6 +675,7 @@ void VehicleControl::run()
         }
         break;
     };
+    LOG_MSG("ExVCR");
 }
 
 void VehicleControl::ADSystemMessagesCb(const AdsysMessage& msg)
@@ -857,6 +859,8 @@ void VehicleControl::updateGearSelection(uint8_t gear) {
 
 void VehicleControl::sendStatus()
 {
+    LOG_MSG("EnVCS");
+
     vehicle_state.callCounter250ms++;
     if(vehicle_state.callCounter250ms >= 4)
     {
@@ -866,6 +870,8 @@ void VehicleControl::sendStatus()
         adsysHandler.sendMessage(AdsysMsgType::BATTERY_SOC, (uint8_t *) (&vehicle_state.batterySoC), 1);
         adsysHandler.sendMessage(AdsysMsgType::BATTERY_RANGE, (uint8_t *) (&vehicle_state.rangeKm), 1);
         adsysHandler.sendMessage(AdsysMsgType::GEAR_SELECTION, (uint8_t *) (&vehicle_state.gearSelection), 1);
+        uint8_t ECUResetReason = (uint8_t) esp_reset_reason();
+        adsysHandler.sendMessage(AdsysMsgType::ECU_RESET_REASON, &ECUResetReason, 1);
     }
 
     // send messages (250ms interval)
@@ -880,4 +886,6 @@ void VehicleControl::sendStatus()
     uint32_t now = millis();
     uint8_t now_big_end[] = {(uint8_t) (now >> 24), (uint8_t) (now >> 16), (uint8_t) (now >> 8), (uint8_t) (now >> 0)};
     adsysHandler.sendMessage(AdsysMsgType::ECU_RUN_TIME_MS, now_big_end, 4);
+
+    LOG_MSG("ExVCS");
 }

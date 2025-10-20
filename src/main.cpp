@@ -10,7 +10,7 @@
 #include "adsystem_interface.h"
 #include "vehicle_control.h"
 
-#define INIT_USB_SERIAL 0
+#define INIT_USB_SERIAL 1
 
 #if(INIT_USB_SERIAL==1)
 #define USBSERIAL_PRINTLN(x) USBSerial1.println(x)
@@ -18,7 +18,7 @@
 #define USBSERIAL_PRINTLN(x)
 #endif
 
-#define LOG_MAIN 0
+#define LOG_MAIN 1
 #if (LOG_MAIN==1)
     #define LOG_MSG(x) sendDebugMessage(x)
 #else
@@ -180,7 +180,19 @@ bool heartbeat_rx_good = false;
 uint8_t operation_mode = OPERATION_MODE_NORMAL;
 
 
-
+String esp_reset_reason_array[] = {
+    "ESP_RST_UNKNOWN",    //!< Reset reason can not be determined
+    "ESP_RST_POWERON",    //!< Reset due to power-on event
+    "ESP_RST_EXT",        //!< Reset by external pin (not applicable for ESP32)
+    "ESP_RST_SW",         //!< Software reset via esp_restart
+    "ESP_RST_PANIC",      //!< Software reset due to exception/panic
+    "ESP_RST_INT_WDT",    //!< Reset (software or hardware) due to interrupt watchdog
+    "ESP_RST_TASK_WDT",   //!< Reset due to task watchdog
+    "ESP_RST_WDT",        //!< Reset due to other watchdogs
+    "ESP_RST_DEEPSLEEP",  //!< Reset after exiting deep sleep mode
+    "ESP_RST_BROWNOUT",   //!< Brownout reset (software or hardware)
+    "ESP_RST_SDIO"       //!< Reset over SDIO
+};
 
 Scheduler runner;
 
@@ -201,7 +213,7 @@ void interpreteCANframe(const CANMessage &frame);
  *  Task Definitions
  **************************************************************************/
 #if(INIT_USB_SERIAL==1)
-Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
+Task taskPrintStatus(1000, TASK_FOREVER, &printStatus, &runner, true);
 #endif
 Task taskvControlRun(10, TASK_FOREVER, [](){ vControl.run(); }, &runner, true);
 Task taskvControlSendStatus(250, TASK_FOREVER, [](){ vControl.sendStatus(); }, &runner, true);
@@ -442,7 +454,7 @@ void interpreteCANframe(const CANMessage &frame)
         if(vehicle_speed >= vehicle_speed_limit_emergency || vehicle_speed <= -vehicle_speed_limit_emergency)
         {
             //vControl.setEmergencyMode();
-            LOG_MSG("vehicle speed larger than vehicle_speed_emergency. Opened safety circuit.");
+            //LOG_MSG("vehicle speed larger than vehicle_speed_emergency. Opened safety circuit.");
         }
 
         adsysHandler.sendMessage(AdsysMsgType::SPEED, &(frame.data[0]), 2);
@@ -630,9 +642,11 @@ void pollCAN()
 // ——————————————————————————————————————————————————————————————————————————————
 void control_dynamics()
 {
+    LOG_MSG("EnmCD");
     pollJoystick();
     control_acceleration();
     control_brake_pedal();
+    LOG_MSG("ExmCD");
 }
 
 double Xavg = 0;
@@ -964,17 +978,20 @@ void control_acceleration()
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
-//   Print Status (Every 500ms)
+//   Print Status (Every 1s)
 // ——————————————————————————————————————————————————————————————————————————————
 
 void printStatus()
 {
-    LOG_MSG("Joystick X: " + String(processedJoystickX) + " | Joystick Y: " + String(processedJoystickY));
-    LOG_MSG("Brake Pedal Target: " + String(brake_pedal_target) + "% | Brake Pedal Position: " + String(brake_pedal_position));
-    LOG_MSG("Torque Request (iMiev): " + String(torque_request) + " | Gear: " + String(gear_selection) + " | Motor RPM: " + String(motor_rpm) + " | Vehicle Speed: " + String(vehicle_speed) + " km/h");
-    LOG_MSG("Torque Theoretical: " + String(torque_theoretical) + " | Torque Calculated: " + String(torque_request_calculated));
-    LOG_MSG("Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr) + " | ignitionState: " + String(ignitionState));
-    LOG_MSG("Total bytes received from AD System: " + String(totalBytesReceivedADSystem));
+    LOG_MSG("---------------------------------------------------");
+    //LOG_MSG("Joystick X: " + String(processedJoystickX) + " | Joystick Y: " + String(processedJoystickY));
+    //LOG_MSG("Brake Pedal Target: " + String(brake_pedal_target) + "% | Brake Pedal Position: " + String(brake_pedal_position));
+    //LOG_MSG("Torque Request (iMiev): " + String(torque_request) + " | Gear: " + String(gear_selection) + " | Motor RPM: " + String(motor_rpm) + " | Vehicle Speed: " + String(vehicle_speed) + " km/h");
+    //LOG_MSG("Torque Theoretical: " + String(torque_theoretical) + " | Torque Calculated: " + String(torque_request_calculated));
+    //LOG_MSG("Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr) + " | ignitionState: " + String(ignitionState));
+    LOG_MSG("Total bytes received from AD System: " + String(totalBytesReceivedADSystem) + " | AD System connected: " + String(vControl.isAdsystemConnected()) + " | Dropped messages count: " + String(adsysHandler.getDroppedMessagesCount()));
+    LOG_MSG("ECU Reset Reason: " + esp_reset_reason_array[esp_reset_reason()]);
+    LOG_MSG("Steering Angle: " + String(steering_angle) + " | vControl.getOperationMode(): " + String(vControl.getOperationMode()));
 }
 
 /**************************************************************************
@@ -983,6 +1000,8 @@ void printStatus()
 void setup()
 {
     Serial.begin(115200);
+
+    Serial.setTimeout(50);
 
 #if(INIT_USB_SERIAL==1)
     // Initialize USB CDC for monitoring/debug output.
@@ -994,6 +1013,12 @@ void setup()
     ignitionState = false;
 
     //delay(10000);
+
+    uint8_t ECUResetReason = 0;
+
+    Serial.println("-------------------------------------");
+    Serial.println("Reset reason: " + String(esp_reset_reason()));
+    Serial.println("-------------------------------------");
 
     // Initialize Servo
     // ESP32PWM::allocateTimer(0);
@@ -1059,25 +1084,23 @@ void receive_from_adsystem()
         return;
     }
 
-    do
-    {
-        size_t readNum = (numBytes > RX_TMP_BUF_SIZE)? RX_TMP_BUF_SIZE : numBytes;
-        ADSYS_PORT.readBytes(rxTmpBuf, readNum);
-        adsysHandler.onBytesReceived(rxTmpBuf, readNum);
+    size_t readNumReq = (numBytes > RX_TMP_BUF_SIZE)? RX_TMP_BUF_SIZE : numBytes;
+    size_t readNumAct = ADSYS_PORT.readBytes(rxTmpBuf, readNumReq);
 
-        //LOG_MSG("Rx " + String(readNum) + " byte(s)");
+    LOG_MSG("Read " + String(readNumAct) + " bytes from AD System UART.");
+    totalBytesReceivedADSystem += readNumAct;
 
-        numBytes -= readNum;
-        totalBytesReceivedADSystem += readNum;
-    } while(numBytes >= RX_TMP_BUF_SIZE);
+    adsysHandler.onBytesReceived(rxTmpBuf, readNumAct);
 }
 
 void loop()
 {
+    LOG_MSG("EnL");
     runner.execute();
     pollCAN();
 
     receive_from_adsystem();
+    LOG_MSG("ExL");
 }
 
 void setVehicleSpeedLimit(double speed)

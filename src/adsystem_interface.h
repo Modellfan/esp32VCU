@@ -26,6 +26,7 @@ enum class AdsysMsgType : uint8_t {
     | ECU has Emergency | Vehicle Ignition State | t.b.d. | t.b.d. | t.b.d. | t.b.d. | t.b.d. | t.b.d. |
                                 */
     ECU_RUN_TIME_MS     = 0x60, // run time of ECU since last boot in ms uint32_t
+    ECU_RESET_REASON    = 0x61, // uint8_t, reset reason as per esp_reset_reason_t
     SET_SIMULATED_DATA_INJECTION = 0xF0, // payload 0x00 for disable, 0x01 for enable
     // Add more as needed...
 };
@@ -75,6 +76,8 @@ public:
     void uartSendByte(uint8_t byte);
     void uartSendBytes(std::vector<uint8_t> &bytes);
 
+    uint32_t getDroppedMessagesCount() const { return droppedMessagesCount; }
+
 private:
     std::vector<uint8_t> rxBuffer;
     MessageCallback messageCallback;
@@ -83,6 +86,8 @@ private:
 
     void processBuffer();
     uint8_t calcChecksum(const uint8_t* data, size_t length);
+
+    uint32_t droppedMessagesCount;
 };
 
 extern AdsysUartHandler adsysHandler;
