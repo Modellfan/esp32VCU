@@ -859,7 +859,7 @@ void VehicleControl::updateGearSelection(uint8_t gear) {
 
 void VehicleControl::sendStatus()
 {
-    LOG_MSG("EnVCS");
+    //LOG_MSG("EnVCS");
 
     vehicle_state.callCounter250ms++;
     if(vehicle_state.callCounter250ms >= 4)
@@ -887,5 +887,5 @@ void VehicleControl::sendStatus()
     uint8_t now_big_end[] = {(uint8_t) (now >> 24), (uint8_t) (now >> 16), (uint8_t) (now >> 8), (uint8_t) (now >> 0)};
     adsysHandler.sendMessage(AdsysMsgType::ECU_RUN_TIME_MS, now_big_end, 4);
 
-    LOG_MSG("ExVCS");
+    //LOG_MSG("ExVCS");
 }

@@ -1,3 +1,16 @@
+/*#if (!PLATFORMIO)
+  // Enable Arduino-ESP32 logging in Arduino IDE
+  #ifdef CORE_DEBUG_LEVEL
+    #undef CORE_DEBUG_LEVEL
+  #endif
+  #ifdef LOG_LOCAL_LEVEL
+    #undef LOG_LOCAL_LEVEL
+  #endif
+
+  #define CORE_DEBUG_LEVEL 4
+  #define LOG_LOCAL_LEVEL CORE_DEBUG_LEVEL
+#endif*/
+
 /**************************************************************************
  *  Includes and Definitions
  **************************************************************************/
@@ -7,10 +20,29 @@
 #include <TaskScheduler.h>
 //#include <ESP32Servo.h>
 
+#include <WiFi.h>
+
+//#include "esp32-hal-log.h"
+
 #include "adsystem_interface.h"
 #include "vehicle_control.h"
 
 #define INIT_USB_SERIAL 1
+
+#define USE_TASK_SCHEDULER 0 // use FreeRTOS tasks instead of TaskScheduler library
+
+#define STACK_SIZE_TASK_DEFAULT 2048
+
+StaticTask_t xPrintStatusTaskBuffer;
+StackType_t xStackTaskPrintStatus[STACK_SIZE_TASK_DEFAULT];
+StaticTask_t xVehicleControlRunTaskBuffer;
+StackType_t xStackTaskVehicleControlRun[STACK_SIZE_TASK_DEFAULT];
+StaticTask_t xVehicleControlSendStatusTaskBuffer;
+StackType_t xStackTaskVehicleControlSendStatus[STACK_SIZE_TASK_DEFAULT];
+StaticTask_t xVehicleDynamicsControlTaskBuffer;
+StackType_t xStackTaskVehicleDynamicsControl[STACK_SIZE_TASK_DEFAULT];
+
+#define POLL_JOYSTICK 0
 
 #if(INIT_USB_SERIAL==1)
 #define USBSERIAL_PRINTLN(x) USBSerial1.println(x)
@@ -194,7 +226,32 @@ String esp_reset_reason_array[] = {
     "ESP_RST_SDIO"       //!< Reset over SDIO
 };
 
+uint32_t avgN = 100;
+double avgExecTimeMsScheduler = 0.0;
+double avgExecTimeMsPollCAN = 0.0;
+double avgExecTimeMsRcADSys = 0.0;
+
+double avgExecTimeDC = 0.0;
+double avgExecTimePS = 0.0;
+double avgExecTimeVCSS = 0.0;
+double avgExecTimeVCRun = 0.0;
+
+size_t loopPeriodsCounter = 0;
+
+uint32_t maxInASecExecTimeMsScheduler = 0.0;
+uint32_t maxInASecExecTimeMsPollCAN = 0.0;
+uint32_t maxInASecExecTimeMsRcADSys = 0.0;
+
+uint32_t maxInASecExecTimeMsDC = 0.0;
+uint32_t maxInASecExecTimeMsPS = 0.0;
+uint32_t maxInASecExecTimeMsVCSS = 0.0;
+uint32_t maxInASecExecTimeMsVCRun = 0.0;
+
+uint32_t motorInjPerSeconds = 0;
+
+#if(USE_TASK_SCHEDULER==1)
 Scheduler runner;
+#endif
 
 /**************************************************************************
  *  Function Prototypes
@@ -212,12 +269,73 @@ void interpreteCANframe(const CANMessage &frame);
 /**************************************************************************
  *  Task Definitions
  **************************************************************************/
+#if(USE_TASK_SCHEDULER==1)
 #if(INIT_USB_SERIAL==1)
 Task taskPrintStatus(1000, TASK_FOREVER, &printStatus, &runner, true);
 #endif
 Task taskvControlRun(10, TASK_FOREVER, [](){ vControl.run(); }, &runner, true);
 Task taskvControlSendStatus(250, TASK_FOREVER, [](){ vControl.sendStatus(); }, &runner, true);
 Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
+#else
+#if(INIT_USB_SERIAL==1)
+void xPrintStatus(void * parameter)
+{
+  for(;;)
+  {
+    uint32_t startTime = millis();
+    printStatus();
+
+    uint32_t execTime = millis() - startTime;
+    avgExecTimePS = ((avgExecTimePS * (avgN - 1)) + execTime) / avgN;
+    if(execTime > maxInASecExecTimeMsPS)
+      maxInASecExecTimeMsPS = execTime;
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+#endif
+void xVehicleDynamics(void * parameter)
+{
+  for(;;)
+  {
+    uint32_t startTime = millis();
+    control_dynamics();
+
+    uint32_t execTime = millis() - startTime;
+    avgExecTimeDC = ((avgExecTimeDC * (avgN - 1)) + execTime) / avgN;
+    if(execTime > maxInASecExecTimeMsDC)
+      maxInASecExecTimeMsDC = execTime;
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+void xVehicleControlRun(void * parameter)
+{
+  for(;;)
+  {
+    uint32_t startTime = millis();
+    vControl.run();
+    uint32_t execTime = millis() - startTime;
+    avgExecTimeVCRun = ((avgExecTimeVCRun * (avgN - 1)) + execTime) / avgN;
+    if(execTime > maxInASecExecTimeMsVCRun)
+      maxInASecExecTimeMsVCRun = execTime;
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+void xVehicleControlSendStatus(void * parameter)
+{
+  for(;;)
+  {
+    uint32_t startTime = millis();
+    vControl.sendStatus();
+    uint32_t execTime = millis() - startTime;
+    avgExecTimeVCSS = ((avgExecTimeVCSS * (avgN - 1)) + execTime) / avgN;
+    if(execTime > maxInASecExecTimeMsVCSS)
+      maxInASecExecTimeMsVCSS = execTime;
+    vTaskDelay(250 / portTICK_PERIOD_MS);
+  }
+}
+#endif
+
 
 //---------------------------------------------------------------------------
 // Blacklist Array: Uncomment an ID to block it from being forwarded.
@@ -589,6 +707,7 @@ void manipulateCAN()
                 CANMessage outFrame;
                 manipulate_0x285(frame, outFrame);
                 can_motor.tryToSend(outFrame);
+                motorInjPerSeconds++;
             }
             else
             {
@@ -642,11 +761,11 @@ void pollCAN()
 // ——————————————————————————————————————————————————————————————————————————————
 void control_dynamics()
 {
-    LOG_MSG("EnmCD");
+    //LOG_MSG("EnmCD");
     pollJoystick();
     control_acceleration();
     control_brake_pedal();
-    LOG_MSG("ExmCD");
+    //LOG_MSG("ExmCD");
 }
 
 double Xavg = 0;
@@ -654,9 +773,18 @@ double Yavg = 0;
 
 void pollJoystick()
 {
+    if(vControl.getOperationMode() == VehicleControl::OperationMode::ADSystemControl)
+    {
+        return;
+    }
+
+#if(POLL_JOYSTICK==1)
     rawJoystickX = analogRead(JOYSTICK_X_PIN); // Read X-axis
     rawJoystickY = analogRead(JOYSTICK_Y_PIN); // Read Y-axis
-
+#else
+    rawJoystickX = joystickX_ZERO; // Center position
+    rawJoystickY = joystickY_ZERO; // Center position
+#endif
     /*
     // in the current setup: Xavg = ~1900, Yavg = ~1940
     double cnt = 1000;
@@ -839,7 +967,7 @@ void control_acceleration()
     }
     else if(vControlMode == VehicleControl::OperationMode::ADSystemControl)
     {
-        // TODO: use AD System inputs
+        return; // don't control acceleration in ADSystemControl mode
     }
 
     // we need motor speed additional
@@ -988,10 +1116,37 @@ void printStatus()
     //LOG_MSG("Brake Pedal Target: " + String(brake_pedal_target) + "% | Brake Pedal Position: " + String(brake_pedal_position));
     //LOG_MSG("Torque Request (iMiev): " + String(torque_request) + " | Gear: " + String(gear_selection) + " | Motor RPM: " + String(motor_rpm) + " | Vehicle Speed: " + String(vehicle_speed) + " km/h");
     //LOG_MSG("Torque Theoretical: " + String(torque_theoretical) + " | Torque Calculated: " + String(torque_request_calculated));
-    //LOG_MSG("Vehicle speed: " + String(vehicle_speed) + " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr) + " | ignitionState: " + String(ignitionState));
+    LOG_MSG("Vehicle speed: " + String(vehicle_speed) /*+ " | SoC: " + String(SoCValuePercent) + "% | Range: " + String(rangeKm) + " km | RPMs: FL: " + String(RPM_fl) + " | FR: " + String(RPM_fr) + " | RL: " + String(RPM_rl) + " | RR: " + String(RPM_rr)*/ + " | ignitionState: " + String(ignitionState));
     LOG_MSG("Total bytes received from AD System: " + String(totalBytesReceivedADSystem) + " | AD System connected: " + String(vControl.isAdsystemConnected()) + " | Dropped messages count: " + String(adsysHandler.getDroppedMessagesCount()));
     LOG_MSG("ECU Reset Reason: " + esp_reset_reason_array[esp_reset_reason()]);
     LOG_MSG("Steering Angle: " + String(steering_angle) + " | vControl.getOperationMode(): " + String(vControl.getOperationMode()));
+    LOG_MSG("Avg Execution Times (ms): Scheduler: " + String(avgExecTimeMsScheduler, 3) + " | Poll CAN: " + String(avgExecTimeMsPollCAN, 3) + " | RC AD Sys: " + String(avgExecTimeMsRcADSys, 3));
+    LOG_MSG("Max Execution Times in last sec (ms): Scheduler: " + String(maxInASecExecTimeMsScheduler) + " | Poll CAN: " + String(maxInASecExecTimeMsPollCAN) + " | RC AD Sys: " + String(maxInASecExecTimeMsRcADSys));
+    LOG_MSG("Loop executions per second: " + String(loopPeriodsCounter) + " | Loop execution time (ms): " + String((1000.0 / (double)loopPeriodsCounter), 3));
+
+    LOG_MSG("Avg Execution Times (ms): VC Run: " + String(avgExecTimeVCRun, 3) + " | VC Send Status: " + String(avgExecTimeVCSS, 3) + " | VC Dynamics: " + String(avgExecTimeDC, 3) + "| Print Status: " + String(avgExecTimePS, 3));
+    LOG_MSG("Max Execution Times in last sec (ms): VC Run: " + String(maxInASecExecTimeMsVCRun) + " | VC Send Status: " + String(maxInASecExecTimeMsVCSS) + " | VC Dynamics: " + String(maxInASecExecTimeMsDC) + "| Print Status: " + String(maxInASecExecTimeMsPS));
+    LOG_MSG("Motor injections last second: " + String(motorInjPerSeconds));
+
+    motorInjPerSeconds = 0;
+
+    loopPeriodsCounter = 0;
+
+    // not included in esp32-arduino; customly build esp32 lib would be needed
+    /*char runtimeStatsBuffer[512];
+    memset(runtimeStatsBuffer, 0, sizeof(runtimeStatsBuffer));
+    vTaskGetRunTimeStats(runtimeStatsBuffer);
+    LOG_MSG("Task Runtime Stats:\n" + String(runtimeStatsBuffer));*/
+
+    // Reset max counters for next interval
+    maxInASecExecTimeMsScheduler = 0;
+    maxInASecExecTimeMsPollCAN = 0;
+    maxInASecExecTimeMsRcADSys = 0;
+}
+
+int log_printf(const char *fmt, va_list args)
+{
+    return USBSerial1.printf(fmt, args);
 }
 
 /**************************************************************************
@@ -1003,12 +1158,26 @@ void setup()
 
     Serial.setTimeout(50);
 
+    // Turn off WiFi completely
+    WiFi.mode(WIFI_OFF);
+
+    disableCore0WDT();
+    disableCore1WDT();
+    
+    
+    //esp_log_level_set("*", ESP_LOG_DEBUG);
+
+    //esp_log_level_set("*", ESP_LOG_DEBUG);
+    //esp_log_set_vprintf(&log_printf);
+
 #if(INIT_USB_SERIAL==1)
     // Initialize USB CDC for monitoring/debug output.
     USBSerial1.begin();
     //USBSerial1.setRxBufferSize(1024);
     USB.begin();
 #endif
+
+    //USBSerial1.setDebugOutput(true);
 
     ignitionState = false;
 
@@ -1033,7 +1202,7 @@ void setup()
     //digitalWrite(RGB_BUILTIN, LOW);
 
     // Configure the emergency button pin (active low).
-    pinMode(EMERGENCY_BUTTON_PIN, INPUT_PULLDOWN);
+    //pinMode(EMERGENCY_BUTTON_PIN, INPUT_PULLDOWN);
 
     // Initialize the CAN buses using the CAN manager.
     canManager_setup();
@@ -1046,6 +1215,14 @@ void setup()
    
     // Optionally, print a startup message.
     LOG_MSG("System Initialized. Starting tasks...");
+
+#if(USE_TASK_SCHEDULER==0)
+    // Define tasks
+    xTaskCreateStatic(xPrintStatus, "xPrintStatusTask", STACK_SIZE_TASK_DEFAULT, NULL, tskIDLE_PRIORITY+10, xStackTaskPrintStatus, &xPrintStatusTaskBuffer);
+    xTaskCreateStatic(xVehicleControlRun, "xVehicleControlRunTask", STACK_SIZE_TASK_DEFAULT, NULL, tskIDLE_PRIORITY+10, xStackTaskVehicleControlRun, &xVehicleControlRunTaskBuffer);
+    xTaskCreateStatic(xVehicleControlSendStatus, "xVehicleControlSendStatusTask", STACK_SIZE_TASK_DEFAULT, NULL, tskIDLE_PRIORITY+10, xStackTaskVehicleControlSendStatus, &xVehicleControlSendStatusTaskBuffer);
+    xTaskCreateStatic(xVehicleDynamics, "xVehicleDynamicsControlTask", STACK_SIZE_TASK_DEFAULT, NULL, tskIDLE_PRIORITY+10, xStackTaskVehicleDynamicsControl, &xVehicleDynamicsControlTaskBuffer);
+#endif
 }
 
 // careful, this was behaving buggy -> individual bytes were not put out
@@ -1087,7 +1264,7 @@ void receive_from_adsystem()
     size_t readNumReq = (numBytes > RX_TMP_BUF_SIZE)? RX_TMP_BUF_SIZE : numBytes;
     size_t readNumAct = ADSYS_PORT.readBytes(rxTmpBuf, readNumReq);
 
-    LOG_MSG("Read " + String(readNumAct) + " bytes from AD System UART.");
+    //LOG_MSG("Read " + String(readNumAct) + " bytes from AD System UART.");
     totalBytesReceivedADSystem += readNumAct;
 
     adsysHandler.onBytesReceived(rxTmpBuf, readNumAct);
@@ -1095,12 +1272,35 @@ void receive_from_adsystem()
 
 void loop()
 {
-    LOG_MSG("EnL");
+    uint32_t micros_start = micros();
+    //LOG_MSG("EnL");
+#if(USE_TASK_SCHEDULER==1)
     runner.execute();
+#endif
+    uint32_t micros_after_scheduler = micros();
+
     pollCAN();
 
+    uint32_t micros_after_pollcan = micros();
+
     receive_from_adsystem();
-    LOG_MSG("ExL");
+
+    uint32_t micros_end = micros();
+
+    // calculate average execution times
+    avgExecTimeMsScheduler = (avgExecTimeMsScheduler * 1000.0 * (avgN -1) + (micros_after_scheduler - micros_start)) / avgN / 1000.0;
+    avgExecTimeMsPollCAN = (avgExecTimeMsPollCAN * 1000.0 * (avgN -1) + (micros_after_pollcan - micros_after_scheduler)) / avgN / 1000.0;
+    avgExecTimeMsRcADSys = (avgExecTimeMsRcADSys * 1000.0 * (avgN -1) + (micros_end - micros_after_pollcan)) / avgN / 1000.0;
+
+    maxInASecExecTimeMsScheduler = max(maxInASecExecTimeMsScheduler * 1000.0, (double) micros_after_scheduler - micros_start) / 1000.0;
+    maxInASecExecTimeMsPollCAN = max(maxInASecExecTimeMsPollCAN * 1000.0, (double) micros_after_pollcan - micros_after_scheduler) / 1000.0;
+    maxInASecExecTimeMsRcADSys = max(maxInASecExecTimeMsRcADSys * 1000.0, (double) micros_end - micros_after_pollcan) / 1000.0;
+
+    loopPeriodsCounter++;
+
+    //vTaskDelay(1);
+    yield();
+    //LOG_MSG("ExL");
 }
 
 void setVehicleSpeedLimit(double speed)

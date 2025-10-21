@@ -44,7 +44,7 @@ void AdsysUartHandler::onBytesReceived(uint8_t *bytes, size_t numBytes) {
 
 // Process rxBuffer for complete messages
 void AdsysUartHandler::processBuffer() {
-    LOG_MSG("EnpB rxBSz: " + String(rxBuffer.size()));
+    //LOG_MSG("EnpB rxBSz: " + String(rxBuffer.size()));
     while (rxBuffer.size() >= 4) {
         // Look for start byte
         if (rxBuffer[0] != ADSYS_UART_START_BYTE) {
@@ -55,7 +55,7 @@ void AdsysUartHandler::processBuffer() {
         // At least start (1 byte) + type (1 byte) + length of payload (1 byte) + payload (min 1) + checksum (1 byte)
         if (rxBuffer.size() < 5)
         {
-            LOG_MSG("ExpB");
+            //LOG_MSG("ExpB");
             return;
         }
         // Determine payload length by type
@@ -95,7 +95,7 @@ void AdsysUartHandler::processBuffer() {
             rxBuffer.erase(rxBuffer.begin());
         }
     }
-    LOG_MSG("ExpB");
+    //LOG_MSG("ExpB");
 }
 
 // Send a message (payload is raw bytes)
