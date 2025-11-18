@@ -1,712 +1,304 @@
-/**************************************************************************
- *  Includes and Definitions
- **************************************************************************/
-#include <Arduino.h>
-#include "USB.h"
-#include "USBCDC.h"
-#include <TaskScheduler.h>
-#include <ESP32Servo.h>
+/*
+  ESP32-S3 SD Card -> Google Drive (Apps Script) STREAMING uploader
+  - Raw bytes body (NOT base64)
+  - Params: token, name, mimeType, folderId (query string)
+  - Streams with HTTPClient::sendRequest(Stream*, size)
+  - Handles Google 302/301/etc with manual re-POST to the Location URL
+  - Increases timeouts and disables connection reuse to avoid -11 timeouts
+  - Parses JSON { ok, id, name, size, webViewUrl, ... }
+*/
 
-// Define GVRET_PORT and MONITOR_PORT.
-// GVRET communication uses the primary Serial port.
-// Monitoring/debug output uses USBSerial1.
-#define GVRET_PORT Serial
-#define MONITOR_PORT USBSerial1
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <SPI.h>
+#include <FS.h>
+#include <SD.h>
+#include <ctype.h>  // isspace/isdigit
 
-// USB Serial Setup: Use a clear name for the USB CDC object.
-USBCDC USBSerial1(0); // First virtual serial port
+// ===== WiFi =====
+const char* WIFI_SSID     = "Blacknet@Ueberlingen";
+const char* WIFI_PASSWORD = "Ueberlingen2019";
 
-#include "gvret.h"
-#include "canmanager.h"
+// ===== Apps Script Web App =====
+// Your working deployment (the /exec endpoint)
+const char* WEBAPP_BASE =
+  "https://script.google.com/macros/s/AKfycbz8dWlOPF_wcNfHRwrzWKuc6QB-jBiv7S6ODfcoz9uqy7vKSUGqdleDthApVtRmBQmj/exec";
+const char* TOKEN     = "my_secret";
+const char* FOLDER_ID = "1ealnpCAoC9H5pLFLJfjuo5vqwT0XOa84";
 
-// RGB LED Config (ESP32-S3 Built-in)
-// #define RGB_BUILTIN    48   // Built-in LED pin on ESP32-S3
-// #define RGB_BRIGHTNESS 0    // 0 for OFF
+// ===== SD SPI pins (ESP32-S3) =====
+#define SD_MOSI 35
+#define SD_MISO 37
+#define SD_SCK  36
+#define SD_CS   39
 
-Servo brake_servo;
-const int servoPin = 17;
-int pos = 0;
+// ---------- helpers ----------
+String urlEncode(const String& s) {
+  String out; char buf[4];
+  for (size_t i = 0; i < s.length(); i++) {
+    unsigned char c = (unsigned char)s[i];
+    if (isalnum(c) || c=='-'||c=='_'||c=='.'||c=='~') out += (char)c;
+    else { snprintf(buf, sizeof(buf), "%%%02X", c); out += buf; }
+  }
+  return out;
+}
+String toLowerExt(const String& name) {
+  int dot = name.lastIndexOf('.');
+  String ext = (dot >= 0) ? name.substring(dot + 1) : "";
+  ext.toLowerCase(); return ext;
+}
+String guessMimeType(const String& filename) {
+  String ext = toLowerExt(filename);
+  if (ext=="jpg"||ext=="jpeg") return "image/jpeg";
+  if (ext=="png") return "image/png";
+  if (ext=="gif") return "image/gif";
+  if (ext=="bmp") return "image/bmp";
+  if (ext=="txt") return "text/plain";
+  if (ext=="csv") return "text/csv";
+  if (ext=="json") return "application/json";
+  if (ext=="pdf") return "application/pdf";
+  if (ext=="mp4") return "video/mp4";
+  if (ext=="mp3") return "audio/mpeg";
+  return "application/octet-stream";
+}
+String driveSafeName(const String& sdAbsPath) {
+  String n = sdAbsPath.startsWith("/") ? sdAbsPath.substring(1) : sdAbsPath;
+  n.replace('/', '_'); if (n.length()==0) n="upload.bin"; return n;
+}
 
-// ——————————————————————————————————————————————————————————————————————————————
-//   Joystick Config (Analog Inputs)
-// ——————————————————————————————————————————————————————————————————————————————
-#define JOYSTICK_X_PIN 4 // GPIO 4 for X-axis
-#define JOYSTICK_Y_PIN 5 // GPIO 5 for Y-axis
+// --- tiny JSON readers (sufficient for your response) ---
+String jsonGetString(const String& json, const char* key) {
+  String pat = "\"" + String(key) + "\":";
+  int i = json.indexOf(pat);
+  if (i < 0) return "";
+  i += pat.length();
+  while (i < (int)json.length() && isspace((unsigned char)json[i])) i++;
+  if (i >= (int)json.length() || json[i] != '\"') return "";
+  i++; // skip opening quote
+  String out;
+  while (i < (int)json.length()) {
+    char ch = json[i++];
+    if (ch == '\\') {
+      if (i >= (int)json.length()) break;
+      char n = json[i++];
+      if (n=='\"'||n=='\\'||n=='/') out += n;
+      else if (n=='n') out += '\n';
+      else if (n=='r') out += '\r';
+      else if (n=='t') out += '\t';
+      else out += n;
+    } else if (ch == '\"') {
+      break;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+bool jsonGetBool(const String& json, const char* key, bool def=false) {
+  String pat = "\"" + String(key) + "\":";
+  int i = json.indexOf(pat);
+  if (i < 0) return def;
+  i += pat.length();
+  while (i < (int)json.length() && isspace((unsigned char)json[i])) i++;
+  if (json.startsWith("true", i)) return true;
+  if (json.startsWith("false", i)) return false;
+  return def;
+}
+long jsonGetLong(const String& json, const char* key, long def=-1) {
+  String pat = "\"" + String(key) + "\":";
+  int i = json.indexOf(pat);
+  if (i < 0) return def;
+  i += pat.length();
+  while (i < (int)json.length() && (isspace((unsigned char)json[i]) || json[i]=='\"')) i++;
+  long sign = 1; if (i < (int)json.length() && json[i]=='-') { sign=-1; i++; }
+  long v=0; bool any=false;
+  while (i < (int)json.length() && isdigit((unsigned char)json[i])) { v=v*10+(json[i]-'0'); any=true; i++; }
+  return any ? v*sign : def;
+}
 
-// Raw joystick values
-int rawJoystickX = 0;
-int rawJoystickY = 0;
+// --- paths / filter ---
+String joinPath(const String& base, const String& name) { return (base=="/")?"/"+name:base+"/"+name; }
+bool isSkippableDir(const String& name) {
+  return (name=="System Volume Information") || name.startsWith("FOUND.");
+}
 
-// Processed joystick values (-100% to 100%)
-float processedJoystickX = 0.0;
-float processedJoystickY = 0.0;
+// forward
+void walkAndUpload(const String& dirPath);
 
-// Calibration values (from your provided data)
-const int joystickX_ZERO = 1993; // X-axis center value
-const int joystickY_ZERO = 2005; // Y-axis center value
+// ------ low-level request that follows redirects correctly ------
+// - For 301/302/303 -> follow with GET (no body)
+// - For 307/308     -> repeat the same POST with body
+int postStreamFollowingRedirects(const String& url,
+                                 const String& mimeType,
+                                 File& f, size_t fsize,
+                                 String& outBody) {
+  const int MAX_HOPS = 3;
+  String curUrl = url;
+  outBody = "";
 
-const int JOYSTICK_MIN = 0;                  // Minimum raw ADC value
-const int JOYSTICK_MAX = 4095;               // Maximum raw ADC value
-const int JOYSTICK_RANGE = JOYSTICK_MAX / 2; // Half range for -100% to 100%
+  for (int hop = 0; hop < MAX_HOPS; ++hop) {
+    // Always reset file for a retry (only used if we POST again)
+    f.seek(0);
 
-// ——————————————————————————————————————————————————————————————————————————————
-//   Emergency Button Configuration
-// ——————————————————————————————————————————————————————————————————————————————
-// The emergency button is connected to pin 15.
-// Using INPUT_PULLUP makes it active low (pressed = LOW).
-const int EMERGENCY_BUTTON_PIN = 18;
-bool emergencyButtonPressed = false;
+    WiFiClientSecure client;
+    client.setInsecure(); // TODO: load proper root CA for production
 
-/**************************************************************************
- *  Global Variables and Objects
- **************************************************************************/
-// joystick control signals
-bool joystick_control_active = false;
-bool joystick_error_flag = false;
+    HTTPClient http;
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS); // manual handling
+    http.setTimeout(25000);
+    http.setReuse(false);
+    if (!http.begin(client, curUrl)) {
+      return -100; // couldn't start
+    }
+    http.addHeader("Accept", "application/json");
+    http.addHeader("Connection", "close");
 
-const float torque_ramp_accel = 20.0;             // torque acceleration ramp per 10ms
-const float torque_ramp_decell = 10.0;            // torque deceleration ramp per 10ms
-const float torque_max = 1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
-const float torque_min = -800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
-const float torque_zero_space = 5.0;              // First 5% of joystick are zero zone in both directions
-const float torque_regen_cutoff_rpm_high = 300.0; // When the motor rpm is below this , stop  cutoff any negative torque regen -> Hysteresis control
-const float torque_regen_cutoff_rpm_low = 200.0;  // When the motor rpm is below this , start cutoff remaining negative torque regen -> Hysteresis control
-const float torque_regen_cutoff_rpm_full = 10.0;  // When the motor rpm is below this , cutoff to zero -> Hysteresis control
-float torque_theoretical = 0.0;                   // torque request before ramping
-float torque_request_internal = 0.0;              // torque request, before putting max on it
-float torque_request_calculated = 0.0;            // final torque before putting out to can
+    // First request is POST with the file stream
+    http.addHeader("Content-Type", mimeType);
+    int code = http.sendRequest("POST", &f, fsize);
 
-// ——————————————————————————————————————————————————————————————————————————————
-//   Brake Control
-// ——————————————————————————————————————————————————————————————————————————————
-// PID Control Constants (Tune these for optimal performance)
-const float Kp = 2.0; // Proportional gain
-const float Ki = 0.1; // Integral gain
-const float Kd = 0.5; // Derivative gain
+    if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+      // Get redirect target
+      String loc = http.getLocation();
+      http.end();
+      if (!loc.length()) return -101; // redirect but no Location
 
-// Servo position limits
-const float SERVO_MIN_POSITION = -180.0; // Minimum servo position
-const float SERVO_MAX_POSITION = 180.0;  // Maximum servo position
+      // 307/308 must repeat POST + body; 301/302/303 switch to GET (no body)
+      bool repeatPost = (code == 307 || code == 308);
 
-// PID variables
-float brake_pedal_target = 0.0; // Desired brake pedal position (0-100%)
-float servo_position = 0.0;     // Servo output position
+      if (!repeatPost) {
+        // Follow with GET (no body) and return that response
+        if (!http.begin(client, loc)) return -102;
+        http.setTimeout(25000);
+        http.setReuse(false);
+        http.addHeader("Accept", "application/json");
+        http.addHeader("Connection", "close");
+        int gcode = http.GET();
+        outBody = http.getString();
+        http.end();
+        return gcode;
+      } else {
+        // Repeat POST with the same file
+        curUrl = loc;
+        // loop and try again with POST to new URL
+        continue;
+      }
+    }
 
-// PID state variables
-float previous_error = 0.0;
-float integral = 0.0;
+    // Not a redirect → read and return
+    outBody = http.getString();
+    http.end();
+    return code;
+  }
 
-// === Constants for Braking Logic ===
-const float BRAKE_RAMP_UP = 0.05;              // Rate of increase per cycle
-const float BRAKE_RAMP_DOWN = 0.1;             // Faster release to avoid brake drag
-const float PARK_BRAKE_TIME_THRESHOLD = 800.0; // Time in ms to engage park brake
-const float BRAKE_PARKING = 0.6;               // Value of target if in parking brake mode
+  return -103; // too many redirects
+}
 
-// === State Variables ===
-float brake_calculated = 0.0;      // Final brake application value
-unsigned long motor_zero_time = 0; // Time tracking for parking brake
+// --- streaming upload (uses the redirect-aware POST) ---
+bool uploadOneFile(const String& sdPathIn) {
+  String sdPath = sdPathIn; if (!sdPath.startsWith("/")) sdPath = "/" + sdPath;
 
-// ——————————————————————————————————————————————————————————————————————————————
-//   iMiev original signals
-// ——————————————————————————————————————————————————————————————————————————————
-float brake_pedal_position = 0.0;         // Scale factor: 0.39216
-float accelerator_pedal_percentage = 0.0; // Scale factor: 0.4
-char gear_selection = ' ';                // Default empty
-int torque_request = 0;
-bool brake_pedal_switch = 0;
-int motor_rpm = 0;
-int steering_angle = 0;
+  File f = SD.open(sdPath, FILE_READ);
+  if (!f) { Serial.printf("  ❌ Cannot open: %s\n", sdPath.c_str()); return false; }
+  size_t fsize = f.size();
+  if (fsize == 0) { Serial.printf("  ⚠️ Empty file, skipping: %s\n", sdPath.c_str()); f.close(); return false; }
 
-byte torque_request_byte_0 = 0;
-byte torque_request_byte_1 = 0;
+  String fname    = driveSafeName(sdPath);
+  String mimeType = guessMimeType(fname);
+  Serial.printf("→ Uploading: %s  (MIME: %s, %u bytes)\n", fname.c_str(), mimeType.c_str(), (unsigned)fsize);
 
-Scheduler runner;
+  String url = String(WEBAPP_BASE)
+               + "?token="    + urlEncode(String(TOKEN))
+               + "&name="     + urlEncode(fname)
+               + "&mimeType=" + urlEncode(mimeType)
+               + "&folderId=" + urlEncode(String(FOLDER_ID));
 
-/**************************************************************************
- *  Function Prototypes
- **************************************************************************/
-void pollCAN();
-void manipulateCAN();
-void passthroughCAN();
-void blinkLED();
-void printStatus();
-void control_dynamics();
-void control_acceleration();
-void pollJoystick();
-void control_brake_pedal();
-void interpreteCANframe(const CANMessage &frame);
+  String resp;
+  int code = postStreamFollowingRedirects(url, mimeType, f, fsize, resp);
+  Serial.printf("  HTTP %d\n", code);
+  f.close();
 
-/**************************************************************************
- *  Task Definitions
- **************************************************************************/
-Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
-Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
-Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
-
-//---------------------------------------------------------------------------
-// Blacklist Array: Uncomment an ID to block it from being forwarded.
-// If the ID is commented out, it is allowed to be forwarded.
-//---------------------------------------------------------------------------
-static const uint32_t BLACKLISTED_CAN_IDS[] = {
-    0x100, // One Time Startup message - not cyclic
-    0x110, // One Time Startup message - not cyclic
-    0x111, // One Time Startup message - not cyclic
-    0x101, // Blacklist this ID
-    0x119, // Allow: ID 0x119
-    0x149, // Allow: ID 0x149
-    0x156, // Allow: ID 0x156
-    0x200, // Allow: Wheel front
-    0x208, // Allow: Wheel back + brake pedal
-    0x210, // Allow: Accelerator pedal
-    0x212, // Allow: Relation with voltage/current (traction battery)
-    0x215, // Allow: Actual speed and distance travelled
-    0x231, // Allow: Brake pedal switch
-    0x236, // Allow: ID 0x236
-    // 0x285, // Allow: acceleration -> triggers error in instrument cluster propoably reduction of torque by esp ?
-    0x286, // Allow: -> only at start and end of the ride? maybe gear selection?
-    // 0x288, // Allow: Motor message so not on this bus anyway
-    // 0x298, // Allow: Motor message so not on this bus anyway
-    // 0x29A, // Allow: Motor message so not on this bus anyway
-    0x2F2, // Allow: ID 0x2F2
-    0x300, // Allow: ID 0x300
-    0x308, // Allow: ID 0x308
-    0x325, // Allow: ID 0x325
-    0x346, // Allow: ID 0x346
-    0x373, // Allow: ID 0x373
-    0x374, // Allow: ID 0x374
-    0x375, // Allow: ID 0x375
-    0x384, // Allow: ID 0x384
-    0x385, // Allow: ID 0x385
-    0x3A4, // Allow: ID 0x3A4
-    0x408, // Allow: ID 0x408
-    0x412, // Allow: ID 0x412
-    0x418, // Allow: Gear shift selection
-    0x424, // Allow: ID 0x424
-    // 0x564, // Allow: Motor message so not on this bus anyway
-    // 0x565, // Allow: Motor message so not on this bus anyway
-    0x5A1, // Allow: ID 0x5A1
-    0x695, // Blacklist: Unknown message
-    0x696, // Blacklist: Motor current and regen amps
-    0x697, // Allow: ID 0x697
-    0x6D0, // Allow: ID 0x6D0
-    0x6D1, // Allow: ID 0x6D1
-    0x6D2, // Allow: ID 0x6D2
-    0x6D3, // Allow: ID 0x6D3
-    0x6D4, // Allow: ID 0x6D4
-    0x6D5, // Allow: ID 0x6D5
-    0x6D6, // Allow: ID 0x6D6
-    0x6DA, // Allow: ID 0x6DA
-    0x6E1, // Allow: ID 0x6E1
-    0x6E2, // Allow: ID 0x6E2
-    0x6E3, // Allow: ID 0x6E3
-    0x6E4, // Allow: ID 0x6E4
-    0x6FA, // Allow: ID 0x6FA
-    // 0x75A, // Allow: Motor message
-    // 0x75B  // Allow: Motor message
-};
-
-//---------------------------------------------------------------------------
-// Helper Function: Returns true if the given CAN ID is blacklisted.
-//---------------------------------------------------------------------------
-bool isBlacklisted(uint32_t canId)
-{
-    const size_t numIDs = sizeof(BLACKLISTED_CAN_IDS) / sizeof(BLACKLISTED_CAN_IDS[0]);
-    for (size_t i = 0; i < numIDs; i++)
-    {
-        if (BLACKLISTED_CAN_IDS[i] == canId)
-        {
-            return true;
+  if (!resp.isEmpty()) {
+    bool ok = jsonGetBool(resp, "ok", false);
+    if (!ok) {
+      String err = jsonGetString(resp, "error");
+      if (err.isEmpty()) {
+        // If we accidentally got HTML (e.g., 302 page), show a hint
+        if (resp.indexOf("<HTML>") >= 0 || resp.indexOf("<html") >= 0) {
+          Serial.println("  ❌ Server returned HTML (likely a redirect page).");
         }
+      }
+      Serial.printf("  ❌ Server error: %s\n", err.length()?err.c_str():"(unknown)");
+      Serial.printf("  Raw response: %s\n", resp.c_str());
+      return false;
     }
-    return false;
+    String id   = jsonGetString(resp, "id");
+    String n    = jsonGetString(resp, "name");
+    long   sz   = jsonGetLong(resp,    "size", -1);
+    String vurl = jsonGetString(resp, "webViewUrl");
+    Serial.printf("  ✅ Uploaded OK: id=%s name=%s size=%ld\n", id.c_str(), n.c_str(), sz);
+    if (vurl.length()) Serial.printf("  🔗 View: %s\n", vurl.c_str());
+    return true;
+  } else {
+    Serial.println("  ⚠️ Empty response body");
+    return (code == 200); // Apps Script always returns 200; we just didn't read it
+  }
 }
 
-//---------------------------------------------------------------------------
-// Manipulate messages here.
-//---------------------------------------------------------------------------
-void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
-{
-    // 1) Copy all message metadata and bytes initially
-    outFrame.id = inFrame.id;
-    outFrame.len = inFrame.len;
-    outFrame.data[0] = inFrame.data[0];
-    outFrame.data[1] = inFrame.data[1];
-    outFrame.data[2] = inFrame.data[2];
-    outFrame.data[3] = inFrame.data[3];
-    outFrame.data[4] = inFrame.data[4];
-    outFrame.data[5] = inFrame.data[5];
-    outFrame.data[6] = inFrame.data[6];
-    outFrame.data[7] = inFrame.data[7];
+void walkAndUpload(const String& dirPath) {
+  String abs = dirPath; if (abs.isEmpty() || abs[0] != '/') abs = "/" + abs;
+  File dir = SD.open(abs);
+  if (!dir || !dir.isDirectory()) { Serial.printf("⚠️ Not a directory: %s\n", abs.c_str()); return; }
 
-    torque_request_byte_0 = inFrame.data[0];
-    torque_request_byte_1 = inFrame.data[1];
-
-    // 2) Interpret the first two bytes as big-endian unsigned 16-bit
-    //    data[0] is MSB, data[1] is LSB
-    uint16_t rawAcceleration = (uint16_t)((outFrame.data[0] << 8) | outFrame.data[1]);
-
-    // 3) Convert to physical value using scale=1, bias=-2000
-    //    physical = raw - 2000
-    int16_t physicalAcceleration = (int16_t)rawAcceleration - 2000;
-
-    // 4) Example manipulation: ensure the physical value is never negative
-    // if (physicalAcceleration < 0) {
-    //     physicalAcceleration = 0;
-    // }
-
-    // if (physicalAcceleration < 0)
-    // {
-    //     if (outFrame.data[7] == 0x10)
-    //     {
-    //         physicalAcceleration = physicalAcceleration * 3;
-    //     }
-    // }
-
-    if (joystick_control_active)
-    {
-        physicalAcceleration = torque_request_calculated;
+  File entry;
+  while ((entry = dir.openNextFile())) {
+    String name = String(entry.name());
+    String path = joinPath(abs, name);
+    if (entry.isDirectory()) {
+      Serial.printf("📁 Dir: %s\n", name.c_str());
+      if (!isSkippableDir(name)) walkAndUpload(path); else Serial.println("  ↪️ Skipping system folder.");
+    } else {
+      Serial.printf("📄 File: %s  (%u bytes)\n", path.c_str(), (unsigned)entry.size());
+      bool ok = uploadOneFile(path);
+      Serial.printf("  %s %s\n", ok ? "✅" : "❌", path.c_str());
+      delay(200);
     }
-    else
-    {
-        physicalAcceleration = 0;
-    }
-
-    // 5) Convert back to raw: raw = physical + 2000
-    rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
-
-    // 6) Store the manipulated raw value back in big-endian format
-    outFrame.data[0] = (uint8_t)((rawAcceleration >> 8) & 0xFF); // MSB
-    outFrame.data[1] = (uint8_t)(rawAcceleration & 0xFF);        // LSB
+    entry.close();
+  }
+  dir.close();
 }
 
-void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
-{
-    // 1) Copy all message metadata and bytes initially
-    outFrame.id = inFrame.id;
-    outFrame.len = inFrame.len;
-    outFrame.data[0] = torque_request_byte_0; // Maybe the ecu notices the manipulation of troque request, because those two bytes dows not reflect the actual expected torque
-    outFrame.data[1] = torque_request_byte_1;
-    outFrame.data[2] = inFrame.data[2];
-    outFrame.data[3] = inFrame.data[3];
-    outFrame.data[4] = inFrame.data[4];
-    outFrame.data[5] = inFrame.data[5];
-    outFrame.data[6] = inFrame.data[6];
-    outFrame.data[7] = inFrame.data[7];
+void connectWiFi() {
+  Serial.printf("Connecting to WiFi: %s\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 25000) { Serial.print("."); delay(500); }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) Serial.printf("✅ WiFi connected. IP: %s\n", WiFi.localIP().toString().c_str());
+  else Serial.println("❌ WiFi connect failed.");
 }
 
-void interpreteCANframe(const CANMessage &frame)
-{
-    // Interpret messages based on their ID.
-    if (frame.id == 0x208)
-    { // Wheel Rotation, Brake Position
-        uint8_t raw_brake_value = frame.data[3];
-        brake_pedal_position = raw_brake_value * 0.25 - 6144.5;
-    }
-    else if (frame.id == 0x210)
-    { // Accelerator Pedal Percentage
-        uint8_t raw_accel_value = frame.data[2];
-        accelerator_pedal_percentage = raw_accel_value * 0.4;
-    }
-    else if (frame.id == 0x236)
-    { // Accelerator Pedal Percentage
-        uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
-        steering_angle = rawSteering - 4096;
-    }
-    else if (frame.id == 0x231)
-    { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
-        // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
-        // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
-        brake_pedal_switch = ((int8_t)frame.data[4] > 0);
-    }
-    else if (frame.id == 0x288)
-    {
-        // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
-        uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
-        // Convert raw value to physical value using scale = 1 and offset = -10000.
-        // That is, physical_rpm = rawRpm - 10000.
-        motor_rpm = (int16_t)rawRpm - 10000;
-    }
-    else if (frame.id == 0x418)
-    { // Gear Shift Selection
-        switch (frame.data[0])
-        {
-        case 0x50:
-            gear_selection = 'P';
-            break;
-        case 0x52:
-            gear_selection = 'R';
-            break;
-        case 0x4E:
-            gear_selection = 'N';
-            break;
-        case 0x44:
-            gear_selection = 'D';
-            break;
-        case 0x83:
-            gear_selection = 'B';
-            break;
-        case 0x32:
-            gear_selection = 'C';
-            break;
-        default:
-            gear_selection = '?';
-            break;
-        }
-    }
+void setup() {
+  Serial.begin(115200);
+  delay(300);
+  Serial.println("\nESP32-S3 SD → Google Drive Uploader (streaming + redirect-safe)");
+
+  connectWiFi();
+  if (WiFi.status() != WL_CONNECTED) { Serial.println("Stopping: no WiFi."); while (true) delay(1000); }
+
+  SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  if (!SD.begin(SD_CS, SPI)) { Serial.println("❌ SD Card initialization failed!"); while (true) delay(1000); }
+  Serial.println("✅ SD Card initialized.");
+
+  if (!SD.exists("/test.txt")) {
+    File f = SD.open("/test.txt", FILE_WRITE);
+    if (f) { f.println("Hello from ESP32-S3!"); f.println("Streaming upload test."); f.close(); Serial.println("✅ Created /test.txt"); }
+  }
+
+  walkAndUpload("/");
+  Serial.println("🎉 Done walking SD card.");
 }
 
-/**************************************************************************
- *  CAN Bus and Task Functions
- **************************************************************************/
-void manipulateCAN()
-{
-    CANMessage frame;
-
-    //Note: GVRET Logging to savvycan
-    //sendFrameToUSB(outFrame, 0); log on bus=0 all messages as they are recieved or sent on motor can bus
-    //sendFrameToUSB(outFrame, 1); log on bus=1 all vehicle can messages as they are recieved
-    //sendFrameToUSB(outFrame, 2); log on bus=2 all vehicle can message as they are (filtered/manipulated) forwarded to motor can bus
-
-
-    // -------------------------------------------------------------
-    // Handle messages from CAN1 - Motor CAN bus
-    // -------------------------------------------------------------
-    if (can.available()) //This is motor can bus
-    {
-        can.receive(frame);
-        interpreteCANframe(frame);
-
-        // Check if this message needs manipulation.
-        if (frame.id == 0x288) // Manipulate motor response to make torque request match
-        {
-            CANMessage outFrame;
-            manipulate_0x288(frame, outFrame);
-            can2.tryToSend(outFrame);
-            sendFrameToUSB(outFrame, 0);
-        }
-        else
-        {
-            // For all other forwards as is
-            can2.tryToSend(frame);
-            sendFrameToUSB(frame, 0);
-        }
-    }
-
-    // -------------------------------------------------------------
-    // Handle messages from CAN2 - Vehicle CAN bus
-    // -------------------------------------------------------------
-    if (can2.available()) 
-    {
-        can2.receive(frame);
-        sendFrameToUSB(frame, 1);
-        interpreteCANframe(frame);
-       
-        // Only process messages that are not blacklisted.
-        if (!isBlacklisted(frame.id))
-        {
-            // Check if this message needs manipulation.
-            if (frame.id == 0x285) // Motor Control functions
-            {
-                CANMessage outFrame;
-                manipulate_0x285(frame, outFrame);
-                can.tryToSend(outFrame);
-                sendFrameToUSB(outFrame, 2);
-            }
-            else
-            {
-                // For all other not-blacklisted IDs, forward as is.
-                can.tryToSend(frame);
-                sendFrameToUSB(frame, 2);
-            }
-        }
-        else
-        {
-            // Optionally log that the message was blacklisted/dropped.
-            // MONITOR_PORT.println("Dropping blacklisted CAN id: 0x" + String(frame.id, HEX));
-        }
-    }
-}
-
-void passthroughCAN()
-{
-    CANMessage frame;
-
-    // -------------------------------------------------------------
-    // Handle messages from CAN1 - Motor CAN bus
-    // -------------------------------------------------------------
-    if (can.available())
-    {
-        can.receive(frame);
-        interpreteCANframe(frame);
-
-        can2.tryToSend(frame);
-        sendFrameToUSB(frame, 0);
-    }
-
-    // -------------------------------------------------------------
-    // Handle messages from CAN2 - Vehicle CAN bus
-    // -------------------------------------------------------------
-    if (can2.available())
-    {
-        can2.receive(frame);
-        interpreteCANframe(frame);
-        
-        // Always forward to USB (for logging / GVRET).
-        sendFrameToUSB(frame, 1);
-        sendFrameToUSB(frame, 2);
-        can.tryToSend(frame);
-        
-    }
-}
-
-void pollCAN()
-{
-    if (emergencyButtonPressed)
-    {
-        passthroughCAN();
-    }
-    else
-    {
-        manipulateCAN();
-    }
-}
-
-// Task Function: Toggle the built-in LED.
-void blinkLED()
-{
-    digitalWrite(RGB_BUILTIN, !digitalRead(RGB_BUILTIN));
-}
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   Control Vehicle Dynamics (Every 10ms)
-// ——————————————————————————————————————————————————————————————————————————————
-void control_dynamics()
-{
-    pollJoystick();
-    control_acceleration();
-    control_brake_pedal();
-}
-
-void pollJoystick()
-{
-    rawJoystickX = analogRead(JOYSTICK_X_PIN); // Read X-axis
-    rawJoystickY = analogRead(JOYSTICK_Y_PIN); // Read Y-axis
-
-    // Convert to -100% to 100% range
-    processedJoystickX = ((rawJoystickX - joystickX_ZERO) / (float)JOYSTICK_RANGE) * 100.0;
-    processedJoystickY = ((rawJoystickY - joystickY_ZERO) / (float)JOYSTICK_RANGE) * 100.0;
-
-    // Constrain values to -100% to 100%
-    processedJoystickX = constrain(processedJoystickX, -100, 100);
-    processedJoystickY = constrain(processedJoystickY, -100, 100);
-
-    // Read the emergency button (active low, hence pressed = LOW)
-    emergencyButtonPressed = (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
-    joystick_control_active = !emergencyButtonPressed;
-}
-
-void control_brake_pedal()
-{
-    // Compute error between target and actual position
-    float error = brake_pedal_target - (brake_pedal_position / 100);
-
-    // PID calculations
-    integral += error; // Accumulate integral term
-    float derivative = error - previous_error;
-    previous_error = error;
-
-    // Compute PID output
-    float pid_output = (Kp * error) + (Ki * integral) + (Kd * derivative);
-
-    // Apply the PID output to the servo position
-    servo_position += pid_output;
-
-    // Constrain servo position within limits
-    servo_position = constrain(servo_position, SERVO_MIN_POSITION, SERVO_MAX_POSITION);
-
-    // Write the servo position
-    brake_servo.write(servo_position);
-}
-
-void control_acceleration()
-{
-    //  Overall control principle
-    //  -5% to 5% joystick -> zero acceleration -> ramp up regen to torque min, when motor rpm is below torque_regen_cutoff_rpm put torque to zero
-    //  > 5% joystick -> acceleration -> ramp up to torque_theoretical which is depending on the joystick position
-
-    // we need motor speed additional
-    if ((joystick_error_flag == false) && (joystick_control_active == true))
-    {
-        if (processedJoystickY > torque_zero_space) // Acceleration
-        {
-            torque_theoretical = (processedJoystickY - torque_zero_space) * torque_max;
-            torque_theoretical = torque_theoretical / (100.0 - torque_zero_space); // Correct for reduced joystick movement
-
-            // now ramping consideration
-            if (torque_request_internal < torque_theoretical)
-            {
-                torque_request_internal = torque_request_internal + torque_ramp_accel;
-            }
-            else
-            {
-                torque_request_internal = torque_request_internal - torque_ramp_accel;
-            }
-
-            // Clamp torque within safe limits
-            torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
-        }
-        else // Regen
-        {
-            torque_theoretical = 0;
-            if (motor_rpm > torque_regen_cutoff_rpm_high) // Normal regen behavior above high threshold
-            {
-                if (torque_request_internal > 0)
-                {
-                    torque_request_internal -= torque_ramp_accel;
-                }
-                else
-                {
-                    torque_request_internal -= torque_ramp_decell;
-                }
-            }
-            else if (motor_rpm < torque_regen_cutoff_rpm_low) // Below low threshold, turn torque off smoothly
-            {
-                torque_request_internal *= 0.9; // Gradual decay instead of instant cutoff
-
-                if (abs(torque_request_internal) < torque_regen_cutoff_rpm_full)
-                {
-                    torque_request_internal = 0.0; // Fully off only when close to zero
-                }
-            }
-            // If within hysteresis band, maintain current torque
-            else
-            {
-                // Do nothing (hold previous torque to prevent oscillation)
-            }
-
-            // Clamp torque within safe limits
-            torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
-        }
-    }
-    else
-    {
-        torque_request_calculated = 0.0;
-    }
-    // clamp to max values again for extra safety
-    torque_request_calculated = constrain(torque_request_internal, torque_min, torque_max);
-
-    if (processedJoystickY < (torque_zero_space * -1))
-    {
-        // Compute braking force based on joystick input
-        brake_calculated = -processedJoystickY / (100.0 - torque_zero_space);
-    }
-    else if (processedJoystickY > torque_zero_space)
-    {
-        brake_calculated = 0;
-    }
-    else
-    {
-        // Check if motor is at zero RPM and hold it for a set time
-        if (motor_rpm == 0)
-        {
-            if (motor_zero_time == 0)
-            {
-                motor_zero_time = millis(); // Start timing
-            }
-            else if ((millis() - motor_zero_time) > (PARK_BRAKE_TIME_THRESHOLD))
-            {
-                brake_calculated = BRAKE_PARKING; // Engage parking brake
-            }
-        }
-        else
-        {
-            motor_zero_time = 0; // Reset timer when RPM is nonzero
-        }
-    }
-
-    // Apply smooth ramping to reach target brake position
-    if (brake_pedal_target < brake_calculated)
-    {
-        brake_pedal_target += BRAKE_RAMP_UP;
-    }
-    else if (brake_pedal_target > brake_calculated)
-    {
-        brake_pedal_target -= BRAKE_RAMP_DOWN;
-    }
-
-    // Ensure brake target remains within valid limits
-    brake_pedal_target = constrain(brake_pedal_target, 0.0, 1.0);
-}
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   Print Status (Every 500ms)
-// ——————————————————————————————————————————————————————————————————————————————
-
-void printStatus()
-{
-    MONITOR_PORT.print("Joystick X: ");
-    MONITOR_PORT.print(processedJoystickX);
-    MONITOR_PORT.print(" | Joystick Y: ");
-    MONITOR_PORT.print(processedJoystickY);
-    MONITOR_PORT.print(" | Brake Pedal: ");
-    MONITOR_PORT.print(brake_pedal_position, 2);
-    MONITOR_PORT.print(" | Torque Request: ");
-    MONITOR_PORT.print(torque_request);
-    MONITOR_PORT.print(" | Accelerator: ");
-    MONITOR_PORT.print(accelerator_pedal_percentage, 2);
-    MONITOR_PORT.print(" | Gear: ");
-    MONITOR_PORT.print(gear_selection);
-    MONITOR_PORT.print(" | Emergency: ");
-    MONITOR_PORT.print(emergencyButtonPressed ? "PRESSED" : "NOT PRESSED");
-    MONITOR_PORT.print(" | Joystick Control: ");
-    MONITOR_PORT.print(joystick_control_active ? "ACTIVE" : "INACTIVE");
-    MONITOR_PORT.print(" | Brake Switch: ");
-    MONITOR_PORT.print(brake_pedal_switch ? "ON" : "OFF");
-    MONITOR_PORT.print(" | Motor RPM: ");
-    MONITOR_PORT.print(motor_rpm);
-    MONITOR_PORT.print(" | Torque Theoretical: ");
-    MONITOR_PORT.print(torque_theoretical);
-    MONITOR_PORT.print(" | Torque Calculated: ");
-    MONITOR_PORT.println(torque_request_calculated);
-}
-
-/**************************************************************************
- *  Setup and Loop
- **************************************************************************/
-void setup()
-{
-    // Initialize the primary Serial port for GVRET communication.
-    Serial.begin(1000000);
-
-    // Initialize USB CDC for monitoring/debug output.
-    USBSerial1.begin();
-    USB.begin();
-
-    // Initialize Servo
-    ESP32PWM::allocateTimer(0);
-    ESP32PWM::allocateTimer(1);
-    ESP32PWM::allocateTimer(2);
-    ESP32PWM::allocateTimer(3);
-    brake_servo.setPeriodHertz(50);           // standard 50 hz servo
-    brake_servo.attach(servoPin, 1000, 2000); // attaches the servo on pin 18 to the servo object
-
-    // Configure the built-in RGB LED.
-    pinMode(RGB_BUILTIN, OUTPUT);
-    digitalWrite(RGB_BUILTIN, LOW);
-
-    // Configure the emergency button pin (active low).
-    pinMode(EMERGENCY_BUTTON_PIN, INPUT_PULLDOWN);
-
-    // Initialize the CAN buses using the CAN manager.
-    canManager_setup();
-
-    // Optionally, print a startup message.
-    MONITOR_PORT.println("System Initialized. Starting tasks...");
-}
-
-void loop()
-{
-    runner.execute();
-    pollCAN();
-    gvret_loop();
-}
+void loop() {}
