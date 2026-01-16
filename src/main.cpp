@@ -1,11 +1,10 @@
-/**************************************************************************
- *  Includes and Definitions
- **************************************************************************/
+//---------------------------------------------------------------------------
+// Includes and Definitions
+//---------------------------------------------------------------------------
 #include <Arduino.h>
 #include "USB.h"
 #include "USBCDC.h"
 #include <TaskScheduler.h>
-#include <ESP32Servo.h>
 
 // Define GVRET_PORT and MONITOR_PORT.
 // GVRET communication uses the primary Serial port.
@@ -23,186 +22,100 @@ USBCDC USBSerial1(0); // First virtual serial port
 // #define RGB_BUILTIN    48   // Built-in LED pin on ESP32-S3
 // #define RGB_BRIGHTNESS 0    // 0 for OFF
 
-Servo brake_servo;
-const int servoPin = 17;
-int pos = 0;
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   Joystick Config (Analog Inputs)
-// ——————————————————————————————————————————————————————————————————————————————
-#define JOYSTICK_X_PIN 4 // GPIO 4 for X-axis
-#define JOYSTICK_Y_PIN 5 // GPIO 5 for Y-axis
-
-// Raw joystick values
-int rawJoystickX = 0;
-int rawJoystickY = 0;
-
-// Processed joystick values (-100% to 100%)
-float processedJoystickX = 0.0;
-float processedJoystickY = 0.0;
-
-// Calibration values (from your provided data)
-const int joystickX_ZERO = 1993; // X-axis center value
-const int joystickY_ZERO = 2005; // Y-axis center value
-
-const int JOYSTICK_MIN = 0;                  // Minimum raw ADC value
-const int JOYSTICK_MAX = 4095;               // Maximum raw ADC value
-const int JOYSTICK_RANGE = JOYSTICK_MAX / 2; // Half range for -100% to 100%
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   Emergency Button Configuration
-// ——————————————————————————————————————————————————————————————————————————————
-// The emergency button is connected to pin 15.
-// Using INPUT_PULLUP makes it active low (pressed = LOW).
-const int EMERGENCY_BUTTON_PIN = 18;
-bool emergencyButtonPressed = false;
-
-/**************************************************************************
- *  Global Variables and Objects
- **************************************************************************/
-// joystick control signals
-bool joystick_control_active = false;
-bool joystick_error_flag = false;
-
-const float torque_ramp_accel = 20.0;             // torque acceleration ramp per 10ms
-const float torque_ramp_decell = 10.0;            // torque deceleration ramp per 10ms
-const float torque_max = 1000.0;                  // it seems like the iMiev allows 1800 here with full battery. Be carefull, this parameter can destroy the battery
-const float torque_min = -800.0;                  // max from iMiev with full battery is arround -1000. Be carefull, this parameter can destroy the battery
-const float torque_zero_space = 5.0;              // First 5% of joystick are zero zone in both directions
-const float torque_regen_cutoff_rpm_high = 300.0; // When the motor rpm is below this , stop  cutoff any negative torque regen -> Hysteresis control
-const float torque_regen_cutoff_rpm_low = 200.0;  // When the motor rpm is below this , start cutoff remaining negative torque regen -> Hysteresis control
-const float torque_regen_cutoff_rpm_full = 10.0;  // When the motor rpm is below this , cutoff to zero -> Hysteresis control
-float torque_theoretical = 0.0;                   // torque request before ramping
-float torque_request_internal = 0.0;              // torque request, before putting max on it
-float torque_request_calculated = 0.0;            // final torque before putting out to can
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   Brake Control
-// ——————————————————————————————————————————————————————————————————————————————
-// PID Control Constants (Tune these for optimal performance)
-const float Kp = 2.0; // Proportional gain
-const float Ki = 0.1; // Integral gain
-const float Kd = 0.5; // Derivative gain
-
-// Servo position limits
-const float SERVO_MIN_POSITION = -180.0; // Minimum servo position
-const float SERVO_MAX_POSITION = 180.0;  // Maximum servo position
-
-// PID variables
-float brake_pedal_target = 0.0; // Desired brake pedal position (0-100%)
-float servo_position = 0.0;     // Servo output position
-
-// PID state variables
-float previous_error = 0.0;
-float integral = 0.0;
-
-// === Constants for Braking Logic ===
-const float BRAKE_RAMP_UP = 0.05;              // Rate of increase per cycle
-const float BRAKE_RAMP_DOWN = 0.1;             // Faster release to avoid brake drag
-const float PARK_BRAKE_TIME_THRESHOLD = 800.0; // Time in ms to engage park brake
-const float BRAKE_PARKING = 0.6;               // Value of target if in parking brake mode
-
-// === State Variables ===
-float brake_calculated = 0.0;      // Final brake application value
-unsigned long motor_zero_time = 0; // Time tracking for parking brake
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   iMiev original signals
-// ——————————————————————————————————————————————————————————————————————————————
-float brake_pedal_position = 0.0;         // Scale factor: 0.39216
-float accelerator_pedal_percentage = 0.0; // Scale factor: 0.4
-char gear_selection = ' ';                // Default empty
-int torque_request = 0;
-bool brake_pedal_switch = 0;
-int motor_rpm = 0;
-int steering_angle = 0;
-
-byte torque_request_byte_0 = 0;
-byte torque_request_byte_1 = 0;
-
+//---------------------------------------------------------------------------
+// Global Variables and Objects
+//---------------------------------------------------------------------------
 Scheduler runner;
 
-/**************************************************************************
- *  Function Prototypes
- **************************************************************************/
+//---------------------------------------------------------------------------
+// Porsche 986 original signals
+//---------------------------------------------------------------------------
+float engine_speed_rpm = 0.0f;
+float throttle_position_280 = 0.0f;
+float pedal_position_1 = 0.0f;
+float pedal_position_2 = 0.0f;
+
+float coolant_temperature = 0.0f;
+bool coolant_level_switch = false;
+bool cruise_control_active = false;
+
+float inlet_air_temperature = 0.0f;
+float throttle_position_1_298 = 0.0f;
+float throttle_position_2_298 = 0.0f;
+float barometric_pressure_mbar = 0.0f;
+uint8_t vehicle_speed_298_raw = 0;
+
+float wheel_speed_fl_legacy = 0.0f;
+float wheel_speed_fr_legacy = 0.0f;
+float wheel_speed_rl_legacy = 0.0f;
+float wheel_speed_rr_legacy = 0.0f;
+float wheel_speed_fl = 0.0f;
+float wheel_speed_fr = 0.0f;
+float wheel_speed_rl = 0.0f;
+float wheel_speed_rr = 0.0f;
+
+bool tcs_intervention = false;
+bool msr_request = false;
+bool abs_intervention = false;
+bool abd_intervention = false;
+bool fdr_intervention = false;
+uint8_t asr_control_mode = 0;
+bool abs_warning_lamp = false;
+bool brake_warning_lamp = false;
+bool brake_switch = false;
+bool brake_switch_inverted = false;
+bool handbrake_switch = false;
+float vehicle_reference_speed = 0.0f;
+float tcs_intervention_slow = 0.0f;
+float tcs_intervention_fast = 0.0f;
+float intervention_torque = 0.0f;
+float lateral_acceleration = 0.0f;
+
+bool check_engine_light = false;
+bool reduced_power = false;
+bool fan_error = false;
+uint16_t fuel_used_raw = 0;
+float boost_pressure = 0.0f;
+float oil_temperature = 0.0f;
+
+float ambient_temperature = 0.0f;
+float oil_pressure = 0.0f;
+uint8_t light_dimmer = 0;
+uint8_t cluster_counter = 0;
+
+float steering_angle_old_deg = 0.0f;
+float steering_angle_deg = 0.0f;
+
+
+
+//---------------------------------------------------------------------------
+// Function Prototypes
+//---------------------------------------------------------------------------
 void pollCAN();
-void manipulateCAN();
-void passthroughCAN();
 void blinkLED();
 void printStatus();
-void control_dynamics();
-void control_acceleration();
-void pollJoystick();
-void control_brake_pedal();
 void interpreteCANframe(const CANMessage &frame);
 
-/**************************************************************************
- *  Task Definitions
- **************************************************************************/
+//---------------------------------------------------------------------------
+// Task Definitions
+//---------------------------------------------------------------------------
 Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
 Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
-Task taskVehicleDynamics(10, TASK_FOREVER, &control_dynamics, &runner, true);
+
 
 //---------------------------------------------------------------------------
 // Blacklist Array: Uncomment an ID to block it from being forwarded.
 // If the ID is commented out, it is allowed to be forwarded.
 //---------------------------------------------------------------------------
 static const uint32_t BLACKLISTED_CAN_IDS[] = {
-    0x100, // One Time Startup message - not cyclic
-    0x110, // One Time Startup message - not cyclic
-    0x111, // One Time Startup message - not cyclic
-    0x101, // Blacklist this ID
-    0x119, // Allow: ID 0x119
-    0x149, // Allow: ID 0x149
-    0x156, // Allow: ID 0x156
-    0x200, // Allow: Wheel front
-    0x208, // Allow: Wheel back + brake pedal
-    0x210, // Allow: Accelerator pedal
-    0x212, // Allow: Relation with voltage/current (traction battery)
-    0x215, // Allow: Actual speed and distance travelled
-    0x231, // Allow: Brake pedal switch
-    0x236, // Allow: ID 0x236
-    // 0x285, // Allow: acceleration -> triggers error in instrument cluster propoably reduction of torque by esp ?
-    0x286, // Allow: -> only at start and end of the ride? maybe gear selection?
-    // 0x288, // Allow: Motor message so not on this bus anyway
-    // 0x298, // Allow: Motor message so not on this bus anyway
-    // 0x29A, // Allow: Motor message so not on this bus anyway
-    0x2F2, // Allow: ID 0x2F2
-    0x300, // Allow: ID 0x300
-    0x308, // Allow: ID 0x308
-    0x325, // Allow: ID 0x325
-    0x346, // Allow: ID 0x346
-    0x373, // Allow: ID 0x373
-    0x374, // Allow: ID 0x374
-    0x375, // Allow: ID 0x375
-    0x384, // Allow: ID 0x384
-    0x385, // Allow: ID 0x385
-    0x3A4, // Allow: ID 0x3A4
-    0x408, // Allow: ID 0x408
-    0x412, // Allow: ID 0x412
-    0x418, // Allow: Gear shift selection
-    0x424, // Allow: ID 0x424
-    // 0x564, // Allow: Motor message so not on this bus anyway
-    // 0x565, // Allow: Motor message so not on this bus anyway
-    0x5A1, // Allow: ID 0x5A1
-    0x695, // Blacklist: Unknown message
-    0x696, // Blacklist: Motor current and regen amps
-    0x697, // Allow: ID 0x697
-    0x6D0, // Allow: ID 0x6D0
-    0x6D1, // Allow: ID 0x6D1
-    0x6D2, // Allow: ID 0x6D2
-    0x6D3, // Allow: ID 0x6D3
-    0x6D4, // Allow: ID 0x6D4
-    0x6D5, // Allow: ID 0x6D5
-    0x6D6, // Allow: ID 0x6D6
-    0x6DA, // Allow: ID 0x6DA
-    0x6E1, // Allow: ID 0x6E1
-    0x6E2, // Allow: ID 0x6E2
-    0x6E3, // Allow: ID 0x6E3
-    0x6E4, // Allow: ID 0x6E4
-    0x6FA, // Allow: ID 0x6FA
-    // 0x75A, // Allow: Motor message
-    // 0x75B  // Allow: Motor message
+    // 0x280, // Engine_1 (ECU)
+    // 0x289, // EngineTemp (ECU)
+    // 0x298, // Engine_2 (ECU)
+    // 0x2A8, // Vehicle Speed (ABS / PSM)
+    // 0x1A0, // ABS_1 (ABS / PSM)
+    // 0x4E0, // EngineStat (ECU)
+    // 0x520, // Instrument Cluster 2
+    // 0x00C0 // Steering Angle Sensor
 };
 
 //---------------------------------------------------------------------------
@@ -222,202 +135,254 @@ bool isBlacklisted(uint32_t canId)
 }
 
 //---------------------------------------------------------------------------
-// Manipulate messages here.
+// Helper functions for Intel (little-endian) bit fields.
 //---------------------------------------------------------------------------
-void manipulate_0x285(const CANMessage &inFrame, CANMessage &outFrame)
+static inline uint32_t readBitsLE(const uint8_t *data, uint16_t startBit, uint8_t bitLen)
 {
-    // 1) Copy all message metadata and bytes initially
-    outFrame.id = inFrame.id;
-    outFrame.len = inFrame.len;
-    outFrame.data[0] = inFrame.data[0];
-    outFrame.data[1] = inFrame.data[1];
-    outFrame.data[2] = inFrame.data[2];
-    outFrame.data[3] = inFrame.data[3];
-    outFrame.data[4] = inFrame.data[4];
-    outFrame.data[5] = inFrame.data[5];
-    outFrame.data[6] = inFrame.data[6];
-    outFrame.data[7] = inFrame.data[7];
-
-    torque_request_byte_0 = inFrame.data[0];
-    torque_request_byte_1 = inFrame.data[1];
-
-    // 2) Interpret the first two bytes as big-endian unsigned 16-bit
-    //    data[0] is MSB, data[1] is LSB
-    uint16_t rawAcceleration = (uint16_t)((outFrame.data[0] << 8) | outFrame.data[1]);
-
-    // 3) Convert to physical value using scale=1, bias=-2000
-    //    physical = raw - 2000
-    int16_t physicalAcceleration = (int16_t)rawAcceleration - 2000;
-
-    // 4) Example manipulation: ensure the physical value is never negative
-    // if (physicalAcceleration < 0) {
-    //     physicalAcceleration = 0;
-    // }
-
-    // if (physicalAcceleration < 0)
-    // {
-    //     if (outFrame.data[7] == 0x10)
-    //     {
-    //         physicalAcceleration = physicalAcceleration * 3;
-    //     }
-    // }
-
-    if (joystick_control_active)
+    uint32_t value = 0;
+    for (uint8_t i = 0; i < bitLen; i++)
     {
-        physicalAcceleration = torque_request_calculated;
+        uint16_t bitIndex = startBit + i;
+        uint8_t byteIndex = bitIndex / 8;
+        uint8_t bitInByte = bitIndex % 8;
+        uint8_t bit = (data[byteIndex] >> bitInByte) & 0x01;
+        value |= (uint32_t)bit << i;
     }
-    else
-    {
-        physicalAcceleration = 0;
-    }
-
-    // 5) Convert back to raw: raw = physical + 2000
-    rawAcceleration = (uint16_t)(physicalAcceleration + 2000);
-
-    // 6) Store the manipulated raw value back in big-endian format
-    outFrame.data[0] = (uint8_t)((rawAcceleration >> 8) & 0xFF); // MSB
-    outFrame.data[1] = (uint8_t)(rawAcceleration & 0xFF);        // LSB
+    return value;
 }
 
-void manipulate_0x288(const CANMessage &inFrame, CANMessage &outFrame)
+static inline int32_t signExtend(uint32_t value, uint8_t bitLen)
 {
-    // 1) Copy all message metadata and bytes initially
-    outFrame.id = inFrame.id;
-    outFrame.len = inFrame.len;
-    outFrame.data[0] = torque_request_byte_0; // Maybe the ecu notices the manipulation of troque request, because those two bytes dows not reflect the actual expected torque
-    outFrame.data[1] = torque_request_byte_1;
-    outFrame.data[2] = inFrame.data[2];
-    outFrame.data[3] = inFrame.data[3];
-    outFrame.data[4] = inFrame.data[4];
-    outFrame.data[5] = inFrame.data[5];
-    outFrame.data[6] = inFrame.data[6];
-    outFrame.data[7] = inFrame.data[7];
+    if (bitLen == 0 || bitLen >= 32)
+    {
+        return (int32_t)value;
+    }
+    uint32_t signBit = 1UL << (bitLen - 1);
+    if (value & signBit)
+    {
+        value |= (~0UL << bitLen);
+    }
+    return (int32_t)value;
 }
 
+static inline void writeBitsLE(uint8_t *data, uint16_t startBit, uint8_t bitLen, uint32_t value)
+{
+    for (uint8_t i = 0; i < bitLen; i++)
+    {
+        uint16_t bitIndex = startBit + i;
+        uint8_t byteIndex = bitIndex / 8;
+        uint8_t bitInByte = bitIndex % 8;
+        uint8_t bit = (value >> i) & 0x01;
+        data[byteIndex] &= ~(1U << bitInByte);
+        data[byteIndex] |= (bit << bitInByte);
+    }
+}
+
+static inline void copyFrame(const CANMessage &inFrame, CANMessage &outFrame)
+{
+    outFrame.id = inFrame.id;
+    outFrame.len = inFrame.len;
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        outFrame.data[i] = inFrame.data[i];
+    }
+}
+
+//---------------------------------------------------------------------------
+// Engine speed manipulation (CAN ID 0x280)
+//---------------------------------------------------------------------------
+bool engine_speed_override_active = false;
+float engine_speed_override_rpm = 0.0f;
+float engine_speed_rpm_offset = 0.0f;
+
+void manipulate_0x280(const CANMessage &inFrame, CANMessage &outFrame)
+{
+    copyFrame(inFrame, outFrame);
+
+    uint16_t rawEngineSpeed = (uint16_t)readBitsLE(outFrame.data, 16, 16);
+    float rpm = rawEngineSpeed * 0.25f;
+
+    if (engine_speed_override_active)
+    {
+        rpm = engine_speed_override_rpm;
+    }
+    rpm += engine_speed_rpm_offset;
+    if (rpm < 0.0f)
+    {
+        rpm = 0.0f;
+    }
+
+    uint16_t newRaw = (uint16_t)(rpm / 0.25f);
+    writeBitsLE(outFrame.data, 16, 16, newRaw);
+}
+
+
+
+//---------------------------------------------------------------------------
+// Interprete incoming messages
+//---------------------------------------------------------------------------
 void interpreteCANframe(const CANMessage &frame)
 {
     // Interpret messages based on their ID.
-    if (frame.id == 0x208)
-    { // Wheel Rotation, Brake Position
-        uint8_t raw_brake_value = frame.data[3];
-        brake_pedal_position = raw_brake_value * 0.25 - 6144.5;
-    }
-    else if (frame.id == 0x210)
-    { // Accelerator Pedal Percentage
-        uint8_t raw_accel_value = frame.data[2];
-        accelerator_pedal_percentage = raw_accel_value * 0.4;
-    }
-    else if (frame.id == 0x236)
-    { // Accelerator Pedal Percentage
-        uint16_t rawSteering = (uint16_t)((frame.data[0] << 8) | frame.data[1]);
-        steering_angle = rawSteering - 4096;
-    }
-    else if (frame.id == 0x231)
-    { // 0x231 message: 5 bytes message with Brake_Pedal_Switch_Sensor
-        // According to the DBC, Brake_Pedal_Switch_Sensor is at bit 32, length 8, big-endian, signed.
-        // In a 5-byte message, the 5th byte (index 4) contains bits 32-39.
-        brake_pedal_switch = ((int8_t)frame.data[4] > 0);
-    }
-    else if (frame.id == 0x288)
+    switch (frame.id)
     {
-        // Extract motor_rpm from data[2] (MSB) and data[3] (LSB) in big-endian
-        uint16_t rawRpm = (uint16_t)((frame.data[2] << 8) | frame.data[3]);
-        // Convert raw value to physical value using scale = 1 and offset = -10000.
-        // That is, physical_rpm = rawRpm - 10000.
-        motor_rpm = (int16_t)rawRpm - 10000;
+    case 0x280: // Engine_1 (ECU)
+    {
+        uint16_t rawEngineSpeed = (uint16_t)readBitsLE(frame.data, 16, 16);
+        engine_speed_rpm = rawEngineSpeed * 0.25f;
+        throttle_position_280 = readBitsLE(frame.data, 40, 8) * 0.390625f;
+        pedal_position_1 = readBitsLE(frame.data, 32, 8) * 1.0f;
+        pedal_position_2 = readBitsLE(frame.data, 56, 8) * 1.0f;
+        break;
     }
-    else if (frame.id == 0x418)
-    { // Gear Shift Selection
-        switch (frame.data[0])
-        {
-        case 0x50:
-            gear_selection = 'P';
-            break;
-        case 0x52:
-            gear_selection = 'R';
-            break;
-        case 0x4E:
-            gear_selection = 'N';
-            break;
-        case 0x44:
-            gear_selection = 'D';
-            break;
-        case 0x83:
-            gear_selection = 'B';
-            break;
-        case 0x32:
-            gear_selection = 'C';
-            break;
-        default:
-            gear_selection = '?';
-            break;
-        }
+    case 0x289: // EngineTemp (ECU)
+    {
+        uint8_t rawCoolantTemp = (uint8_t)readBitsLE(frame.data, 8, 8);
+        coolant_temperature = rawCoolantTemp * 0.75f - 48.0f;
+        coolant_level_switch = readBitsLE(frame.data, 16, 1) != 0;
+        cruise_control_active = readBitsLE(frame.data, 22, 1) != 0;
+        break;
+    }
+    case 0x298: // Engine_2 (ECU)
+    {
+        uint8_t rawIat = (uint8_t)readBitsLE(frame.data, 8, 8);
+        inlet_air_temperature = rawIat * 0.75f - 48.0f;
+        throttle_position_1_298 = readBitsLE(frame.data, 16, 8) * 0.390625f;
+        throttle_position_2_298 = readBitsLE(frame.data, 32, 8) * 0.390625f;
+        barometric_pressure_mbar = readBitsLE(frame.data, 40, 8) * 5.0f;
+        vehicle_speed_298_raw = (uint8_t)readBitsLE(frame.data, 56, 8);
+        break;
+    }
+    case 0x2A8: // Vehicle Speed (ABS / PSM)
+    {
+        uint16_t rawLegacyFL = (uint16_t)readBitsLE(frame.data, 1, 15);
+        uint16_t rawLegacyFR = (uint16_t)readBitsLE(frame.data, 17, 15);
+        uint16_t rawLegacyRL = (uint16_t)readBitsLE(frame.data, 33, 15);
+        uint16_t rawLegacyRR = (uint16_t)readBitsLE(frame.data, 49, 15);
+        wheel_speed_fl_legacy = rawLegacyFL * 0.01f;
+        wheel_speed_fr_legacy = rawLegacyFR * 0.01f;
+        wheel_speed_rl_legacy = rawLegacyRL * 0.01f;
+        wheel_speed_rr_legacy = rawLegacyRR * 0.01f;
+
+        uint16_t rawNewFL = (uint16_t)readBitsLE(frame.data, 0, 16);
+        uint16_t rawNewFR = (uint16_t)readBitsLE(frame.data, 16, 16);
+        uint16_t rawNewRL = (uint16_t)readBitsLE(frame.data, 32, 16);
+        uint16_t rawNewRR = (uint16_t)readBitsLE(frame.data, 48, 16);
+        wheel_speed_fl = rawNewFL * 0.005218f - 1.6338f;
+        wheel_speed_fr = rawNewFR * 0.005218f - 1.6338f;
+        wheel_speed_rl = rawNewRL * 0.005218f - 1.6338f;
+        wheel_speed_rr = rawNewRR * 0.005218f - 1.6338f;
+        break;
+    }
+    case 0x1A0: // ABS_1 (ABS / PSM)
+    {
+        tcs_intervention = readBitsLE(frame.data, 0, 1) != 0;
+        msr_request = readBitsLE(frame.data, 1, 1) != 0;
+        abs_intervention = readBitsLE(frame.data, 2, 1) != 0;
+        abd_intervention = readBitsLE(frame.data, 3, 1) != 0;
+        fdr_intervention = readBitsLE(frame.data, 4, 1) != 0;
+        asr_control_mode = (uint8_t)readBitsLE(frame.data, 5, 2);
+        abs_warning_lamp = readBitsLE(frame.data, 8, 1) != 0;
+        brake_warning_lamp = readBitsLE(frame.data, 10, 1) != 0;
+        brake_switch = readBitsLE(frame.data, 11, 1) != 0;
+        brake_switch_inverted = readBitsLE(frame.data, 12, 1) != 0;
+        handbrake_switch = readBitsLE(frame.data, 15, 1) != 0;
+        vehicle_reference_speed = readBitsLE(frame.data, 17, 16) * 0.01f;
+        tcs_intervention_slow = readBitsLE(frame.data, 32, 8) * 0.39f;
+        tcs_intervention_fast = readBitsLE(frame.data, 40, 8) * 0.39f;
+        intervention_torque = readBitsLE(frame.data, 48, 8) * 0.39f;
+        lateral_acceleration = readBitsLE(frame.data, 48, 8) * 0.01f - 1.27f;
+        break;
+    }
+    case 0x4E0: // EngineStat (ECU)
+    {
+        check_engine_light = readBitsLE(frame.data, 0, 1) != 0;
+        reduced_power = readBitsLE(frame.data, 3, 1) != 0;
+        fan_error = readBitsLE(frame.data, 4, 1) != 0;
+        fuel_used_raw = (uint16_t)readBitsLE(frame.data, 16, 16);
+        boost_pressure = readBitsLE(frame.data, 32, 8) * 10.0f;
+        oil_temperature = readBitsLE(frame.data, 40, 8) * 0.75f - 48.0f;
+        break;
+    }
+    case 0x520: // Instrument Cluster 2
+    {
+        ambient_temperature = readBitsLE(frame.data, 24, 8) * 0.5f - 40.0f;
+        oil_pressure = readBitsLE(frame.data, 32, 8) * 0.04f;
+        light_dimmer = (uint8_t)readBitsLE(frame.data, 8, 8);
+        cluster_counter = (uint8_t)readBitsLE(frame.data, 40, 8);
+        break;
+    }
+    case 0x00C0: // Steering Angle Sensor
+    {
+        int32_t rawOld = signExtend(readBitsLE(frame.data, 4, 12), 12);
+        steering_angle_old_deg = rawOld * 0.390625f;
+        int32_t rawNew = signExtend(readBitsLE(frame.data, 0, 16), 16);
+        steering_angle_deg = rawNew * 0.0773f - 1.1668f;
+        break;
+    }
+    default:
+        break;
     }
 }
 
-/**************************************************************************
- *  CAN Bus and Task Functions
- **************************************************************************/
-void manipulateCAN()
+//---------------------------------------------------------------------------
+// CAN Bus and Task Functions
+//---------------------------------------------------------------------------
+void pollCAN()
 {
     CANMessage frame;
-
-    //Note: GVRET Logging to savvycan
-    //sendFrameToUSB(outFrame, 0); log on bus=0 all messages as they are recieved or sent on motor can bus
-    //sendFrameToUSB(outFrame, 1); log on bus=1 all vehicle can messages as they are recieved
-    //sendFrameToUSB(outFrame, 2); log on bus=2 all vehicle can message as they are (filtered/manipulated) forwarded to motor can bus
-
 
     // -------------------------------------------------------------
     // Handle messages from CAN1 - Motor CAN bus
     // -------------------------------------------------------------
-    if (can.available()) //This is motor can bus
+    if (can.available()) // This is motor CAN bus
     {
+        CANMessage outFrame;
         can.receive(frame);
         interpreteCANframe(frame);
+        outFrame = frame;
 
-        // Check if this message needs manipulation.
-        if (frame.id == 0x288) // Manipulate motor response to make torque request match
+        // Only process messages that are not blacklisted.
+        if (!isBlacklisted(frame.id))
         {
-            CANMessage outFrame;
-            manipulate_0x288(frame, outFrame);
+            // Check if this message needs manipulation.
+            if (frame.id == 0x288) // Manipulate motor response to make torque request match
+            {
+                // TODO: apply manipulation here if needed.
+            }
+
+            // For all other forwards as is
             can2.tryToSend(outFrame);
             sendFrameToUSB(outFrame, 0);
         }
         else
         {
-            // For all other forwards as is
-            can2.tryToSend(frame);
-            sendFrameToUSB(frame, 0);
+            // Optionally log that the message was blacklisted/dropped.
+            // MONITOR_PORT.println("Dropping blacklisted CAN id: 0x" + String(frame.id, HEX));
         }
     }
 
     // -------------------------------------------------------------
     // Handle messages from CAN2 - Vehicle CAN bus
     // -------------------------------------------------------------
-    if (can2.available()) 
+    if (can2.available())
     {
+        CANMessage outFrame;
         can2.receive(frame);
         sendFrameToUSB(frame, 1);
         interpreteCANframe(frame);
-       
+        outFrame = frame;
+
         // Only process messages that are not blacklisted.
         if (!isBlacklisted(frame.id))
         {
-            // Check if this message needs manipulation.
-            if (frame.id == 0x285) // Motor Control functions
+            if (frame.id == 0x280) // Engine_1 (ECU)
             {
-                CANMessage outFrame;
-                manipulate_0x285(frame, outFrame);
-                can.tryToSend(outFrame);
-                sendFrameToUSB(outFrame, 2);
+                manipulate_0x280(frame, outFrame);
             }
-            else
-            {
-                // For all other not-blacklisted IDs, forward as is.
-                can.tryToSend(frame);
-                sendFrameToUSB(frame, 2);
-            }
+            // For all other not-blacklisted IDs, forward as is.
+            can.tryToSend(outFrame);
+            sendFrameToUSB(outFrame, 2);
         }
         else
         {
@@ -427,252 +392,85 @@ void manipulateCAN()
     }
 }
 
-void passthroughCAN()
-{
-    CANMessage frame;
-
-    // -------------------------------------------------------------
-    // Handle messages from CAN1 - Motor CAN bus
-    // -------------------------------------------------------------
-    if (can.available())
-    {
-        can.receive(frame);
-        interpreteCANframe(frame);
-
-        can2.tryToSend(frame);
-        sendFrameToUSB(frame, 0);
-    }
-
-    // -------------------------------------------------------------
-    // Handle messages from CAN2 - Vehicle CAN bus
-    // -------------------------------------------------------------
-    if (can2.available())
-    {
-        can2.receive(frame);
-        interpreteCANframe(frame);
-        
-        // Always forward to USB (for logging / GVRET).
-        sendFrameToUSB(frame, 1);
-        sendFrameToUSB(frame, 2);
-        can.tryToSend(frame);
-        
-    }
-}
-
-void pollCAN()
-{
-    if (emergencyButtonPressed)
-    {
-        passthroughCAN();
-    }
-    else
-    {
-        manipulateCAN();
-    }
-}
-
 // Task Function: Toggle the built-in LED.
 void blinkLED()
 {
     digitalWrite(RGB_BUILTIN, !digitalRead(RGB_BUILTIN));
 }
 
-// ——————————————————————————————————————————————————————————————————————————————
-//   Control Vehicle Dynamics (Every 10ms)
-// ——————————————————————————————————————————————————————————————————————————————
-void control_dynamics()
-{
-    pollJoystick();
-    control_acceleration();
-    control_brake_pedal();
-}
 
-void pollJoystick()
-{
-    rawJoystickX = analogRead(JOYSTICK_X_PIN); // Read X-axis
-    rawJoystickY = analogRead(JOYSTICK_Y_PIN); // Read Y-axis
-
-    // Convert to -100% to 100% range
-    processedJoystickX = ((rawJoystickX - joystickX_ZERO) / (float)JOYSTICK_RANGE) * 100.0;
-    processedJoystickY = ((rawJoystickY - joystickY_ZERO) / (float)JOYSTICK_RANGE) * 100.0;
-
-    // Constrain values to -100% to 100%
-    processedJoystickX = constrain(processedJoystickX, -100, 100);
-    processedJoystickY = constrain(processedJoystickY, -100, 100);
-
-    // Read the emergency button (active low, hence pressed = LOW)
-    emergencyButtonPressed = (digitalRead(EMERGENCY_BUTTON_PIN) == LOW);
-    joystick_control_active = !emergencyButtonPressed;
-}
-
-void control_brake_pedal()
-{
-    // Compute error between target and actual position
-    float error = brake_pedal_target - (brake_pedal_position / 100);
-
-    // PID calculations
-    integral += error; // Accumulate integral term
-    float derivative = error - previous_error;
-    previous_error = error;
-
-    // Compute PID output
-    float pid_output = (Kp * error) + (Ki * integral) + (Kd * derivative);
-
-    // Apply the PID output to the servo position
-    servo_position += pid_output;
-
-    // Constrain servo position within limits
-    servo_position = constrain(servo_position, SERVO_MIN_POSITION, SERVO_MAX_POSITION);
-
-    // Write the servo position
-    brake_servo.write(servo_position);
-}
-
-void control_acceleration()
-{
-    //  Overall control principle
-    //  -5% to 5% joystick -> zero acceleration -> ramp up regen to torque min, when motor rpm is below torque_regen_cutoff_rpm put torque to zero
-    //  > 5% joystick -> acceleration -> ramp up to torque_theoretical which is depending on the joystick position
-
-    // we need motor speed additional
-    if ((joystick_error_flag == false) && (joystick_control_active == true))
-    {
-        if (processedJoystickY > torque_zero_space) // Acceleration
-        {
-            torque_theoretical = (processedJoystickY - torque_zero_space) * torque_max;
-            torque_theoretical = torque_theoretical / (100.0 - torque_zero_space); // Correct for reduced joystick movement
-
-            // now ramping consideration
-            if (torque_request_internal < torque_theoretical)
-            {
-                torque_request_internal = torque_request_internal + torque_ramp_accel;
-            }
-            else
-            {
-                torque_request_internal = torque_request_internal - torque_ramp_accel;
-            }
-
-            // Clamp torque within safe limits
-            torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
-        }
-        else // Regen
-        {
-            torque_theoretical = 0;
-            if (motor_rpm > torque_regen_cutoff_rpm_high) // Normal regen behavior above high threshold
-            {
-                if (torque_request_internal > 0)
-                {
-                    torque_request_internal -= torque_ramp_accel;
-                }
-                else
-                {
-                    torque_request_internal -= torque_ramp_decell;
-                }
-            }
-            else if (motor_rpm < torque_regen_cutoff_rpm_low) // Below low threshold, turn torque off smoothly
-            {
-                torque_request_internal *= 0.9; // Gradual decay instead of instant cutoff
-
-                if (abs(torque_request_internal) < torque_regen_cutoff_rpm_full)
-                {
-                    torque_request_internal = 0.0; // Fully off only when close to zero
-                }
-            }
-            // If within hysteresis band, maintain current torque
-            else
-            {
-                // Do nothing (hold previous torque to prevent oscillation)
-            }
-
-            // Clamp torque within safe limits
-            torque_request_internal = constrain(torque_request_internal, torque_min, torque_max);
-        }
-    }
-    else
-    {
-        torque_request_calculated = 0.0;
-    }
-    // clamp to max values again for extra safety
-    torque_request_calculated = constrain(torque_request_internal, torque_min, torque_max);
-
-    if (processedJoystickY < (torque_zero_space * -1))
-    {
-        // Compute braking force based on joystick input
-        brake_calculated = -processedJoystickY / (100.0 - torque_zero_space);
-    }
-    else if (processedJoystickY > torque_zero_space)
-    {
-        brake_calculated = 0;
-    }
-    else
-    {
-        // Check if motor is at zero RPM and hold it for a set time
-        if (motor_rpm == 0)
-        {
-            if (motor_zero_time == 0)
-            {
-                motor_zero_time = millis(); // Start timing
-            }
-            else if ((millis() - motor_zero_time) > (PARK_BRAKE_TIME_THRESHOLD))
-            {
-                brake_calculated = BRAKE_PARKING; // Engage parking brake
-            }
-        }
-        else
-        {
-            motor_zero_time = 0; // Reset timer when RPM is nonzero
-        }
-    }
-
-    // Apply smooth ramping to reach target brake position
-    if (brake_pedal_target < brake_calculated)
-    {
-        brake_pedal_target += BRAKE_RAMP_UP;
-    }
-    else if (brake_pedal_target > brake_calculated)
-    {
-        brake_pedal_target -= BRAKE_RAMP_DOWN;
-    }
-
-    // Ensure brake target remains within valid limits
-    brake_pedal_target = constrain(brake_pedal_target, 0.0, 1.0);
-}
-
-// ——————————————————————————————————————————————————————————————————————————————
-//   Print Status (Every 500ms)
-// ——————————————————————————————————————————————————————————————————————————————
+//---------------------------------------------------------------------------
+// Print Status (Every 500ms)
+//---------------------------------------------------------------------------
 
 void printStatus()
 {
-    MONITOR_PORT.print("Joystick X: ");
-    MONITOR_PORT.print(processedJoystickX);
-    MONITOR_PORT.print(" | Joystick Y: ");
-    MONITOR_PORT.print(processedJoystickY);
-    MONITOR_PORT.print(" | Brake Pedal: ");
-    MONITOR_PORT.print(brake_pedal_position, 2);
-    MONITOR_PORT.print(" | Torque Request: ");
-    MONITOR_PORT.print(torque_request);
-    MONITOR_PORT.print(" | Accelerator: ");
-    MONITOR_PORT.print(accelerator_pedal_percentage, 2);
-    MONITOR_PORT.print(" | Gear: ");
-    MONITOR_PORT.print(gear_selection);
-    MONITOR_PORT.print(" | Emergency: ");
-    MONITOR_PORT.print(emergencyButtonPressed ? "PRESSED" : "NOT PRESSED");
-    MONITOR_PORT.print(" | Joystick Control: ");
-    MONITOR_PORT.print(joystick_control_active ? "ACTIVE" : "INACTIVE");
-    MONITOR_PORT.print(" | Brake Switch: ");
-    MONITOR_PORT.print(brake_pedal_switch ? "ON" : "OFF");
-    MONITOR_PORT.print(" | Motor RPM: ");
-    MONITOR_PORT.print(motor_rpm);
-    MONITOR_PORT.print(" | Torque Theoretical: ");
-    MONITOR_PORT.print(torque_theoretical);
-    MONITOR_PORT.print(" | Torque Calculated: ");
-    MONITOR_PORT.println(torque_request_calculated);
+    MONITOR_PORT.printf(
+        "ENG{rpm=%.1f thr=%.1f ped1=%.1f ped2=%.1f} "
+        "TEMP{cool=%.1f clvl=%u crs=%u iat=%.1f amb=%.1f oil=%.1f} "
+        "AIR{bar=%.0f boost=%.0f} "
+        "THR{t1=%.1f t2=%.1f} "
+        "SPD{vref=%.1f vraw=%u wfl=%.2f wfr=%.2f wrl=%.2f wrr=%.2f lfl=%.2f lfr=%.2f lrl=%.2f lrr=%.2f} "
+        "ABS{tcs=%u msr=%u abs=%u abd=%u fdr=%u asr=%u} "
+        "BRK{aw=%u bw=%u sw=%u swi=%u hb=%u} "
+        "TRQ{tcss=%.2f tcsf=%.2f itq=%.2f lat=%.2f} "
+        "STAT{cel=%u red=%u fan=%u fuel=%u} "
+        "OIL{pres=%.2f} "
+        "CLUS{dim=%u cnt=%u} "
+        "STR{old=%.1f new=%.1f}\n",
+        engine_speed_rpm,
+        throttle_position_280,
+        pedal_position_1,
+        pedal_position_2,
+        coolant_temperature,
+        coolant_level_switch ? 1U : 0U,
+        cruise_control_active ? 1U : 0U,
+        inlet_air_temperature,
+        ambient_temperature,
+        oil_temperature,
+        barometric_pressure_mbar,
+        boost_pressure,
+        throttle_position_1_298,
+        throttle_position_2_298,
+        vehicle_reference_speed,
+        (unsigned int)vehicle_speed_298_raw,
+        wheel_speed_fl,
+        wheel_speed_fr,
+        wheel_speed_rl,
+        wheel_speed_rr,
+        wheel_speed_fl_legacy,
+        wheel_speed_fr_legacy,
+        wheel_speed_rl_legacy,
+        wheel_speed_rr_legacy,
+        tcs_intervention ? 1U : 0U,
+        msr_request ? 1U : 0U,
+        abs_intervention ? 1U : 0U,
+        abd_intervention ? 1U : 0U,
+        fdr_intervention ? 1U : 0U,
+        (unsigned int)asr_control_mode,
+        abs_warning_lamp ? 1U : 0U,
+        brake_warning_lamp ? 1U : 0U,
+        brake_switch ? 1U : 0U,
+        brake_switch_inverted ? 1U : 0U,
+        handbrake_switch ? 1U : 0U,
+        tcs_intervention_slow,
+        tcs_intervention_fast,
+        intervention_torque,
+        lateral_acceleration,
+        check_engine_light ? 1U : 0U,
+        reduced_power ? 1U : 0U,
+        fan_error ? 1U : 0U,
+        (unsigned int)fuel_used_raw,
+        oil_pressure,
+        (unsigned int)light_dimmer,
+        (unsigned int)cluster_counter,
+        steering_angle_old_deg,
+        steering_angle_deg);
 }
 
-/**************************************************************************
- *  Setup and Loop
- **************************************************************************/
+//---------------------------------------------------------------------------
+// Setup and Loop
+//---------------------------------------------------------------------------
 void setup()
 {
     // Initialize the primary Serial port for GVRET communication.
@@ -682,20 +480,9 @@ void setup()
     USBSerial1.begin();
     USB.begin();
 
-    // Initialize Servo
-    ESP32PWM::allocateTimer(0);
-    ESP32PWM::allocateTimer(1);
-    ESP32PWM::allocateTimer(2);
-    ESP32PWM::allocateTimer(3);
-    brake_servo.setPeriodHertz(50);           // standard 50 hz servo
-    brake_servo.attach(servoPin, 1000, 2000); // attaches the servo on pin 18 to the servo object
-
     // Configure the built-in RGB LED.
     pinMode(RGB_BUILTIN, OUTPUT);
     digitalWrite(RGB_BUILTIN, LOW);
-
-    // Configure the emergency button pin (active low).
-    pinMode(EMERGENCY_BUTTON_PIN, INPUT_PULLDOWN);
 
     // Initialize the CAN buses using the CAN manager.
     canManager_setup();
