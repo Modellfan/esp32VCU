@@ -649,6 +649,7 @@ void setup()
 
     // Optionally, print a startup message.
     MONITOR_PORT.println("System Initialized. Starting tasks...");
+    MONITOR_PORT.println("Monitor port: USBSerial1 (CDC0). Send '?' + LF for help.");
 }
 
 void loop()
