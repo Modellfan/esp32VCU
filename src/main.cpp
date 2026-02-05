@@ -5,6 +5,7 @@
 #include "USB.h"
 #include "USBCDC.h"
 #include <TaskScheduler.h>
+#include <ctype.h>
 
 // Define GVRET_PORT and MONITOR_PORT.
 // GVRET communication uses the primary Serial port.
@@ -100,7 +101,7 @@ void interpreteCANframe(const CANMessage &frame);
 // Task Definitions
 //---------------------------------------------------------------------------
 Task taskBlinkLED(500, TASK_FOREVER, &blinkLED, &runner, true);
-Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, true);
+Task taskPrintStatus(500, TASK_FOREVER, &printStatus, &runner, false);
 
 
 //---------------------------------------------------------------------------
@@ -191,8 +192,8 @@ static inline void copyFrame(const CANMessage &inFrame, CANMessage &outFrame)
 //---------------------------------------------------------------------------
 // Engine speed manipulation (CAN ID 0x280)
 //---------------------------------------------------------------------------
-bool engine_speed_override_active = false;
-float engine_speed_override_rpm = 0.0f;
+bool engine_speed_override_active = true;
+float engine_speed_override_rpm = 8000.0f;
 float engine_speed_rpm_offset = 0.0f;
 
 void manipulate_0x280(const CANMessage &inFrame, CANMessage &outFrame)
@@ -214,6 +215,160 @@ void manipulate_0x280(const CANMessage &inFrame, CANMessage &outFrame)
 
     uint16_t newRaw = (uint16_t)(rpm / 0.25f);
     writeBitsLE(outFrame.data, 16, 16, newRaw);
+}
+
+//---------------------------------------------------------------------------
+// EngineTemp manipulation (CAN ID 0x289)
+//---------------------------------------------------------------------------
+bool engine_temp_override_active = false;
+float coolant_temperature_override_c = 90.0f;
+bool coolant_level_switch_override = false;
+bool cruise_control_active_override = false;
+bool engine_stat_override_active = false;
+bool check_engine_light_override = false;
+bool reduced_power_override = false;
+bool fan_error_override = false;
+uint16_t fuel_used_override_raw = 0;
+float boost_pressure_override_mbar = 0.0f;
+float oil_temperature_override_c = 90.0f;
+
+static inline uint8_t clampU8(int32_t value)
+{
+    if (value < 0)
+    {
+        return 0;
+    }
+    if (value > 255)
+    {
+        return 255;
+    }
+    return (uint8_t)value;
+}
+
+static inline uint16_t clampU16(int32_t value)
+{
+    if (value < 0)
+    {
+        return 0;
+    }
+    if (value > 65535)
+    {
+        return 65535;
+    }
+    return (uint16_t)value;
+}
+
+void manipulate_0x289(const CANMessage &inFrame, CANMessage &outFrame)
+{
+    copyFrame(inFrame, outFrame);
+
+    if (!engine_temp_override_active)
+    {
+        return;
+    }
+
+    int32_t rawCoolantTemp = (int32_t)((coolant_temperature_override_c + 48.0f) / 0.75f + 0.5f);
+    uint8_t rawTemp = clampU8(rawCoolantTemp);
+    writeBitsLE(outFrame.data, 8, 8, rawTemp);
+    writeBitsLE(outFrame.data, 16, 1, coolant_level_switch_override ? 1U : 0U);
+    writeBitsLE(outFrame.data, 22, 1, cruise_control_active_override ? 1U : 0U);
+}
+
+//---------------------------------------------------------------------------
+// EngineStat manipulation (CAN ID 0x4E0)
+//---------------------------------------------------------------------------
+void manipulate_0x4E0(const CANMessage &inFrame, CANMessage &outFrame)
+{
+    copyFrame(inFrame, outFrame);
+
+    if (!engine_stat_override_active)
+    {
+        return;
+    }
+
+    writeBitsLE(outFrame.data, 0, 1, check_engine_light_override ? 1U : 0U);
+    writeBitsLE(outFrame.data, 3, 1, reduced_power_override ? 1U : 0U);
+    writeBitsLE(outFrame.data, 4, 1, fan_error_override ? 1U : 0U);
+
+    writeBitsLE(outFrame.data, 16, 16, fuel_used_override_raw);
+
+    int32_t rawBoost = (int32_t)(boost_pressure_override_mbar / 10.0f + 0.5f);
+    writeBitsLE(outFrame.data, 32, 8, clampU8(rawBoost));
+
+    int32_t rawOilTemp = (int32_t)((oil_temperature_override_c + 48.0f) / 0.75f + 0.5f);
+    writeBitsLE(outFrame.data, 40, 8, clampU8(rawOilTemp));
+}
+
+//---------------------------------------------------------------------------
+// Monitor Port Command Handling
+//---------------------------------------------------------------------------
+void processMonitorCommand(char *line)
+{
+    for (char *p = line; *p != '\0'; p++)
+    {
+        *p = (char)toupper((unsigned char)*p);
+    }
+
+    if (strncmp(line, "HELP", 4) == 0 || (line[0] == '?' && line[1] == '\0'))
+    {
+        MONITOR_PORT.println("Commands:");
+        MONITOR_PORT.println("  RPM <value>");
+        MONITOR_PORT.println("  289 <coolant_c> <level 0/1> <cruise 0/1>");
+        return;
+    }
+
+    float rpmValue = 0.0f;
+    if (sscanf(line, "RPM %f", &rpmValue) == 1)
+    {
+        engine_speed_override_rpm = rpmValue;
+        engine_speed_override_active = true;
+        return;
+    }
+
+    float coolC = 0.0f;
+    unsigned int level = 0;
+    unsigned int cruise = 0;
+    if (sscanf(line, "289 %f %u %u", &coolC, &level, &cruise) == 3)
+    {
+        coolant_temperature_override_c = coolC;
+        coolant_level_switch_override = (level != 0);
+        cruise_control_active_override = (cruise != 0);
+        engine_temp_override_active = true;
+        return;
+    }
+}
+
+void handleMonitorInput()
+{
+    static char line[96];
+    static size_t linePos = 0;
+
+    while (MONITOR_PORT.available())
+    {
+        int c = MONITOR_PORT.read();
+        if (c < 0)
+        {
+            break;
+        }
+        if (c == '\r')
+        {
+            continue;
+        }
+        if (c == '\n')
+        {
+            line[linePos] = '\0';
+            if (linePos > 0)
+            {
+                processMonitorCommand(line);
+            }
+            linePos = 0;
+            continue;
+        }
+        if (linePos < (sizeof(line) - 1))
+        {
+            line[linePos++] = (char)c;
+        }
+    }
 }
 
 
@@ -346,10 +501,21 @@ void pollCAN()
         if (!isBlacklisted(frame.id))
         {
             // Check if this message needs manipulation.
-            if (frame.id == 0x288) // Manipulate motor response to make torque request match
+            if (frame.id == 0x280) // Engine_1 (ECU)
             {
-                // TODO: apply manipulation here if needed.
+                manipulate_0x280(frame, outFrame);
             }
+            else if (frame.id == 0x289) // EngineTemp (ECU)
+            {
+                manipulate_0x289(frame, outFrame);
+            }
+            else if (frame.id == 0x4E0) // EngineStat (ECU)
+            {
+                manipulate_0x4E0(frame, outFrame);
+            }
+            // For all other not-blacklisted IDs, forward as is.
+            can.tryToSend(outFrame);
+            sendFrameToUSB(outFrame, 2);
 
             // For all other forwards as is
             can2.tryToSend(outFrame);
@@ -376,13 +542,7 @@ void pollCAN()
         // Only process messages that are not blacklisted.
         if (!isBlacklisted(frame.id))
         {
-            if (frame.id == 0x280) // Engine_1 (ECU)
-            {
-                manipulate_0x280(frame, outFrame);
-            }
-            // For all other not-blacklisted IDs, forward as is.
-            can.tryToSend(outFrame);
-            sendFrameToUSB(outFrame, 2);
+
         }
         else
         {
@@ -493,6 +653,7 @@ void setup()
 
 void loop()
 {
+    handleMonitorInput();
     runner.execute();
     pollCAN();
     gvret_loop();
