@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>ESP32 UI</title>
+<style>
+:root{
+  --bg:#000;--card:#111;--line:#1c1c1c;--text:#fff;--muted:#9a9a9a;--accent:#ff2d2d;
+  --safeT:env(safe-area-inset-top,0px);--safeB:env(safe-area-inset-bottom,0px);
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+.app{height:100%;display:flex;flex-direction:column;padding:calc(12px + var(--safeT)) 16px calc(10px + var(--safeB));gap:10px}
+.header{font-size:24px;font-weight:750;padding:6px 0 10px}
+.pager{flex:1;overflow:hidden}
+.track{height:100%;display:flex;width:300%;transition:transform .25s ease}
+.page{width:33.3333%;height:100%;overflow:auto;padding:6px 0 0;scrollbar-width:thin;scrollbar-color:#ff2d2d #101014}
+.page::-webkit-scrollbar{width:8px}
+.page::-webkit-scrollbar-track{background:#101014;border-radius:999px}
+.page::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#2d6cff,#ff2d2d);border-radius:999px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;min-height:110px;display:flex;flex-direction:column;justify-content:space-between}
+.label{font-size:14px;color:var(--muted);font-weight:650}
+.value{font-size:24px;font-weight:800;letter-spacing:-.2px;line-height:1.1}
+.value.sm{font-size:24px}
+.value.xs{font-size:24px}
+.button{margin-top:18px;height:56px;width:100%;border-radius:18px;background:var(--accent);border:none;color:#fff;font-size:18px;font-weight:850}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.field label{font-size:13px;color:var(--muted);font-weight:650}
+input{height:52px;border-radius:14px;border:1px solid var(--line);background:#000;color:#fff;font-size:15px;padding:12px;outline:none}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.control-tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;min-height:96px;display:flex;flex-direction:column;justify-content:space-between}
+.control-label{font-size:14px;color:var(--muted);font-weight:700}
+.switch-row{display:flex;justify-content:space-between;align-items:center}
+.switch-state{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.4px}
+.toggle{position:relative;width:0;height:0;opacity:0}
+.toggle-ui{position:relative;display:inline-block;width:52px;height:30px;border-radius:999px;background:#2a2a2a;border:1px solid #3a3a3a;transition:all .2s ease}
+.toggle-ui::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:all .2s ease}
+.toggle:checked + .toggle-ui{background:var(--accent);border-color:var(--accent)}
+.toggle:checked + .toggle-ui::after{left:27px}
+.slider-stack{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.slider-tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
+.slider-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.slider-label{font-size:14px;color:var(--muted);font-weight:700}
+.slider-value{font-size:14px;font-weight:800}
+.slider{width:100%;height:6px;appearance:none;background:#f1f1f1;border-radius:999px;outline:none}
+.slider.temp-slider{background:linear-gradient(90deg,#2d6cff 0%, #ff2d2d 100%)}
+.slider::-webkit-slider-thumb{appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid #d5d5d5}
+.slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid #d5d5d5}
+.slider-scale{margin-top:8px;display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-weight:700}
+.nav{display:flex;align-items:flex-end;justify-content:space-around;border-top:1px solid var(--line);padding:10px 6px calc(10px + var(--safeB));gap:6px}
+.tab{width:64px;height:54px;border-radius:16px;display:grid;place-items:center;color:var(--muted);user-select:none}
+.tab.active{color:var(--accent)}
+.tab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;opacity:.95}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header" id="pageTitle">Vehicle Data</div>
+  <div class="pager" id="pager">
+    <div class="track" id="track">
+      <div class="page">
+      <div class="grid">
+        <div class="tile"><div class="label">Engine RPM</div><div class="value" id="rpm">0</div></div>
+        <div class="tile"><div class="label">Coolant</div><div class="value" id="cool">0.0&deg;C</div></div>
+        <div class="tile"><div class="label">Oil Temp</div><div class="value" id="oil">0.0&deg;C</div></div>
+        <div class="tile"><div class="label">Vehicle Ref</div><div class="value" id="vref">0.0 km/h</div></div>
+        <div class="tile"><div class="label">Throttle</div><div class="value" id="thr">0.0%</div></div>
+        <div class="tile"><div class="label">Pedal 1 / 2</div><div class="value sm" id="ped">0.0 / 0.0%</div></div>
+        <div class="tile"><div class="label">IAT</div><div class="value" id="iat">0.0&deg;C</div></div>
+        <div class="tile"><div class="label">Ambient</div><div class="value" id="amb">0.0&deg;C</div></div>
+        <div class="tile"><div class="label">Boost</div><div class="value" id="boost">0.0</div></div>
+        <div class="tile"><div class="label">Baro</div><div class="value" id="baro">0 mbar</div></div>
+        <div class="tile"><div class="label">Thr1 / Thr2 (298)</div><div class="value xs" id="thr298">0.0 / 0.0%</div></div>
+        <div class="tile"><div class="label">V298 Raw</div><div class="value" id="v298">0</div></div>
+        <div class="tile"><div class="label">Wheel New FL/FR</div><div class="value xs" id="wnewf">0.0 0.0</div></div>
+        <div class="tile"><div class="label">Wheel New RL/RR</div><div class="value xs" id="wnewr">0.0 0.0</div></div>
+        <div class="tile"><div class="label">Wheel Legacy FL/FR</div><div class="value xs" id="wlegf">0.0 0.0</div></div>
+        <div class="tile"><div class="label">Wheel Legacy RL/RR</div><div class="value xs" id="wlegr">0.0 0.0</div></div>
+        <div class="tile"><div class="label">MIL / Reduced</div><div class="value xs" id="mil">OFF / OFF</div></div>
+        <div class="tile"><div class="label">Fan Error</div><div class="value" id="fan">OFF</div></div>
+        <div class="tile"><div class="label">TCS / ABS / ABD</div><div class="value xs" id="absgrp1">OFF OFF OFF</div></div>
+        <div class="tile"><div class="label">MSR / FDR / ASR</div><div class="value xs" id="absgrp2">OFF OFF 0</div></div>
+        <div class="tile"><div class="label">ABS/Brake Lamps</div><div class="value xs" id="lamps">OFF OFF</div></div>
+        <div class="tile"><div class="label">Brake / Inv / Hand</div><div class="value xs" id="brk">OFF OFF OFF</div></div>
+        <div class="tile"><div class="label">TCS Slow / Fast</div><div class="value xs" id="tcss">0.0 / 0.0</div></div>
+        <div class="tile"><div class="label">Torque / Lateral G</div><div class="value xs" id="torqlat">0.0 / 0.000</div></div>
+        <div class="tile"><div class="label">Fuel Raw</div><div class="value" id="fuel">0</div></div>
+        <div class="tile"><div class="label">Oil Pressure</div><div class="value" id="oilp">0.00 bar</div></div>
+        <div class="tile"><div class="label">Coolant Lvl / Cruise</div><div class="value xs" id="coolflags">OFF / OFF</div></div>
+        <div class="tile"><div class="label">Cluster Dim / Cnt</div><div class="value xs" id="cluster">0 / 0</div></div>
+        <div class="tile"><div class="label">Steering Old</div><div class="value" id="steerOld">0.0</div></div>
+        <div class="tile"><div class="label">Steering New</div><div class="value" id="steerNew">0.0</div></div>
+      </div>
+      </div>
+      <div class="page">
+        <div class="settings-grid">
+          <div class="control-tile">
+            <div class="control-label">Door Left</div>
+            <div class="switch-row">
+              <span class="switch-state" id="stateDoorLeft">OFF</span>
+              <label>
+                <input class="toggle" id="swDoorLeft" type="checkbox">
+                <span class="toggle-ui"></span>
+              </label>
+            </div>
+          </div>
+          <div class="control-tile">
+            <div class="control-label">Door Right</div>
+            <div class="switch-row">
+              <span class="switch-state" id="stateDoorRight">OFF</span>
+              <label>
+                <input class="toggle" id="swDoorRight" type="checkbox">
+                <span class="toggle-ui"></span>
+              </label>
+            </div>
+          </div>
+          <div class="control-tile">
+            <div class="control-label">Seat Heater L</div>
+            <div class="switch-row">
+              <span class="switch-state" id="stateHeatLeft">OFF</span>
+              <label>
+                <input class="toggle" id="swHeatLeft" type="checkbox">
+                <span class="toggle-ui"></span>
+              </label>
+            </div>
+          </div>
+          <div class="control-tile">
+            <div class="control-label">Seat Heater R</div>
+            <div class="switch-row">
+              <span class="switch-state" id="stateHeatRight">OFF</span>
+              <label>
+                <input class="toggle" id="swHeatRight" type="checkbox">
+                <span class="toggle-ui"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="slider-stack">
+          <div class="slider-tile">
+            <div class="slider-head">
+              <span class="slider-label">Set Engine RPM</span>
+              <span class="slider-value"><span id="valSetRpm">1200</span> rpm</span>
+            </div>
+            <input class="slider" id="slSetRpm" type="range" min="0" max="9000" step="50" value="1200">
+            <div class="slider-scale"><span>0</span><span>9000</span></div>
+          </div>
+          <div class="slider-tile">
+            <div class="slider-head">
+              <span class="slider-label">Set Coolant</span>
+              <span class="slider-value"><span id="valSetCool">90.0</span>&deg;C</span>
+            </div>
+            <input class="slider temp-slider" id="slSetCool" type="range" min="40" max="120" step="0.5" value="90">
+            <div class="slider-scale"><span>40.0&deg;C</span><span>120.0&deg;C</span></div>
+          </div>
+          <div class="slider-tile">
+            <div class="slider-head">
+              <span class="slider-label">Set Oil Temp</span>
+              <span class="slider-value"><span id="valSetOil">90.0</span>&deg;C</span>
+            </div>
+            <input class="slider temp-slider" id="slSetOil" type="range" min="40" max="160" step="0.5" value="90">
+            <div class="slider-scale"><span>40.0&deg;C</span><span>160.0&deg;C</span></div>
+          </div>
+          <div class="slider-tile">
+            <div class="slider-head">
+              <span class="slider-label">Cabin Temp</span>
+              <span class="slider-value"><span id="valTemp">21.5</span>&deg;C</span>
+            </div>
+            <input class="slider temp-slider" id="slTemp" type="range" min="16" max="29.5" step="0.5" value="21.5">
+            <div class="slider-scale"><span>16.0&deg;C</span><span>29.5&deg;C</span></div>
+          </div>
+          <div class="slider-tile">
+            <div class="slider-head">
+              <span class="slider-label">Fan Speed</span>
+              <span class="slider-value"><span id="valFan">4</span>/8</span>
+            </div>
+            <input class="slider" id="slFan" type="range" min="1" max="8" step="1" value="4">
+            <div class="slider-scale"><span>1</span><span>8</span></div>
+          </div>
+          <div class="slider-tile">
+            <div class="slider-head">
+              <span class="slider-label">Display Brightness</span>
+              <span class="slider-value"><span id="valBright">70</span>%</span>
+            </div>
+            <input class="slider" id="slBright" type="range" min="0" max="100" step="1" value="70">
+            <div class="slider-scale"><span>0%</span><span>100%</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="page">
+        <div class="grid">
+          <div class="tile"><div class="label">SDU Opmode</div><div class="value" id="sdu_opmode">0</div></div>
+          <div class="tile"><div class="label">SDU LastErr</div><div class="value" id="sdu_lasterr">0</div></div>
+          <div class="tile"><div class="label">SDU Status</div><div class="value" id="sdu_status">0</div></div>
+          <div class="tile"><div class="label">SDU Din Ocur</div><div class="value" id="sdu_din_ocur">0</div></div>
+          <div class="tile"><div class="label">SDU Din Ocur51</div><div class="value" id="sdu_din_ocur51">0</div></div>
+          <div class="tile"><div class="label">SDU Din BMS</div><div class="value" id="sdu_din_bms">0</div></div>
+          <div class="tile"><div class="label">UDC</div><div class="value" id="sdu_udc">0.000</div></div>
+          <div class="tile"><div class="label">IDC</div><div class="value" id="sdu_idc">0.000</div></div>
+          <div class="tile"><div class="label">Speed</div><div class="value" id="sdu_speed">0</div></div>
+          <div class="tile"><div class="label">CruiseSpeed</div><div class="value" id="sdu_cruisespeed">0</div></div>
+          <div class="tile"><div class="label">Pot</div><div class="value" id="sdu_pot">0</div></div>
+          <div class="tile"><div class="label">Pot2</div><div class="value" id="sdu_pot2">0</div></div>
+          <div class="tile"><div class="label">RegenPresent</div><div class="value" id="sdu_regenpresent">0.00</div></div>
+          <div class="tile"><div class="label">RegenPresent32</div><div class="value" id="sdu_regenpresent32">0.00</div></div>
+          <div class="tile"><div class="label">SelDir</div><div class="value" id="sdu_seldir">0</div></div>
+          <div class="tile"><div class="label">SelDir43</div><div class="value" id="sdu_seldir43">0</div></div>
+          <div class="tile"><div class="label">Temp Heatsink</div><div class="value" id="sdu_temp_heatsink">0.00</div></div>
+          <div class="tile"><div class="label">Temp Heatsink74</div><div class="value" id="sdu_temp_heatsink74">0.00</div></div>
+          <div class="tile"><div class="label">UAux</div><div class="value" id="sdu_uaux">0.00</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="nav" aria-label="Bottom navigation">
+    <div class="tab active" id="tabLive" role="button" aria-label="Live" tabindex="0">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 16v-3l2-6h14l2 6v3"></path>
+        <path d="M5 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm14 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"></path>
+        <path d="M3 13h18"></path>
+      </svg>
+    </div>
+    <div class="tab" id="tabSettings" role="button" aria-label="Settings" tabindex="0">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"></path>
+        <path d="M4 21a8 8 0 0 1 16 0"></path>
+      </svg>
+    </div>
+    <div class="tab" id="tabTesla" role="button" aria-label="Tesla SDU" tabindex="0">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v18"></path>
+        <path d="M7 8h10"></path>
+        <path d="M7 16h10"></path>
+      </svg>
+    </div>
+  </nav>
+</div>
+<script>
+const track = document.getElementById("track");
+const title = document.getElementById("pageTitle");
+const pager = document.getElementById("pager");
+let page = 0;
+
+function setActiveTab(p){
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  if (p === 0) document.getElementById("tabLive").classList.add("active");
+  if (p === 1) document.getElementById("tabSettings").classList.add("active");
+  if (p === 2) document.getElementById("tabTesla").classList.add("active");
+}
+
+function setPage(p){
+  page = Math.max(0, Math.min(2, p));
+  track.style.transform = "translateX(" + (-page * 33.333333) + "%)";
+  title.textContent = page === 0 ? "Vehicle Data" : (page === 1 ? "Einstellungen" : "Tesla SDU");
+  setActiveTab(page);
+}
+
+document.getElementById("tabLive").onclick = () => setPage(0);
+document.getElementById("tabSettings").onclick = () => setPage(1);
+document.getElementById("tabTesla").onclick = () => setPage(2);
+document.querySelectorAll(".tab").forEach(el => {
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
+  });
+});
+
+let startX = 0, startY = 0, dx = 0, dragging = false;
+pager.addEventListener("pointerdown", e => { dragging = true; dx = 0; startX = e.clientX; startY = e.clientY; track.style.transition = "none"; });
+pager.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const mx = e.clientX - startX, my = e.clientY - startY;
+  if (Math.abs(my) > Math.abs(mx) && Math.abs(my) > 8) return;
+  dx = mx;
+  track.style.transform = "translateX(" + (-page * 33.333333 + (dx / pager.clientWidth) * 100) + "%)";
+});
+function endDrag(){
+  if (!dragging) return;
+  dragging = false;
+  track.style.transition = ".25s ease";
+  const threshold = Math.min(80, pager.clientWidth * 0.18);
+  if (dx < -threshold) setPage(page + 1);
+  else if (dx > threshold) setPage(page - 1);
+  else setPage(page);
+  dx = 0;
+}
+pager.addEventListener("pointerup", endDrag);
+pager.addEventListener("pointercancel", endDrag);
+
+function setText(id, v){
+  const el = document.getElementById(id);
+  if (el) el.textContent = v;
+}
+function boolTxt(v){ return v ? "ON" : "OFF"; }
+function bindToggle(id, stateId){
+  const el = document.getElementById(id);
+  const st = document.getElementById(stateId);
+  const apply = () => st.textContent = el.checked ? "ON" : "OFF";
+  el.addEventListener("change", apply);
+  apply();
+}
+function bindSlider(id, valueId, decimals){
+  const el = document.getElementById(id);
+  const out = document.getElementById(valueId);
+  const apply = () => out.textContent = Number(el.value).toFixed(decimals);
+  el.addEventListener("input", apply);
+  apply();
+}
+let controlTimer = null;
+function queueControlUpdate(){
+  if (controlTimer) clearTimeout(controlTimer);
+  controlTimer = setTimeout(pushControlUpdate, 180);
+}
+async function pushControlUpdate(){
+  const rpm = document.getElementById("slSetRpm").value;
+  const cool = document.getElementById("slSetCool").value;
+  const oil = document.getElementById("slSetOil").value;
+  try { await fetch("/api/set?rpm=" + encodeURIComponent(rpm) + "&coolant=" + encodeURIComponent(cool) + "&oil=" + encodeURIComponent(oil), { cache:"no-store" }); }
+  catch (_) {}
+}
+function initSettingsControls(){
+  bindToggle("swDoorLeft","stateDoorLeft");
+  bindToggle("swDoorRight","stateDoorRight");
+  bindToggle("swHeatLeft","stateHeatLeft");
+  bindToggle("swHeatRight","stateHeatRight");
+  bindSlider("slTemp","valTemp",1);
+  bindSlider("slFan","valFan",0);
+  bindSlider("slBright","valBright",0);
+  bindSlider("slSetRpm","valSetRpm",0);
+  bindSlider("slSetCool","valSetCool",1);
+  bindSlider("slSetOil","valSetOil",1);
+  ["slSetRpm","slSetCool","slSetOil"].forEach(id => {
+    document.getElementById(id).addEventListener("input", queueControlUpdate);
+  });
+}
+async function refreshNow(){
+  try {
+    const r = await fetch("/api/live", { cache: "no-store" });
+    if (!r.ok) return;
+    const d = await r.json();
+    setText("rpm", d.rpm.toFixed(0));
+    setText("cool", d.coolant_c.toFixed(1) + "\u00B0C");
+    setText("oil", d.oil_temp_c.toFixed(1) + "\u00B0C");
+    setText("vref", d.vref_kmh.toFixed(1) + " km/h");
+    setText("thr", d.throttle_pct.toFixed(1) + "%");
+    setText("ped", d.pedal1_pct.toFixed(1) + " / " + d.pedal2_pct.toFixed(1) + "%");
+    setText("iat", d.iat_c.toFixed(1) + "\u00B0C");
+    setText("amb", d.ambient_c.toFixed(1) + "\u00B0C");
+    setText("boost", d.boost.toFixed(1));
+    setText("baro", d.baro_mbar.toFixed(0) + " mbar");
+    setText("thr298", d.thr1_298_pct.toFixed(1) + " / " + d.thr2_298_pct.toFixed(1) + "%");
+    setText("v298", d.v298_raw);
+    setText("wnewf", d.wfl_kmh.toFixed(1) + " " + d.wfr_kmh.toFixed(1));
+    setText("wnewr", d.wrl_kmh.toFixed(1) + " " + d.wrr_kmh.toFixed(1));
+    setText("wlegf", d.wfl_legacy_kmh.toFixed(1) + " " + d.wfr_legacy_kmh.toFixed(1));
+    setText("wlegr", d.wrl_legacy_kmh.toFixed(1) + " " + d.wrr_legacy_kmh.toFixed(1));
+    setText("mil", boolTxt(d.mil) + " / " + boolTxt(d.reduced_power));
+    setText("fan", boolTxt(d.fan_error));
+    setText("absgrp1", boolTxt(d.tcs) + " " + boolTxt(d.abs) + " " + boolTxt(d.abd));
+    setText("absgrp2", boolTxt(d.msr) + " " + boolTxt(d.fdr) + " " + d.asr_mode);
+    setText("lamps", boolTxt(d.abs_lamp) + " " + boolTxt(d.brake_lamp));
+    setText("brk", boolTxt(d.brake_sw) + " " + boolTxt(d.brake_sw_inv) + " " + boolTxt(d.handbrake));
+    setText("tcss", d.tcs_slow_pct.toFixed(2) + " / " + d.tcs_fast_pct.toFixed(2));
+    setText("torqlat", d.itq_pct.toFixed(2) + " / " + d.lat_g.toFixed(3));
+    setText("fuel", d.fuel_raw);
+    setText("oilp", d.oil_pressure_bar.toFixed(2) + " bar");
+    setText("coolflags", boolTxt(d.coolant_level) + " / " + boolTxt(d.cruise_active));
+    setText("cluster", d.light_dimmer + " / " + d.cluster_counter);
+    setText("steerOld", d.steer_old_deg.toFixed(1));
+    setText("steerNew", d.steer_deg.toFixed(1));
+    setText("sdu_opmode", d.sdu_opmode);
+    setText("sdu_lasterr", d.sdu_lasterr);
+    setText("sdu_status", d.sdu_status);
+    setText("sdu_din_ocur", d.sdu_din_ocur);
+    setText("sdu_din_ocur51", d.sdu_din_ocur51);
+    setText("sdu_din_bms", d.sdu_din_bms);
+    setText("sdu_udc", Number(d.sdu_udc).toFixed(3));
+    setText("sdu_idc", Number(d.sdu_idc).toFixed(3));
+    setText("sdu_speed", d.sdu_speed);
+    setText("sdu_cruisespeed", d.sdu_cruisespeed);
+    setText("sdu_pot", d.sdu_pot);
+    setText("sdu_pot2", d.sdu_pot2);
+    setText("sdu_regenpresent", Number(d.sdu_regenpresent).toFixed(2));
+    setText("sdu_regenpresent32", Number(d.sdu_regenpresent32).toFixed(2));
+    setText("sdu_seldir", d.sdu_seldir);
+    setText("sdu_seldir43", d.sdu_seldir43);
+    setText("sdu_temp_heatsink", Number(d.sdu_temp_heatsink).toFixed(2));
+    setText("sdu_temp_heatsink74", Number(d.sdu_temp_heatsink74).toFixed(2));
+    setText("sdu_uaux", Number(d.sdu_uaux).toFixed(2));
+    setText("ssid", d.ap_ssid);
+    setText("ip", d.ap_ip);
+  } catch (_) {}
+}
+
+setPage(0);
+initSettingsControls();
+refreshNow();
+setInterval(refreshNow, 500);
+</script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+﻿{
+    "stage_id":  "20260223_214307_before_tesla_sdu_codec_web_page",
+    "label":  "before_tesla_sdu_codec_web_page",
+    "local_time":  "2026-02-23 21:43:07",
+    "utc_time":  "2026-02-23 20:43:07Z",
+    "git_head":  "1b1aa17",
+    "archived_files":  [
+                           "data\\index.html",
+                           "data_spiffs\\index.html",
+                           "src\\986_ecu_messages.cpp",
+                           "src\\986_vehicle_messages.cpp",
+                           "src\\main.cpp",
+                           "src\\webinterface.cpp",
+                           "src\\webinterface.h"
+                       ],
+    "git_status_short":  [
+                             " M .gitignore",
+                             " M platformio.ini",
+                             " M src/main.cpp",
+                             "?? IMPLEMENTATION_LOG.md",
+                             "?? archives/",
+                             "?? data/",
+                             "?? data_spiffs/",
+                             "?? src/986_can_codec.h",
+                             "?? src/986_ecu_messages.cpp",
+                             "?? src/986_ecu_messages.h",
+                             "?? src/986_vehicle_messages.cpp",
+                             "?? src/986_vehicle_messages.h",
+                             "?? src/can_utils.h",
+                             "?? src/webinterface.cpp",
+                             "?? src/webinterface.h",
+                             "?? tools/"
+                         ]
+}

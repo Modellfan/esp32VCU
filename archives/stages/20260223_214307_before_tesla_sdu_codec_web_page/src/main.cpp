@@ -19,7 +19,6 @@ USBCDC USBSerial1(0); // First virtual serial port
 #include "gvret.h"
 #include "canmanager.h"
 #include "webinterface.h"
-#include "tesla_sdu_messages.h"
 
 // RGB LED Config (ESP32-S3 Built-in)
 // #define RGB_BUILTIN    48   // Built-in LED pin on ESP32-S3
@@ -475,31 +474,6 @@ void interpreteCANframe(const CANMessage &frame)
         steering_angle_old_deg = rawOld * 0.390625f;
         int32_t rawNew = signExtend(readBitsLE(frame.data, 0, 16), 16);
         steering_angle_deg = rawNew * 0.0773f - 1.1668f;
-        break;
-    }
-    case 0x320: // Tesla SDU Motor_Status
-    {
-        decode0x320(frame);
-        break;
-    }
-    case 0x321: // Tesla SDU Voltage_Current
-    {
-        decode0x321(frame);
-        break;
-    }
-    case 0x322: // Tesla SDU Speed_Input
-    {
-        decode0x322(frame);
-        break;
-    }
-    case 0x323: // Tesla SDU Steering
-    {
-        decode0x323(frame);
-        break;
-    }
-    case 0x324: // Tesla SDU Temperatur_LowVoltage
-    {
-        decode0x324(frame);
         break;
     }
     default:
