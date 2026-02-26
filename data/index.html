@@ -1,11 +1,18 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="eBoxster">
 <meta name="mobile-web-app-capable" content="yes">
 <title>ESP32 UI</title>
@@ -39,7 +46,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .field label{font-size:13px;color:var(--muted);font-weight:650}
 input{height:52px;border-radius:14px;border:1px solid var(--line);background:#000;color:#fff;font-size:15px;padding:12px;outline:none}
 .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.control-tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;min-height:96px;display:flex;flex-direction:column;justify-content:space-between}
+.control-tile{grid-column:span 1;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;min-height:96px;display:flex;flex-direction:column;justify-content:space-between}
+.value-tile{grid-column:span 1;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;min-height:96px;display:flex;flex-direction:column;justify-content:space-between}
 .control-label{font-size:14px;color:var(--muted);font-weight:700}
 .switch-row{display:flex;justify-content:space-between;align-items:center}
 .switch-state{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.4px}
@@ -49,7 +57,7 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
 .toggle:checked + .toggle-ui{background:var(--accent);border-color:var(--accent)}
 .toggle:checked + .toggle-ui::after{left:27px}
 .slider-stack{display:flex;flex-direction:column;gap:12px;margin-top:12px}
-.slider-tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
+.slider-tile{grid-column:1 / -1;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
 .slider-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .slider-label{font-size:14px;color:var(--muted);font-weight:700}
 .slider-value{font-size:14px;font-weight:800}
@@ -71,167 +79,45 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
   <div class="pager" id="pager">
     <div class="track" id="track">
       <div class="page">
-      <div class="grid">
-        <div class="tile"><div class="label">Engine RPM</div><div class="value" id="rpm">0</div></div>
-        <div class="tile"><div class="label">Coolant</div><div class="value" id="cool">0.0&deg;C</div></div>
-        <div class="tile"><div class="label">Oil Temp</div><div class="value" id="oil">0.0&deg;C</div></div>
-        <div class="tile"><div class="label">Vehicle Ref</div><div class="value" id="vref">0.0 km/h</div></div>
-        <div class="tile"><div class="label">Throttle</div><div class="value" id="thr">0.0%</div></div>
-        <div class="tile"><div class="label">Pedal 1 / 2</div><div class="value sm" id="ped">0.0 / 0.0%</div></div>
-        <div class="tile"><div class="label">IAT</div><div class="value" id="iat">0.0&deg;C</div></div>
-        <div class="tile"><div class="label">Ambient</div><div class="value" id="amb">0.0&deg;C</div></div>
-        <div class="tile"><div class="label">Boost</div><div class="value" id="boost">0.0</div></div>
-        <div class="tile"><div class="label">Baro</div><div class="value" id="baro">0 mbar</div></div>
-        <div class="tile"><div class="label">Thr1 / Thr2 (298)</div><div class="value xs" id="thr298">0.0 / 0.0%</div></div>
-        <div class="tile"><div class="label">V298 Raw</div><div class="value" id="v298">0</div></div>
-        <div class="tile"><div class="label">Wheel New FL/FR</div><div class="value xs" id="wnewf">0.0 0.0</div></div>
-        <div class="tile"><div class="label">Wheel New RL/RR</div><div class="value xs" id="wnewr">0.0 0.0</div></div>
-        <div class="tile"><div class="label">Wheel Legacy FL/FR</div><div class="value xs" id="wlegf">0.0 0.0</div></div>
-        <div class="tile"><div class="label">Wheel Legacy RL/RR</div><div class="value xs" id="wlegr">0.0 0.0</div></div>
-        <div class="tile"><div class="label">MIL / Reduced</div><div class="value xs" id="mil">OFF / OFF</div></div>
-        <div class="tile"><div class="label">Fan Error</div><div class="value" id="fan">OFF</div></div>
-        <div class="tile"><div class="label">TCS / ABS / ABD</div><div class="value xs" id="absgrp1">OFF OFF OFF</div></div>
-        <div class="tile"><div class="label">MSR / FDR / ASR</div><div class="value xs" id="absgrp2">OFF OFF 0</div></div>
-        <div class="tile"><div class="label">ABS/Brake Lamps</div><div class="value xs" id="lamps">OFF OFF</div></div>
-        <div class="tile"><div class="label">Brake / Inv / Hand</div><div class="value xs" id="brk">OFF OFF OFF</div></div>
-        <div class="tile"><div class="label">TCS Slow / Fast</div><div class="value xs" id="tcss">0.0 / 0.0</div></div>
-        <div class="tile"><div class="label">Torque / Lateral G</div><div class="value xs" id="torqlat">0.0 / 0.000</div></div>
-        <div class="tile"><div class="label">Fuel Raw</div><div class="value" id="fuel">0</div></div>
-        <div class="tile"><div class="label">Oil Pressure</div><div class="value" id="oilp">0.00 bar</div></div>
-        <div class="tile"><div class="label">Coolant Lvl / Cruise</div><div class="value xs" id="coolflags">OFF / OFF</div></div>
-        <div class="tile"><div class="label">Cluster Dim / Cnt</div><div class="value xs" id="cluster">0 / 0</div></div>
-        <div class="tile"><div class="label">Steering Old</div><div class="value" id="steerOld">0.0</div></div>
-        <div class="tile"><div class="label">Steering New</div><div class="value" id="steerNew">0.0</div></div>
-      </div>
+      <div class="grid" id="vehicleSignalGrid"></div>
       </div>
       <div class="page">
-        <div class="settings-grid">
-          <div class="control-tile">
-            <div class="control-label">Door Left</div>
-            <div class="switch-row">
-              <span class="switch-state" id="stateDoorLeft">OFF</span>
-              <label>
-                <input class="toggle" id="swDoorLeft" type="checkbox">
-                <span class="toggle-ui"></span>
-              </label>
-            </div>
-          </div>
-          <div class="control-tile">
-            <div class="control-label">Door Right</div>
-            <div class="switch-row">
-              <span class="switch-state" id="stateDoorRight">OFF</span>
-              <label>
-                <input class="toggle" id="swDoorRight" type="checkbox">
-                <span class="toggle-ui"></span>
-              </label>
-            </div>
-          </div>
-          <div class="control-tile">
-            <div class="control-label">Seat Heater L</div>
-            <div class="switch-row">
-              <span class="switch-state" id="stateHeatLeft">OFF</span>
-              <label>
-                <input class="toggle" id="swHeatLeft" type="checkbox">
-                <span class="toggle-ui"></span>
-              </label>
-            </div>
-          </div>
-          <div class="control-tile">
-            <div class="control-label">Seat Heater R</div>
-            <div class="switch-row">
-              <span class="switch-state" id="stateHeatRight">OFF</span>
-              <label>
-                <input class="toggle" id="swHeatRight" type="checkbox">
-                <span class="toggle-ui"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="slider-stack">
-          <div class="slider-tile">
-            <div class="slider-head">
-              <span class="slider-label">Set Engine RPM</span>
-              <span class="slider-value"><span id="valSetRpm">1200</span> rpm</span>
-            </div>
-            <input class="slider" id="slSetRpm" type="range" min="0" max="9000" step="50" value="1200">
-            <div class="slider-scale"><span>0</span><span>9000</span></div>
-          </div>
-          <div class="slider-tile">
-            <div class="slider-head">
-              <span class="slider-label">Set Coolant</span>
-              <span class="slider-value"><span id="valSetCool">90.0</span>&deg;C</span>
-            </div>
-            <input class="slider temp-slider" id="slSetCool" type="range" min="40" max="120" step="0.5" value="90">
-            <div class="slider-scale"><span>40.0&deg;C</span><span>120.0&deg;C</span></div>
-          </div>
-          <div class="slider-tile">
-            <div class="slider-head">
-              <span class="slider-label">Set Oil Temp</span>
-              <span class="slider-value"><span id="valSetOil">90.0</span>&deg;C</span>
-            </div>
-            <input class="slider temp-slider" id="slSetOil" type="range" min="40" max="160" step="0.5" value="90">
-            <div class="slider-scale"><span>40.0&deg;C</span><span>160.0&deg;C</span></div>
-          </div>
-          <div class="slider-tile">
-            <div class="slider-head">
-              <span class="slider-label">Cabin Temp</span>
-              <span class="slider-value"><span id="valTemp">21.5</span>&deg;C</span>
-            </div>
-            <input class="slider temp-slider" id="slTemp" type="range" min="16" max="29.5" step="0.5" value="21.5">
-            <div class="slider-scale"><span>16.0&deg;C</span><span>29.5&deg;C</span></div>
-          </div>
-          <div class="slider-tile">
-            <div class="slider-head">
-              <span class="slider-label">Fan Speed</span>
-              <span class="slider-value"><span id="valFan">4</span>/8</span>
-            </div>
-            <input class="slider" id="slFan" type="range" min="1" max="8" step="1" value="4">
-            <div class="slider-scale"><span>1</span><span>8</span></div>
-          </div>
-          <div class="slider-tile">
-            <div class="slider-head">
-              <span class="slider-label">Display Brightness</span>
-              <span class="slider-value"><span id="valBright">70</span>%</span>
-            </div>
-            <input class="slider" id="slBright" type="range" min="0" max="100" step="1" value="70">
-            <div class="slider-scale"><span>0%</span><span>100%</span></div>
-          </div>
-        </div>
+        <div class="grid" id="ecuControlGrid"></div>
       </div>
       <div class="page">
         <div class="grid">
-          <div class="tile"><div class="label">SDU Opmode</div><div class="value" id="sdu_opmode">0</div></div>
-          <div class="tile"><div class="label">SDU LastErr</div><div class="value" id="sdu_lasterr">0</div></div>
-          <div class="tile"><div class="label">SDU Status</div><div class="value" id="sdu_status">0</div></div>
-          <div class="tile"><div class="label">SDU Din Ocur</div><div class="value" id="sdu_din_ocur">0</div></div>
-          <div class="tile"><div class="label">SDU Din Ocur51</div><div class="value" id="sdu_din_ocur51">0</div></div>
-          <div class="tile"><div class="label">SDU Din BMS</div><div class="value" id="sdu_din_bms">0</div></div>
-          <div class="tile"><div class="label">UDC</div><div class="value" id="sdu_udc">0.000</div></div>
-          <div class="tile"><div class="label">IDC</div><div class="value" id="sdu_idc">0.000</div></div>
-          <div class="tile"><div class="label">Speed</div><div class="value" id="sdu_speed">0</div></div>
-          <div class="tile"><div class="label">CruiseSpeed</div><div class="value" id="sdu_cruisespeed">0</div></div>
-          <div class="tile"><div class="label">Pot</div><div class="value" id="sdu_pot">0</div></div>
-          <div class="tile"><div class="label">Pot2</div><div class="value" id="sdu_pot2">0</div></div>
-          <div class="tile"><div class="label">RegenPresent</div><div class="value" id="sdu_regenpresent">0.00</div></div>
-          <div class="tile"><div class="label">RegenPresent32</div><div class="value" id="sdu_regenpresent32">0.00</div></div>
-          <div class="tile"><div class="label">SelDir</div><div class="value" id="sdu_seldir">0</div></div>
-          <div class="tile"><div class="label">SelDir43</div><div class="value" id="sdu_seldir43">0</div></div>
-          <div class="tile"><div class="label">Temp Heatsink</div><div class="value" id="sdu_temp_heatsink">0.00</div></div>
-          <div class="tile"><div class="label">Temp Heatsink74</div><div class="value" id="sdu_temp_heatsink74">0.00</div></div>
-          <div class="tile"><div class="label">UAux</div><div class="value" id="sdu_uaux">0.00</div></div>
+          <div class="tile"><div class="label">Operating Mode</div><div class="value" id="sdu_opmode">0</div></div>
+          <div class="tile"><div class="label">Last Error</div><div class="value" id="sdu_lasterr">0</div></div>
+          <div class="tile"><div class="label">Status</div><div class="value" id="sdu_status">0</div></div>
+          <div class="tile"><div class="label">Digital Input OCUR</div><div class="value" id="sdu_din_ocur">0</div></div>
+          <div class="tile"><div class="label">Digital Input OCUR51</div><div class="value" id="sdu_din_ocur51">0</div></div>
+          <div class="tile"><div class="label">Digital Input BMS</div><div class="value" id="sdu_din_bms">0</div></div>
+          <div class="tile"><div class="label">DC Bus Voltage (UDC)</div><div class="value" id="sdu_udc">0.000 V</div></div>
+          <div class="tile"><div class="label">DC Bus Current (IDC)</div><div class="value" id="sdu_idc">0.000 A</div></div>
+          <div class="tile"><div class="label">Motor Speed</div><div class="value" id="sdu_speed">0 rpm</div></div>
+          <div class="tile"><div class="label">Cruise Speed Setpoint</div><div class="value" id="sdu_cruisespeed">0 rpm</div></div>
+          <div class="tile"><div class="label">Pedal Input 1 (POT)</div><div class="value" id="sdu_pot">0 counts</div></div>
+          <div class="tile"><div class="label">Pedal Input 2 (POT2)</div><div class="value" id="sdu_pot2">0 counts</div></div>
+          <div class="tile"><div class="label">Regen Available 1</div><div class="value" id="sdu_regenpresent">0.00 %</div></div>
+          <div class="tile"><div class="label">Regen Available 2</div><div class="value" id="sdu_regenpresent32">0.00 %</div></div>
+          <div class="tile"><div class="label">Selected Direction</div><div class="value" id="sdu_seldir">0</div></div>
+          <div class="tile"><div class="label">Selected Direction Aux</div><div class="value" id="sdu_seldir43">0</div></div>
+          <div class="tile"><div class="label">Heatsink Temperature 1</div><div class="value" id="sdu_temp_heatsink">0.00 degC</div></div>
+          <div class="tile"><div class="label">Heatsink Temperature 2</div><div class="value" id="sdu_temp_heatsink74">0.00 degC</div></div>
+          <div class="tile"><div class="label">Auxiliary Voltage</div><div class="value" id="sdu_uaux">0.00 V</div></div>
         </div>
       </div>
     </div>
   </div>
   <nav class="nav" aria-label="Bottom navigation">
     <div class="tab active" id="tabLive" role="button" aria-label="Vehicle Data" tabindex="0">
-      <img src="/assets/car.svg" alt="Vehicle Data">
+      <img src="/i_car.svg" alt="Vehicle Data">
     </div>
     <div class="tab" id="tabSettings" role="button" aria-label="ECU Data" tabindex="0">
-      <img src="/assets/tachometer.svg" alt="ECU Data">
+      <img src="/i_ecu.svg" alt="ECU Data">
     </div>
     <div class="tab" id="tabTesla" role="button" aria-label="Electric Engine" tabindex="0">
-      <img src="/assets/car-battery.svg" alt="Electric Engine">
+      <img src="/i_sdu.svg" alt="Electric Engine">
     </div>
   </nav>
 </div>
@@ -275,7 +161,10 @@ document.querySelectorAll(".tab").forEach(el => {
 });
 
 let startX = 0, startY = 0, dx = 0, dragging = false, swipeAxis = "";
-pager.addEventListener("pointerdown", e => { dragging = true; dx = 0; swipeAxis = ""; startX = e.clientX; startY = e.clientY; track.style.transition = "none"; });
+pager.addEventListener("pointerdown", e => {
+  if (e.target.closest("input,select,textarea,button,label")) return;
+  dragging = true; dx = 0; swipeAxis = ""; startX = e.clientX; startY = e.clientY; track.style.transition = "none";
+});
 pager.addEventListener("pointermove", e => {
   if (!dragging) return;
   const mx = e.clientX - startX, my = e.clientY - startY;
@@ -310,45 +199,186 @@ function setText(id, v){
   if (el) el.textContent = v;
 }
 function boolTxt(v){ return v ? "ON" : "OFF"; }
-function bindToggle(id, stateId){
-  const el = document.getElementById(id);
-  const st = document.getElementById(stateId);
-  const apply = () => st.textContent = el.checked ? "ON" : "OFF";
-  el.addEventListener("change", apply);
-  apply();
+function numTxt(v, decimals, suffix){
+  const n = Number(v || 0);
+  return n.toFixed(decimals) + (suffix || "");
 }
-function bindSlider(id, valueId, decimals){
-  const el = document.getElementById(id);
-  const out = document.getElementById(valueId);
-  const apply = () => out.textContent = Number(el.value).toFixed(decimals);
-  el.addEventListener("input", apply);
-  apply();
+
+const vehicleSignals = [
+  { key:"wfl_legacy_kmh", label:"Wheel Speed Front Left", fmt:d=>numTxt(d.wfl_legacy_kmh,2," km/h") },
+  { key:"wfr_legacy_kmh", label:"Wheel Speed Front Right", fmt:d=>numTxt(d.wfr_legacy_kmh,2," km/h") },
+  { key:"wrl_legacy_kmh", label:"Wheel Speed Rear Left", fmt:d=>numTxt(d.wrl_legacy_kmh,2," km/h") },
+  { key:"wrr_legacy_kmh", label:"Wheel Speed Rear Right", fmt:d=>numTxt(d.wrr_legacy_kmh,2," km/h") },
+  { key:"tcs", label:"BR1 ASR Request", fmt:d=>boolTxt(d.tcs) },
+  { key:"msr", label:"BR1 MSR Request", fmt:d=>boolTxt(d.msr) },
+  { key:"abs", label:"BR1 ABS Control", fmt:d=>boolTxt(d.abs) },
+  { key:"abd", label:"BR1 EDS Intervention", fmt:d=>boolTxt(d.abd) },
+  { key:"fdr", label:"BR1 ESP Intervention", fmt:d=>boolTxt(d.fdr) },
+  { key:"asr_mode", label:"BR1 ASR Switching Influence", fmt:d=>String(d.asr_mode ?? 0) },
+  { key:"fdr_lamp", label:"BR1 EBV Intervention", fmt:d=>boolTxt(d.fdr_lamp) },
+  { key:"abs_lamp", label:"BR1 ABS Lamp", fmt:d=>boolTxt(d.abs_lamp) },
+  { key:"fdr_lamp2", label:"BR1 ASR/ESP Lamp", fmt:d=>boolTxt(d.fdr_lamp2) },
+  { key:"brake_lamp", label:"Brake Warning Lamp", fmt:d=>boolTxt(d.brake_lamp) },
+  { key:"brake_sw", label:"Brake Switch", fmt:d=>boolTxt(d.brake_sw) },
+  { key:"brake_sw_inv", label:"BR1 Brake Test Switch", fmt:d=>boolTxt(d.brake_sw_inv) },
+  { key:"rough_road_suppression", label:"BR1 OBD Rough Road Suppression", fmt:d=>boolTxt(d.rough_road_suppression) },
+  { key:"rough_road_suppression_status", label:"BR1 Rough Road Status", fmt:d=>boolTxt(d.rough_road_suppression_status) },
+  { key:"handbrake", label:"BR1 ABS Diagnose Mode", fmt:d=>boolTxt(d.handbrake) },
+  { key:"psm_button_lamp", label:"BR1 Active Brake Booster", fmt:d=>boolTxt(d.psm_button_lamp) },
+  { key:"vref_kmh", label:"BR1 Vehicle Speed", fmt:d=>numTxt(d.vref_kmh,2," km/h") },
+  { key:"tcs_slow_pct", label:"BR1 ASR Torque Slow", fmt:d=>numTxt(d.tcs_slow_pct,2,"%") },
+  { key:"tcs_fast_pct", label:"BR1 ASR Torque Fast", fmt:d=>numTxt(d.tcs_fast_pct,2,"%") },
+  { key:"msr_inv_pct", label:"BR1 Inverse MSR Torque", fmt:d=>numTxt(d.msr_inv_pct,2,"%") },
+  { key:"itq_pct", label:"BR1 MSR Torque", fmt:d=>numTxt(d.itq_pct,2,"%") },
+  { key:"br1_counter", label:"BR1 Counter", fmt:d=>String(d.br1_counter ?? 0) },
+  { key:"br1_asr_esp", label:"BR1 Control Unit Type ASR/ESP", fmt:d=>boolTxt(d.br1_asr_esp) },
+  { key:"br1_espasr_passive", label:"BR1 ESP/ASR Passive", fmt:d=>boolTxt(d.br1_espasr_passive) },
+  { key:"br1_sta_esp", label:"BR1 ESP Error Status", fmt:d=>boolTxt(d.br1_sta_esp) },
+  { key:"br1_ersatz_kmh", label:"BR1 Substitute Speed", fmt:d=>boolTxt(d.br1_ersatz_kmh) },
+  { key:"lat_g", label:"Lateral Acceleration", fmt:d=>numTxt(d.lat_g,3," g") },
+  { key:"ambient_c", label:"Ambient Temperature", fmt:d=>numTxt(d.ambient_c,2," degC") },
+  { key:"oil_pressure_bar", label:"Oil Pressure", fmt:d=>numTxt(d.oil_pressure_bar,2," bar") },
+  { key:"light_dimmer", label:"Cluster Light Dimmer", fmt:d=>String(d.light_dimmer ?? 0) },
+  { key:"cluster_counter", label:"Cluster Counter", fmt:d=>String(d.cluster_counter ?? 0) },
+  { key:"vorzeichen_rb", label:"Steering Sign (RB)", fmt:d=>boolTxt(d.vorzeichen_rb) },
+  { key:"lenkwinkel_rb", label:"Steering Angle (RB)", fmt:d=>numTxt(d.lenkwinkel_rb,2," deg") },
+  { key:"lws_ok_rb", label:"LWS OK (RB)", fmt:d=>boolTxt(d.lws_ok_rb) },
+  { key:"lws_abgleich_rb", label:"LWS Calibration (RB)", fmt:d=>boolTxt(d.lws_abgleich_rb) },
+  { key:"frei_lenkwinkel_1_1_rb", label:"Free Lenkwinkel Bit (RB)", fmt:d=>boolTxt(d.frei_lenkwinkel_1_1_rb) },
+  { key:"fine_check_rb", label:"Fine Check (RB)", fmt:d=>boolTxt(d.fine_check_rb) },
+  { key:"coarse_check_rb", label:"Coarse Check (RB)", fmt:d=>boolTxt(d.coarse_check_rb) },
+  { key:"yaw_rate_sign", label:"Yaw Rate Sign", fmt:d=>boolTxt(d.yaw_rate_sign) },
+  { key:"yaw_rate", label:"Yaw Rate", fmt:d=>numTxt(d.yaw_rate,6," rad/s") },
+  { key:"no_actively_built_up_brake_pressure", label:"No Active Brake Pressure", fmt:d=>boolTxt(d.no_actively_built_up_brake_pressure) },
+  { key:"acc_related_error", label:"ACC Related Error", fmt:d=>boolTxt(d.acc_related_error) },
+  { key:"receipt_for_acc_message", label:"ACC Message Receipt Fault", fmt:d=>boolTxt(d.receipt_for_acc_message) },
+  { key:"driver_braking", label:"Driver Braking", fmt:d=>boolTxt(d.driver_braking) },
+  { key:"regulator_error_fdr", label:"FDR Regulator Error", fmt:d=>boolTxt(d.regulator_error_fdr) },
+  { key:"acceleration", label:"Longitudinal Acceleration", fmt:d=>numTxt(d.acceleration,4," m/s^2") },
+  { key:"error_driver_brake_detection", label:"Driver Brake Detection Error", fmt:d=>boolTxt(d.error_driver_brake_detection) },
+  { key:"multiplex_byte4", label:"ABS2 Multiplex Byte4", fmt:d=>String(d.multiplex_byte4 ?? 0) },
+  { key:"brake_normal_or_offset", label:"Brake Normal/Offset", fmt:d=>numTxt(d.brake_normal_or_offset,2," (0.1/bit)") },
+  { key:"vehicle_speed_510", label:"Vehicle Speed (Cluster)", fmt:d=>numTxt(d.vehicle_speed_510,2," km/h") },
+  { key:"indicator_left", label:"Indicator Left", fmt:d=>boolTxt(d.indicator_left) },
+  { key:"indicator_right", label:"Indicator Right", fmt:d=>boolTxt(d.indicator_right) },
+  { key:"tempomat_button", label:"Cruise Button", fmt:d=>boolTxt(d.tempomat_button) },
+  { key:"steeringwheel_button_up", label:"Steering Wheel Button Up", fmt:d=>boolTxt(d.steeringwheel_button_up) },
+  { key:"steeringwheel_button_down", label:"Steering Wheel Button Down", fmt:d=>boolTxt(d.steeringwheel_button_down) },
+  { key:"prnd_pos", label:"Gear Selector PRND Raw", fmt:d=>String(d.prnd_pos ?? 0) }
+];
+
+function initVehicleTiles(){
+  const grid = document.getElementById("vehicleSignalGrid");
+  if (!grid) return;
+  grid.innerHTML = vehicleSignals.map(s =>
+    `<div class="tile"><div class="label">${s.label}</div><div class="value xs" id="vs_${s.key}">-</div></div>`
+  ).join("");
 }
-let controlTimer = null;
-function queueControlUpdate(){
-  if (controlTimer) clearTimeout(controlTimer);
-  controlTimer = setTimeout(pushControlUpdate, 180);
+const ecuControlDefs = [
+  { key:"motor2_coolant_temperature", label:"Motor Coolant Temperature", unit:"degC", type:"number", ui:"slider", min:-48, max:150, step:"0.1", temp:true },
+  { key:"motor2_brake_light_switch", label:"Brake Light Switch", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_brake_test_switch", label:"Brake Test Switch", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_coolant_temp_not_ok", label:"Coolant Temp Not OK", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_ac_compressor_active", label:"AC Compressor Active", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_normal_operation_active", label:"Normal Operation Active", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_drivetrain_coordinator_active", label:"Drivetrain Coordinator Active", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_cruise_control_status", label:"Cruise Control Status", unit:"mode", type:"number", ui:"slider", min:0, max:3, step:"1" },
+  { key:"motor2_speed_limiter_selected", label:"Speed Limiter Selected", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_cruise_control_regulating", label:"Cruise Control Regulating", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_sport_error", label:"Sport Error", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_offroad_mode_active", label:"Offroad Mode Active", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"motor2_cruise_target_speed_kmh", label:"Cruise Target Speed", unit:"km/h", type:"number", ui:"slider", min:0, max:325, step:"0.1" },
+  { key:"motor2_idle_target_speed_rpm", label:"Idle Target Speed", unit:"rpm", type:"number", ui:"slider", min:0, max:3000, step:"1" },
+  { key:"motor2_limited_torque_percent", label:"Limited Torque", unit:"%", type:"number", ui:"slider", min:0, max:100, step:"0.1" },
+  { key:"motor2_min_torque_ignition_retard_percent", label:"Min Torque (Ignition Retard)", unit:"%", type:"number", ui:"slider", min:0, max:100, step:"0.1" },
+  { key:"engine_speed_rpm", label:"Engine Speed", unit:"rpm", type:"number", ui:"slider", min:0, max:9000, step:"1" },
+  { key:"throttle_position_280", label:"Throttle Position", unit:"%", type:"number", ui:"slider", min:0, max:100, step:"0.1" },
+  { key:"pedal_position_1", label:"Pedal Position 1", unit:"%", type:"number", ui:"slider", min:0, max:100, step:"0.1" },
+  { key:"pedal_position_2", label:"Pedal Position 2", unit:"%", type:"number", ui:"slider", min:0, max:100, step:"0.1" },
+  { key:"inlet_air_temperature", label:"Inlet Air Temperature", unit:"degC", type:"number", ui:"slider", min:-48, max:150, step:"0.1", temp:true },
+  { key:"barometric_pressure_mbar", label:"Barometric Pressure", unit:"mbar", type:"number", ui:"slider", min:0, max:1300, step:"1" },
+  { key:"mo5_vorgluehen", label:"Pre-Glow Lamp", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"check_engine_light", label:"Check Engine Light", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"check_engine_light_bit1", label:"Check Engine Light Bit 1", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"engine_stat_bool2", label:"EngineStat Bool 2", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"reduced_power", label:"Reduced Power", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"fan_error", label:"Fan Error", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"engine_stat_bool5", label:"EngineStat Bool 5", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"engine_stat_bool6", label:"EngineStat Bool 6", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"engine_stat_bool7", label:"EngineStat Bool 7", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_e_gas", label:"E-Gas Lamp", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_obd_2", label:"OBD/MIL Lamp", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_heissl", label:"Coolant Overheat Lamp", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_klimakompr", label:"AC Compressor Off Request", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_feld_kuehl", label:"Map Cooling OK", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_kliko_red", label:"AC Power Reduction", unit:"on/off", type:"bool", ui:"toggle" },
+  { key:"mo5_verbrauch_ul", label:"Fuel Consumption Counter", unit:"uL", type:"number", ui:"slider", min:0, max:32767, step:"1" },
+  { key:"mo5_ueberlverb", label:"Consumption Overflow", unit:"on/off", type:"bool", ui:"toggle" }
+];
+
+let ecuControlTimer = null;
+function queueEcuControlUpdate(){
+  if (ecuControlTimer) clearTimeout(ecuControlTimer);
+  ecuControlTimer = setTimeout(pushEcuControlUpdate, 180);
 }
-async function pushControlUpdate(){
-  const rpm = document.getElementById("slSetRpm").value;
-  const cool = document.getElementById("slSetCool").value;
-  const oil = document.getElementById("slSetOil").value;
-  try { await fetch("/api/set?rpm=" + encodeURIComponent(rpm) + "&coolant=" + encodeURIComponent(cool) + "&oil=" + encodeURIComponent(oil), { cache:"no-store" }); }
-  catch (_) {}
+
+function formatEcuControlValue(def, raw){
+  if (def.type === "bool") return raw ? "ON" : "OFF";
+  const decimals = (String(def.step || "1").indexOf(".") >= 0) ? String(def.step).split(".")[1].length : 0;
+  const val = Number(raw || 0).toFixed(decimals);
+  return def.unit ? (val + " " + def.unit) : val;
 }
-function initSettingsControls(){
-  bindToggle("swDoorLeft","stateDoorLeft");
-  bindToggle("swDoorRight","stateDoorRight");
-  bindToggle("swHeatLeft","stateHeatLeft");
-  bindToggle("swHeatRight","stateHeatRight");
-  bindSlider("slTemp","valTemp",1);
-  bindSlider("slFan","valFan",0);
-  bindSlider("slBright","valBright",0);
-  bindSlider("slSetRpm","valSetRpm",0);
-  bindSlider("slSetCool","valSetCool",1);
-  bindSlider("slSetOil","valSetOil",1);
-  ["slSetRpm","slSetCool","slSetOil"].forEach(id => {
-    document.getElementById(id).addEventListener("input", queueControlUpdate);
+
+async function pushEcuControlUpdate(){
+  const p = new URLSearchParams();
+  ecuControlDefs.forEach(def => {
+    const el = document.getElementById("ec_" + def.key);
+    if (!el) return;
+    if (def.type === "bool") p.set(def.key, el.checked ? "1" : "0");
+    else p.set(def.key, String(el.value));
+  });
+  try { await fetch("/api/set-ecu?" + p.toString(), { cache:"no-store" }); } catch (_) {}
+}
+
+function initEcuControls(){
+  const grid = document.getElementById("ecuControlGrid");
+  if (!grid) return;
+  grid.innerHTML = ecuControlDefs.map(def => {
+    if (def.type === "bool") {
+      return `<div class="control-tile"><div class="control-label">${def.label}</div><div class="switch-row"><span class="switch-state" id="ecv_${def.key}">OFF</span><label><input class="toggle" id="ec_${def.key}" type="checkbox"><span class="toggle-ui"></span></label></div></div>`;
+    }
+    if (def.ui === "value") {
+      return `<div class="value-tile"><div class="control-label">${def.label}</div><div class="value xs" id="ecv_${def.key}">-</div></div>`;
+    }
+    const sliderCls = def.temp ? "slider temp-slider" : "slider";
+    const min = (def.min !== undefined) ? def.min : 0;
+    const max = (def.max !== undefined) ? def.max : 100;
+    const step = def.step || "0.1";
+    return `<div class="slider-tile"><div class="slider-head"><span class="slider-label">${def.label}</span><span class="slider-value" id="ecv_${def.key}">0 ${def.unit || ""}</span></div><input class="${sliderCls}" id="ec_${def.key}" type="range" min="${min}" max="${max}" step="${step}" value="${min}"><div class="slider-scale"><span>${min}</span><span>${max}</span></div></div>`;
+  }).join("");
+
+  ecuControlDefs.forEach(def => {
+    const el = document.getElementById("ec_" + def.key);
+    if (!el) return;
+    el.addEventListener("change", queueEcuControlUpdate);
+    if (def.type !== "bool") el.addEventListener("input", queueEcuControlUpdate);
+  });
+}
+
+function updateEcuControlsFromLive(d){
+  ecuControlDefs.forEach(def => {
+    const el = document.getElementById("ec_" + def.key);
+    const out = document.getElementById("ecv_" + def.key);
+    if (!el || d[def.key] === undefined) return;
+    if (def.type === "bool") {
+      const checked = !!d[def.key];
+      el.checked = checked;
+      if (out) out.textContent = checked ? "ON" : "OFF";
+    } else {
+      const active = document.activeElement === el;
+      if (!active) el.value = d[def.key];
+      if (out) out.textContent = formatEcuControlValue(def, d[def.key]);
+    }
   });
 }
 async function refreshNow(){
@@ -356,64 +386,39 @@ async function refreshNow(){
     const r = await fetch("/api/live", { cache: "no-store" });
     if (!r.ok) return;
     const d = await r.json();
-    setText("rpm", d.rpm.toFixed(0));
-    setText("cool", d.coolant_c.toFixed(1) + "\u00B0C");
-    setText("oil", d.oil_temp_c.toFixed(1) + "\u00B0C");
-    setText("vref", d.vref_kmh.toFixed(1) + " km/h");
-    setText("thr", d.throttle_pct.toFixed(1) + "%");
-    setText("ped", d.pedal1_pct.toFixed(1) + " / " + d.pedal2_pct.toFixed(1) + "%");
-    setText("iat", d.iat_c.toFixed(1) + "\u00B0C");
-    setText("amb", d.ambient_c.toFixed(1) + "\u00B0C");
-    setText("boost", d.boost.toFixed(1));
-    setText("baro", d.baro_mbar.toFixed(0) + " mbar");
-    setText("thr298", d.thr1_298_pct.toFixed(1) + " / " + d.thr2_298_pct.toFixed(1) + "%");
-    setText("v298", d.v298_raw);
-    setText("wnewf", d.wfl_kmh.toFixed(1) + " " + d.wfr_kmh.toFixed(1));
-    setText("wnewr", d.wrl_kmh.toFixed(1) + " " + d.wrr_kmh.toFixed(1));
-    setText("wlegf", d.wfl_legacy_kmh.toFixed(1) + " " + d.wfr_legacy_kmh.toFixed(1));
-    setText("wlegr", d.wrl_legacy_kmh.toFixed(1) + " " + d.wrr_legacy_kmh.toFixed(1));
-    setText("mil", boolTxt(d.mil) + " / " + boolTxt(d.reduced_power));
-    setText("fan", boolTxt(d.fan_error));
-    setText("absgrp1", boolTxt(d.tcs) + " " + boolTxt(d.abs) + " " + boolTxt(d.abd));
-    setText("absgrp2", boolTxt(d.msr) + " " + boolTxt(d.fdr) + " " + d.asr_mode);
-    setText("lamps", boolTxt(d.abs_lamp) + " " + boolTxt(d.brake_lamp));
-    setText("brk", boolTxt(d.brake_sw) + " " + boolTxt(d.brake_sw_inv) + " " + boolTxt(d.handbrake));
-    setText("tcss", d.tcs_slow_pct.toFixed(2) + " / " + d.tcs_fast_pct.toFixed(2));
-    setText("torqlat", d.itq_pct.toFixed(2) + " / " + d.lat_g.toFixed(3));
-    setText("fuel", d.fuel_raw);
-    setText("oilp", d.oil_pressure_bar.toFixed(2) + " bar");
-    setText("coolflags", boolTxt(d.coolant_level) + " / " + boolTxt(d.cruise_active));
-    setText("cluster", d.light_dimmer + " / " + d.cluster_counter);
-    setText("steerOld", d.steer_old_deg.toFixed(1));
-    setText("steerNew", d.steer_deg.toFixed(1));
+    vehicleSignals.forEach(s => setText("vs_" + s.key, s.fmt(d)));
+    updateEcuControlsFromLive(d);
     setText("sdu_opmode", d.sdu_opmode);
     setText("sdu_lasterr", d.sdu_lasterr);
     setText("sdu_status", d.sdu_status);
     setText("sdu_din_ocur", d.sdu_din_ocur);
     setText("sdu_din_ocur51", d.sdu_din_ocur51);
     setText("sdu_din_bms", d.sdu_din_bms);
-    setText("sdu_udc", Number(d.sdu_udc).toFixed(3));
-    setText("sdu_idc", Number(d.sdu_idc).toFixed(3));
-    setText("sdu_speed", d.sdu_speed);
-    setText("sdu_cruisespeed", d.sdu_cruisespeed);
-    setText("sdu_pot", d.sdu_pot);
-    setText("sdu_pot2", d.sdu_pot2);
-    setText("sdu_regenpresent", Number(d.sdu_regenpresent).toFixed(2));
-    setText("sdu_regenpresent32", Number(d.sdu_regenpresent32).toFixed(2));
+    setText("sdu_udc", Number(d.sdu_udc).toFixed(3) + " V");
+    setText("sdu_idc", Number(d.sdu_idc).toFixed(3) + " A");
+    setText("sdu_speed", d.sdu_speed + " rpm");
+    setText("sdu_cruisespeed", d.sdu_cruisespeed + " rpm");
+    setText("sdu_pot", d.sdu_pot + " counts");
+    setText("sdu_pot2", d.sdu_pot2 + " counts");
+    setText("sdu_regenpresent", Number(d.sdu_regenpresent).toFixed(2) + " %");
+    setText("sdu_regenpresent32", Number(d.sdu_regenpresent32).toFixed(2) + " %");
     setText("sdu_seldir", d.sdu_seldir);
     setText("sdu_seldir43", d.sdu_seldir43);
-    setText("sdu_temp_heatsink", Number(d.sdu_temp_heatsink).toFixed(2));
-    setText("sdu_temp_heatsink74", Number(d.sdu_temp_heatsink74).toFixed(2));
-    setText("sdu_uaux", Number(d.sdu_uaux).toFixed(2));
+    setText("sdu_temp_heatsink", Number(d.sdu_temp_heatsink).toFixed(2) + " degC");
+    setText("sdu_temp_heatsink74", Number(d.sdu_temp_heatsink74).toFixed(2) + " degC");
+    setText("sdu_uaux", Number(d.sdu_uaux).toFixed(2) + " V");
     setText("ssid", d.ap_ssid);
     setText("ip", d.ap_ip);
   } catch (_) {}
 }
 
 setPage(0);
-initSettingsControls();
+initVehicleTiles();
+initEcuControls();
 refreshNow();
 setInterval(refreshNow, 500);
 </script>
 </body>
 </html>
+
+

@@ -36,16 +36,17 @@ extern TeslaSduSignals tesla_sdu;
 
 } // namespace params
 
-bool decode0x320(const CANMessage &frame);
-bool decode0x321(const CANMessage &frame);
-bool decode0x322(const CANMessage &frame);
-bool decode0x323(const CANMessage &frame);
-bool decode0x324(const CANMessage &frame);
+bool decodeTeslaSdu0x320(const CANMessage &frame);
+bool decodeTeslaSdu0x321(const CANMessage &frame);
+bool decodeTeslaSdu0x322(const CANMessage &frame);
+bool decodeTeslaSdu0x323(const CANMessage &frame);
+bool decodeTeslaSdu0x324(const CANMessage &frame);
+bool decodeTeslaSdu(const CANMessage &frame);
 
-void encode0x320(CANMessage &frame);
-void encode0x321(CANMessage &frame);
-void encode0x322(CANMessage &frame);
-void encode0x323(CANMessage &frame);
-void encode0x324(CANMessage &frame);
+void encodeTeslaSdu0x320(CANMessage &frame);
+void encodeTeslaSdu0x321(CANMessage &frame);
+void encodeTeslaSdu0x322(CANMessage &frame);
+void encodeTeslaSdu0x323(CANMessage &frame);
+void encodeTeslaSdu0x324(CANMessage &frame);
 
 #endif

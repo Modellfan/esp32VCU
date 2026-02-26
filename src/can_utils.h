@@ -2,6 +2,7 @@
 #define CAN_UTILS_H
 
 #include <Arduino.h>
+#include <ACAN2515.h>
 
 static inline uint32_t readBitsLE(const uint8_t *data, uint16_t startBit, uint8_t bitLen) {
     uint32_t value = 0;
@@ -23,6 +24,25 @@ static inline void writeBitsLE(uint8_t *data, uint16_t startBit, uint8_t bitLen,
         const uint8_t bit = (value >> i) & 0x01;
         data[byteIndex] &= ~(1U << bitInByte);
         data[byteIndex] |= (bit << bitInByte);
+    }
+}
+
+static inline int32_t signExtend(uint32_t value, uint8_t bitLen) {
+    if (bitLen == 0 || bitLen >= 32) {
+        return (int32_t)value;
+    }
+    const uint32_t signBit = 1UL << (bitLen - 1);
+    if (value & signBit) {
+        value |= (~0UL << bitLen);
+    }
+    return (int32_t)value;
+}
+
+static inline void copyFrame(const CANMessage &inFrame, CANMessage &outFrame) {
+    outFrame.id = inFrame.id;
+    outFrame.len = inFrame.len;
+    for (uint8_t i = 0; i < 8; i++) {
+        outFrame.data[i] = inFrame.data[i];
     }
 }
 

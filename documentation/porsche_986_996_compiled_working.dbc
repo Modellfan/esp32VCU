@@ -1,0 +1,197 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+BU_: ECU ABS_PSM INSTR STEER TCU TEENSY UNKNOWN 
+BO_ 640 Engine_1: 8 ECU
+   SG_ RPM : 16|16@1+ (0.25,0) [0|16383.8] "rpm" INSTR
+   SG_ ThrottlePosition : 40|8@1+ (0.390625,0) [0|100] "%" INSTR
+   SG_ PedalPosition1 : 32|8@1+ (1,0) [0|255] "%" UNKNOWN
+   SG_ PedalPosition2 : 56|8@1+ (1,0) [0|255] "%" UNKNOWN
+
+BO_ 649 Motor_2: 8 ECU
+   SG_ MO2_Mp_Code m : 6|2@1+ (1,0) [0|3] "" INSTR
+   SG_ MO2_Getr_Code m2 : 0|6@1+ (1,0) [0|63] "" INSTR
+   SG_ MO2_max_Mo m3 : 0|6@1+ (10,0) [0|630] "Nm" INSTR
+   SG_ MO2_CAN_Vers m0 : 0|6@1+ (1,0) [0|63] "" INSTR
+   SG_ MO2_Motor_Code m1 : 0|6@1+ (1,0) [0|63] "" INSTR
+   SG_ MO2_Kuehlm_T : 8|8@1+ (0.75,-48) [-47.25|142.5] "degC" INSTR
+   SG_ MO2_BLS : 16|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_BTS : 17|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_Sta_Kuehlm : 18|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_Sta_Klima : 19|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_Sta_No_Bet : 20|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_Status_TSK : 21|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_Sta_GRA : 22|2@1+ (1,0) [0|3] "" INSTR
+   SG_ MO2_GRAregelt : 26|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_Sport_Error : 27|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_OffRoad : 28|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO2_RME_Gehalt : 29|3@1+ (12.5,0) [0|75] "%" INSTR
+   SG_ MO2_GRA_Soll : 32|8@1+ (1.28,0) [0|325.12] "km/h" INSTR
+   SG_ MO2_LL_Solldz : 40|8@1+ (10,0) [0|2540] "1/min" INSTR
+   SG_ MO2_Begr_Mo : 48|8@1+ (0.39,0) [0|99.06] "%" INSTR
+   SG_ MO2_Mo_ZWR : 56|8@1+ (0.39,0) [0|99.06] "%" INSTR
+
+BO_ 664 Engine_2: 8 ECU
+   SG_ InletAirTemp : 8|8@1+ (0.75,-48) [-48|142.5] "degC" INSTR
+   SG_ ThrottlePosition1 : 16|8@1+ (0.390625,0) [0|100] "%" UNKNOWN
+   SG_ ThrottlePosition2 : 32|8@1+ (0.390625,0) [0|100] "%" UNKNOWN
+   SG_ BarometricPressure : 40|8@1+ (5,0) [0|1275] "mbar" UNKNOWN
+   SG_ Speed_raw : 56|8@1+ (1,0) [0|255] "" UNKNOWN
+
+BO_ 680 Vehicle_Speed: 8 ABS_PSM
+   SG_ Frei_Bremse_3_1 : 0|1@1+ (1,0) [0|1] "" UNKNOWN
+   SG_ WheelSpeed_LF_15b_legacy : 1|15@1+ (0.01,0) [0|327.67] "km/h" UNKNOWN
+   SG_ Frei_Bremse_3_2 : 16|1@1+ (1,0) [0|1] "" UNKNOWN
+   SG_ WheelSpeed_RF_15b_legacy : 17|15@1+ (0.01,0) [0|327.67] "km/h" UNKNOWN
+   SG_ Frei_Bremse_3_3 : 32|1@1+ (1,0) [0|1] "" UNKNOWN
+   SG_ WheelSpeed_LR_15b_legacy : 33|15@1+ (0.01,0) [0|327.67] "km/h" UNKNOWN
+   SG_ Frei_Bremse_3_4 : 48|1@1+ (1,0) [0|1] "" UNKNOWN
+   SG_ WheelSpeed_RR_15b_legacy : 49|15@1+ (0.01,0) [0|327.67] "km/h" UNKNOWN
+
+BO_ 416 ABS_1: 8 ABS_PSM
+   SG_ BR1_ASR_Anf : 0|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_MSR_Anf : 1|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_ABS_Brems : 2|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_EDS_Ongr : 3|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_ESP_Ongr : 4|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_ASR_Ongr : 5|2@1+ (1,0) [0|3] "" INSTR
+   SG_ BR1_EBV_Ongr : 7|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Lampe_ABS : 8|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Lampe_ASR : 9|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Lampe_BK : 10|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Lichtschalt : 11|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_StaDruckschw : 12|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_MAD : 13|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Sta_MAD : 14|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Diagnose : 15|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_BKV_active : 16|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Rad_kmh : 17|15@1+ (0.01,0) [0|327.67] "km/h" INSTR
+   SG_ BR1_ASRMo_sl : 32|8@1+ (0.39,0) [0|99.06] "%" INSTR
+   SG_ BR1_ASRMo_fa : 40|8@1+ (0.39,0) [0|99.06] "%" INSTR
+   SG_ BR1_MSR_Mo_inv : 40|8@1+ (-0.39,99.45) [0|99.45] "%" INSTR
+   SG_ BR1_MSR_Mo : 48|8@1+ (0.39,0) [0|99.06] "%" INSTR
+   SG_ BR1_Zaehler : 56|4@1+ (1,0) [0|15] "" INSTR
+   SG_ BR1_ASR_ESP : 60|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_ESPASR_passive : 61|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Sta_ESP : 62|1@1+ (1,0) [0|1] "" INSTR
+   SG_ BR1_Ersatz_Kmh : 63|1@1+ (1,0) [0|1] "" INSTR
+
+BO_ 1185 ABS_2: 8 ABS_PSM
+   SG_ YawRateSign : 0|1@1+ (1,0) [0|1] "" INSTR
+   SG_ YawRate : 1|9@1+ (0.0021326,0) [0|1.09] "" INSTR
+   SG_ NoActivelyBuiltUpBrakePressure : 10|1@1+ (1,0) [0|1] "" INSTR
+   SG_ ACC_Related_Error : 12|1@1+ (1,0) [0|1] "" INSTR
+   SG_ ReceiptForACCMessage : 13|1@1+ (1,0) [0|1] "" INSTR
+   SG_ DriverBraking : 14|1@1+ (1,0) [0|1] "" INSTR
+   SG_ RegulatorError_FDR : 15|1@1+ (1,0) [0|1] "" INSTR
+   SG_ Acceleration : 16|9@1+ (0.3125,0) [0|159.688] "" INSTR
+   SG_ ErrorDriverBrakeDetection : 25|1@1+ (1,0) [0|1] "" INSTR
+   SG_ Multiplex_Byte4 : 30|2@1+ (1,0) [0|3] "" INSTR
+   SG_ BrakeNormal_or_Offset : 32|8@1+ (0.1,0) [0|25.5] "" INSTR
+
+BO_ 1248 EngineStat: 8 ECU
+   SG_ CheckEngineLight : 0|1@1+ (1,0) [0|1] "" INSTR
+   SG_ CheckEngineLight_AlsoBit1 : 1|1@1+ (1,0) [0|1] "" INSTR
+   SG_ EngineStat_Bool2 : 2|1@1+ (1,0) [0|1] "" INSTR
+   SG_ Reduced_Power : 3|1@1+ (1,0) [0|1] "" INSTR
+   SG_ Fan_Error : 4|1@1+ (1,0) [0|1] "" INSTR
+   SG_ EngineStat_Bool5 : 5|1@1+ (1,0) [0|1] "" INSTR
+   SG_ EngineStat_Bool6 : 6|1@1+ (1,0) [0|1] "" INSTR
+   SG_ EngineStat_Bool7 : 7|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_Vorgluehen : 9|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_E_Gas : 10|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_OBD_2 : 11|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_Heissl : 12|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_KlimaKompr : 13|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_Feld_kuehl : 14|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_KliKo_Red : 15|1@1+ (1,0) [0|1] "" INSTR
+   SG_ MO5_Verbrauch : 16|15@1+ (1,0) [0|32767] "uL" INSTR
+   SG_ MO5_UeberlVerb : 31|1@1+ (1,0) [0|1] "" INSTR
+
+BO_ 1296 InstrCluster_1: 8 INSTR
+   SG_ VehicleSpeed : 0|16@1+ (0.250264,-4100.17) [-4100.17|16383] "km/h" ECU
+   SG_ Indicator_Left : 20|1@1+ (1,0) [0|1] "" ECU
+   SG_ Indicator_Right : 21|1@1+ (1,0) [0|1] "" ECU
+   SG_ Tempomat_Button : 23|1@1+ (1,0) [0|1] "" ECU
+   SG_ SteeringwheelButton_Up : 48|1@1+ (1,0) [0|1] "" ECU
+   SG_ SteeringwheelButton_Dwn : 49|1@1+ (1,0) [0|1] "" ECU
+
+BO_ 1312 InstrCluster_2: 8 INSTR
+   SG_ LightDimmer : 8|8@1+ (1,0) [0|255] "" ECU
+   SG_ AmbientTemp : 24|8@1+ (0.5,-40) [-40|87.5] "degC" ECU
+   SG_ OilPressure : 32|8@1+ (0.04,0) [0|10.2] "bar" ECU
+   SG_ Counter_Unknown : 40|8@1+ (1,0) [0|255] "" ECU
+
+BO_ 1088 AT_Line1: 8 TCU
+   SG_ PRND_Pos : 16|8@1+ (1,0) [0|255] "" INSTR
+
+BO_ 192 SWA: 2 STEER
+   SG_ Vorzeichen__RB_ : 15|1@1+ (1,0) [0|1] "" INSTR
+   SG_ Lenkwinkel__RB_ : 5|10@1+ (2.5,-720) [-720|1837.5] "" INSTR
+   SG_ LWS_OK__RB_ : 4|1@1+ (1,0) [0|1] "" INSTR
+   SG_ LWS_Abgleich__RB_ : 3|1@1+ (1,0) [0|1] "" INSTR
+   SG_ Frei_Lenkwinkel_1_1__RB_ : 2|1@1+ (1,0) [0|1] "" UNKNOWN
+   SG_ FINE_CHECK__RB_ : 1|1@1+ (1,0) [0|1] "" INSTR
+   SG_ COARSE_CHECK__RB_ : 0|1@1+ (1,0) [0|1] "" INSTR
+
+BO_ 1272 Unknown_4F8: 8 ECU
+
+BO_ 1376 Unknown_560: 8 INSTR
+
+BO_ 1952 Unknown_7A0: 8 ECU
+
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_ "GenMsgForegroundColor" BO_ 640 "#000000";
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
+BA_DEF_DEF_ "matchingcriteria" 0;
+BA_DEF_DEF_ "filterlabeling" false;
+CM_ BO_ 640 "0x280. Compiled from DBC + 'more infos' notes + Teensy sender. RPM scaling matches Teensy (raw = rpm*4). Time slice: 30ms.";
+CM_ BO_ 649 "0x289. Motor_2 mapped from VW PQ Motor_2 layout; replaces original EngineTemp mapping. Time slice: 30ms.";
+CM_ BO_ 664 "0x298. Several signals marked 'Turbo? Unsure' in notes; Speed_raw scaling unknown. Time slice: 30ms.";
+CM_ BO_ 680 "0x2A8. Using legacy 15-bit wheel-speed variant.";
+CM_ BO_ 416 "0x1A0. Uses Bremse_1 BR1 mapping with ASR/MSR/ABS status bits, 15-bit vehicle speed, torque fields, and message counter/status bits 56..63.";
+CM_ BO_ 1185 "0x4A1. Compiled from DBC notes list. BrakeNormal_or_Offset depends on multiplex code (bits 30-31).";
+CM_ BO_ 1248 "0x4E0. Uses byte0 status/lamp interpretation on bits 0..7 plus MO5 lamp/consumption layout on bits 9..31. Time slice: 30ms.";
+CM_ BO_ 1296 "0x510. VehicleSpeed scaling/offset from notes list appears unusual; treat as working hypothesis.";
+CM_ BO_ 1312 "0x520. AmbientTemp and OilPressure from notes/DBC list. OilPressure offset not specified in notes; assumed 0.";
+CM_ BO_ 1088 "0x440. PRND mapping from notes: P=128, R=119, N=96, D=81, M=225.";
+CM_ BO_ 192 "0x00C0. RB Lenkwinkel_1 layout: DLC=2, angle on bits 5..14 (factor 2.5, offset -720) plus Vorzeichen/LWS status/check bits.";
+CM_ BO_ 1272 "0x4F8. Message observed/listed but signals unknown.";
+CM_ BO_ 1376 "0x560. Message observed/listed but signals unknown.";
+CM_ BO_ 1952 "0x7A0. Message observed/listed but signals unknown. Time slice: 30ms. Standard payload: 85 0C 00 03 00 00 FF 02.";
+VAL_ 1088 PRND_Pos 128 "P" 119 "R" 96 "N" 81 "D" 225 "M";

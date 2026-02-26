@@ -9,3 +9,10 @@ data/assets/*
 !data/assets/.gitkeep
 data_spiffs/assets/*
 !data_spiffs/assets/.gitkeep
+
+# Local stage snapshots
+/archives/
+/archives/**
+archives/**
+!archives/.gitkeep
+!archives/stages/.gitkeep

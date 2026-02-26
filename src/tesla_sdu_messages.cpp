@@ -1,11 +1,11 @@
-﻿#include "tesla_sdu_messages.h"
+#include "tesla_sdu_messages.h"
 #include "986_can_codec.h"
 #include "can_utils.h"
 namespace params {
 TeslaSduSignals tesla_sdu;
 }
 
-bool decode0x320(const CANMessage &frame) {
+bool decodeTeslaSdu0x320(const CANMessage &frame) {
     if (frame.id != 0x320 || frame.len < 8) {
         return false;
     }
@@ -19,7 +19,7 @@ bool decode0x320(const CANMessage &frame) {
     return true;
 }
 
-void encode0x320(CANMessage &frame) {
+void encodeTeslaSdu0x320(CANMessage &frame) {
     frame.id = 0x320;
     frame.len = 8;
     for (uint8_t i = 0; i < 8; i++) {
@@ -34,7 +34,7 @@ void encode0x320(CANMessage &frame) {
     writeBitsLE(frame.data, 40, 8, (uint8_t)params::tesla_sdu.din_bms);
 }
 
-bool decode0x321(const CANMessage &frame) {
+bool decodeTeslaSdu0x321(const CANMessage &frame) {
     if (frame.id != 0x321 || frame.len < 8) {
         return false;
     }
@@ -46,7 +46,7 @@ bool decode0x321(const CANMessage &frame) {
     return true;
 }
 
-void encode0x321(CANMessage &frame) {
+void encodeTeslaSdu0x321(CANMessage &frame) {
     frame.id = 0x321;
     frame.len = 8;
     for (uint8_t i = 0; i < 8; i++) {
@@ -59,7 +59,7 @@ void encode0x321(CANMessage &frame) {
     writeBitsLE(frame.data, 32, 32, (uint32_t)rawIdc);
 }
 
-bool decode0x322(const CANMessage &frame) {
+bool decodeTeslaSdu0x322(const CANMessage &frame) {
     if (frame.id != 0x322 || frame.len < 8) {
         return false;
     }
@@ -71,7 +71,7 @@ bool decode0x322(const CANMessage &frame) {
     return true;
 }
 
-void encode0x322(CANMessage &frame) {
+void encodeTeslaSdu0x322(CANMessage &frame) {
     frame.id = 0x322;
     frame.len = 8;
     for (uint8_t i = 0; i < 8; i++) {
@@ -84,7 +84,7 @@ void encode0x322(CANMessage &frame) {
     writeBitsLE(frame.data, 48, 16, (uint16_t)params::tesla_sdu.pot2);
 }
 
-bool decode0x323(const CANMessage &frame) {
+bool decodeTeslaSdu0x323(const CANMessage &frame) {
     if (frame.id != 0x323 || frame.len < 8) {
         return false;
     }
@@ -98,7 +98,7 @@ bool decode0x323(const CANMessage &frame) {
     return true;
 }
 
-void encode0x323(CANMessage &frame) {
+void encodeTeslaSdu0x323(CANMessage &frame) {
     frame.id = 0x323;
     frame.len = 8;
     for (uint8_t i = 0; i < 8; i++) {
@@ -113,7 +113,7 @@ void encode0x323(CANMessage &frame) {
     writeBitsLE(frame.data, 40, 8, (uint8_t)params::tesla_sdu.seldir43);
 }
 
-bool decode0x324(const CANMessage &frame) {
+bool decodeTeslaSdu0x324(const CANMessage &frame) {
     if (frame.id != 0x324 || frame.len < 8) {
         return false;
     }
@@ -127,7 +127,7 @@ bool decode0x324(const CANMessage &frame) {
     return true;
 }
 
-void encode0x324(CANMessage &frame) {
+void encodeTeslaSdu0x324(CANMessage &frame) {
     frame.id = 0x324;
     frame.len = 8;
     for (uint8_t i = 0; i < 8; i++) {
@@ -142,6 +142,13 @@ void encode0x324(CANMessage &frame) {
     writeBitsLE(frame.data, 32, 16, (uint16_t)rawUaux);
 }
 
-
-
-
+bool decodeTeslaSdu(const CANMessage &frame) {
+    switch (frame.id) {
+        case 0x320: return decodeTeslaSdu0x320(frame);
+        case 0x321: return decodeTeslaSdu0x321(frame);
+        case 0x322: return decodeTeslaSdu0x322(frame);
+        case 0x323: return decodeTeslaSdu0x323(frame);
+        case 0x324: return decodeTeslaSdu0x324(frame);
+        default: return false;
+    }
+}

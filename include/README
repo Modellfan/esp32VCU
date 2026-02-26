@@ -1,6 +1,0 @@
-
-This directory holds project-specific public headers.
-
-Currently used headers:
-
-* `tusb_config.h` - TinyUSB configuration for the ESP32-S3 build (dual CDC).

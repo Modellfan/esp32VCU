@@ -31,27 +31,27 @@ inline void canManager_setup() {
     SPI.begin(MCP2515_SCK, MCP2515_MISO, MCP2515_MOSI);
 
     // Configure ACAN2515 for CAN1.
-    MONITOR_PORT.println("Configuring ACAN2515 CAN 1...");
+    GVRET_PORT.println("Configuring ACAN2515 CAN 1...");
     ACAN2515Settings settings(QUARTZ_FREQUENCY, 500UL * 1000UL);
     settings.mRequestedMode = ACAN2515Settings::NormalMode;
     const uint16_t errorCode = can.begin(settings, []{ can.isr(); });
     if (errorCode == 0)
-        MONITOR_PORT.println("CAN Initialized Successfully!");
+        GVRET_PORT.println("CAN Initialized Successfully!");
     else {
-        MONITOR_PORT.print("Configuration error: 0x");
-        MONITOR_PORT.println(errorCode, HEX);
+        GVRET_PORT.print("Configuration error: 0x");
+        GVRET_PORT.println(errorCode, HEX);
     }
     
     // Configure ACAN2515 for CAN2.
-    MONITOR_PORT.println("Configuring ACAN2515 CAN2...");
+    GVRET_PORT.println("Configuring ACAN2515 CAN2...");
     ACAN2515Settings settings2(QUARTZ_FREQUENCY, 500UL * 1000UL);
     settings2.mRequestedMode = ACAN2515Settings::NormalMode;
     const uint16_t errorCode2 = can2.begin(settings2, []{ can2.isr(); });
     if (errorCode2 == 0)
-        MONITOR_PORT.println("CAN Initialized Successfully!");
+        GVRET_PORT.println("CAN Initialized Successfully!");
     else {
-        MONITOR_PORT.print("Configuration error: 0x");
-        MONITOR_PORT.println(errorCode2, HEX);
+        GVRET_PORT.print("Configuration error: 0x");
+        GVRET_PORT.println(errorCode2, HEX);
     }
 }
 

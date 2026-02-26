@@ -9,6 +9,7 @@ Before and after each task in this runbook, update [`IMPLEMENTATION_LOG.md`](../
 Required flow:
 - Create a new timestamped entry title: `YYYY-MM-DD HH:MM:SS +/-TZ - Task Title`.
 - Fill `Planned Steps` before changing files.
+- Before any code/doc change, create a stage snapshot and record `stage_id` + `stage_path` in the same log entry.
 - After implementation, fill `Changes Made`, `Automated Tests Run`, `Result`, and `Artifacts`.
 - Run a validation test after each implementation step, then record that command/result immediately.
 - Put only blockers/assumptions in `Notes` (do not place metrics or artifact lists in `Notes`).
@@ -41,9 +42,28 @@ Required format:
   - `// ====================================================================================================`
 - Place all `run_*selftest` implementations under that divider.
 
+## UI Layout Convention
+
+For ECU page controls, keep tile widths consistent:
+- Slider visual controls must be `2x1` (span full row across 2 columns).
+- Boolean controls must be `1x1`.
+- Value tiles must be `1x1`.
+
+Implementation expectation:
+- Encode this in CSS classes (`.slider-tile`, `.control-tile`, `.value-tile`) so it remains enforced for future edits.
+
 ## Stage Archiving Workflow
 
 Use `tools/stage_archive.ps1` to keep restore points before code changes.
+
+Mandatory gate:
+- Do not edit code/docs until a snapshot is created for the exact files you are about to modify.
+- Record `SNAPSHOT_OK stage=<stage_id>` and `stage_path=...` in `IMPLEMENTATION_LOG.md` before proceeding.
+
+Git tracking rule:
+- Keep all generated stage archive contents out of git at all times.
+- Enforce root-level ignore for `archives/` in `.gitignore`.
+- Only placeholder keep-files are allowed (`archives/.gitkeep`, `archives/stages/.gitkeep`).
 
 ### Create a snapshot
 
@@ -52,6 +72,12 @@ powershell -ExecutionPolicy Bypass -File tools\stage_archive.ps1 `
   -Action snapshot `
   -Label "before_<change_name>" `
   -Paths src/dev/upload_ui_test_v5 src/dev/sd_http_upload_ui_test_v5.cpp tools/upload_ui_tester_v5.py
+```
+
+If `-Paths` parsing fails in your shell, use this robust form:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "& { .\tools\stage_archive.ps1 -Action snapshot -Label 'before_<change_name>' -Paths @('path1','path2','path3') }"
 ```
 
 Output includes:
