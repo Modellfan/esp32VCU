@@ -68,7 +68,7 @@ struct EcuSignals {
     bool mo5_klimakompr = false;
     bool mo5_feld_kuehl = false;
     bool mo5_kliko_red = false;
-    uint16_t mo5_verbrauch_ul = 0;
+    uint32_t mo5_verbrauch_ul = 0;
     bool mo5_ueberlverb = false;
 
     uint8_t unknown_4f8[8] = {0};

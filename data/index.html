@@ -119,6 +119,7 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
           <div class="tile"><div class="label">Power Percent Max</div><div class="value" id="cc_power_percent_max">0.000</div></div>
           <div class="tile"><div class="label">Power Percent Dyn</div><div class="value" id="cc_power_percent_dyn">0.000</div></div>
           <div class="tile"><div class="label">Needle Position</div><div class="value" id="cc_needle_position">0</div></div>
+          <div class="tile"><div class="label">Total Fuel</div><div class="value" id="cc_total_fuel_l">0.000 L</div></div>
           <div class="tile"><div class="label">Heatsink Temp Critical</div><div class="value" id="cc_heatsink_temp_critical">OFF</div></div>
           <div class="tile"><div class="label">Motor Temp Critical</div><div class="value" id="cc_motor_temp_critical">OFF</div></div>
         </div>
@@ -135,7 +136,9 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
     <div class="tab" id="tabTesla" role="button" aria-label="Electric Engine" tabindex="0">
       <img src="/i_sdu.svg" alt="Electric Engine">
     </div>
-    <div class="tab" id="tabCluster" role="button" aria-label="Cluster Calculation" tabindex="0">CL</div>
+    <div class="tab" id="tabCluster" role="button" aria-label="Cluster Calculation" tabindex="0">
+      <img src="/i_cluster.svg" alt="Cluster Calculation">
+    </div>
   </nav>
 </div>
 <script>
@@ -341,6 +344,31 @@ function queueEcuControlUpdate(){
   ecuControlTimer = setTimeout(pushEcuControlUpdate, 180);
 }
 
+function isHalfTileDef(def){
+  return def.type === "bool" || def.ui === "value";
+}
+
+function isFullTileDef(def){
+  return !isHalfTileDef(def);
+}
+
+function normalizeTileOrder(defs){
+  const out = defs.slice();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i + 2 < out.length; i++) {
+      if (isHalfTileDef(out[i]) && isFullTileDef(out[i + 1]) && isHalfTileDef(out[i + 2])) {
+        const tmp = out[i + 1];
+        out[i + 1] = out[i + 2];
+        out[i + 2] = tmp;
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
+
 function formatEcuControlValue(def, raw){
   if (def.type === "bool") return raw ? "ON" : "OFF";
   const decimals = (String(def.step || "1").indexOf(".") >= 0) ? String(def.step).split(".")[1].length : 0;
@@ -362,7 +390,8 @@ async function pushEcuControlUpdate(){
 function initEcuControls(){
   const grid = document.getElementById("ecuControlGrid");
   if (!grid) return;
-  grid.innerHTML = ecuControlDefs.map(def => {
+  const orderedDefs = normalizeTileOrder(ecuControlDefs);
+  grid.innerHTML = orderedDefs.map(def => {
     if (def.type === "bool") {
       return `<div class="control-tile"><div class="control-label">${def.label}</div><div class="switch-row"><span class="switch-state" id="ecv_${def.key}">OFF</span><label><input class="toggle" id="ec_${def.key}" type="checkbox"><span class="toggle-ui"></span></label></div></div>`;
     }
@@ -454,6 +483,7 @@ async function refreshNow(){
     setText("cc_power_percent_max", Number(d.cluster_power_percent_max || 0).toFixed(3));
     setText("cc_power_percent_dyn", Number(d.cluster_power_percent_dyn || 0).toFixed(3));
     setText("cc_needle_position", String(d.cluster_needle_position ?? 0));
+    setText("cc_total_fuel_l", Number(d.cluster_total_fuel_l || 0).toFixed(3) + " L");
     setText("cc_heatsink_temp_critical", d.cluster_heatsink_temp_critical ? "ON" : "OFF");
     setText("cc_motor_temp_critical", d.cluster_motor_temp_critical ? "ON" : "OFF");
     setText("ssid", d.ap_ssid);

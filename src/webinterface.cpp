@@ -4,6 +4,7 @@
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <stdlib.h>
 #include "tesla_sdu_messages.h"
 #include "986_vehicle_messages.h"
 #include "986_ecu_messages.h"
@@ -190,6 +191,7 @@ static String getLiveJson() {
     addNum("cluster_power_percent_max", params::cluster.power_percent_max, 3);
     addNum("cluster_power_percent_dyn", params::cluster.power_percent_dyn, 3);
     addInt("cluster_needle_position", params::cluster.needle_position);
+    addNum("cluster_total_fuel_l", params::cluster.total_fuel, 3);
     addBool("cluster_heatsink_temp_critical", params::cluster.heatsink_temp_critical);
     addBool("cluster_motor_temp_critical", params::cluster.motor_temp_critical);
 
@@ -263,7 +265,7 @@ static void handleSet() {
         params::ecu.motor2_coolant_temperature = server.arg("coolant").toFloat();
     }
     if (server.hasArg("oil")) {
-        params::ecu.mo5_verbrauch_ul = (uint16_t)server.arg("oil").toInt();
+        params::ecu.mo5_verbrauch_ul = (uint32_t)strtoul(server.arg("oil").c_str(), nullptr, 10);
     }
     server.send(200, "application/json", getLiveJson());
 }
@@ -283,9 +285,9 @@ static void handleSetEcu() {
             dst = (uint8_t)server.arg(key).toInt();
         }
     };
-    auto setU16 = [&](const char *key, uint16_t &dst) {
+    auto setU32 = [&](const char *key, uint32_t &dst) {
         if (server.hasArg(key)) {
-            dst = (uint16_t)server.arg(key).toInt();
+            dst = (uint32_t)strtoul(server.arg(key).c_str(), nullptr, 10);
         }
     };
     auto setBool = [&](const char *key, bool &dst) {
@@ -324,7 +326,7 @@ static void handleSetEcu() {
     setBool("mo5_klimakompr", params::ecu.mo5_klimakompr);
     setBool("mo5_feld_kuehl", params::ecu.mo5_feld_kuehl);
     setBool("mo5_kliko_red", params::ecu.mo5_kliko_red);
-    setU16("mo5_verbrauch_ul", params::ecu.mo5_verbrauch_ul);
+    setU32("mo5_verbrauch_ul", params::ecu.mo5_verbrauch_ul);
     setBool("mo5_ueberlverb", params::ecu.mo5_ueberlverb);
     setBool("check_engine_light", params::ecu.check_engine_light);
     setBool("check_engine_light_bit1", params::ecu.check_engine_light_bit1);
@@ -376,6 +378,7 @@ void webinterfaceBegin() {
         server.serveStatic("/i_car.svg", SPIFFS, "/i_car.svg");
         server.serveStatic("/i_ecu.svg", SPIFFS, "/i_ecu.svg");
         server.serveStatic("/i_sdu.svg", SPIFFS, "/i_sdu.svg");
+        server.serveStatic("/i_cluster.svg", SPIFFS, "/i_cluster.svg");
     }
     server.onNotFound(handleNotFound);
     server.begin();

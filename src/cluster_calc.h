@@ -7,6 +7,7 @@ namespace params {
 
 struct ClusterSignals {
     bool activated = false;
+    float total_fuel = 0.0f;
     float power_percent_max = 0.0f;
     float power_percent_dyn = 0.0f;
     int needle_position = 0;
@@ -20,6 +21,6 @@ extern ClusterSignals cluster;
 
 float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode);
 int needleFromPercent(int8_t dir, float percentSigned);
-void updateClusterFromTeslaSdu();
+void updateCluster();
 
 #endif

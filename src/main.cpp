@@ -47,7 +47,7 @@ void pollVehicleCAN()
     while (can.available())
     {
         can.receive(frame);
-        sendFrameToUSB(frame, 1);
+        //sendFrameToUSB(frame, 1);
 
         (void)decode986Vehicle(frame);
     }
@@ -62,7 +62,7 @@ void pollTeslaCAN()
     while (can2.available())
     {
         can2.receive(frame);
-        sendFrameToUSB(frame, 2);
+        //sendFrameToUSB(frame, 2);
         (void)decodeTeslaSdu(frame);
     }
 }
@@ -97,7 +97,7 @@ void emulateECUCAN()
     }
 
     can.tryToSend(outFrame);
-    sendFrameToUSB(outFrame, 0); // 0 to differentiate between received and sent frames in SavvyCAN
+    //sendFrameToUSB(outFrame, 0); // 0 to differentiate between received and sent frames in SavvyCAN
 
     slot++;
     if (slot >= 5U)
@@ -128,7 +128,7 @@ void blinkLED()
 void setup()
 {
     // Initialize the primary Serial port for GVRET communication.
-    Serial.begin(1000000);
+    Serial.begin(250000);
 
     // Initialize built-in RGB LED utility.
     fastledInit();
@@ -146,6 +146,6 @@ void loop()
     runner.execute();
     pollVehicleCAN();
     pollTeslaCAN();
-    updateClusterFromTeslaSdu();
+    updateCluster();
     gvret_loop();
 }

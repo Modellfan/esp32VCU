@@ -210,7 +210,7 @@ bool decode986Ecu0x4E0(const CANMessage &frame) {
     params::ecu.mo5_klimakompr = readBitsLE(frame.data, 13, 1) != 0;
     params::ecu.mo5_feld_kuehl = readBitsLE(frame.data, 14, 1) != 0;
     params::ecu.mo5_kliko_red = readBitsLE(frame.data, 15, 1) != 0;
-    params::ecu.mo5_verbrauch_ul = (uint16_t)readBitsLE(frame.data, 16, 15);
+    params::ecu.mo5_verbrauch_ul = readBitsLE(frame.data, 16, 15);
     params::ecu.mo5_ueberlverb = readBitsLE(frame.data, 31, 1) != 0;
     return true;
 }
@@ -231,7 +231,8 @@ void encode986Ecu0x4E0(CANMessage &frame) {
     writeBitsLE(frame.data, 6, 1, params::ecu.engine_stat_bool6 ? 1U : 0U);
     writeBitsLE(frame.data, 7, 1, params::ecu.engine_stat_bool7 ? 1U : 0U);
 
-    const uint16_t rawVerbrauch = (uint16_t)(params::ecu.mo5_verbrauch_ul & 0x7FFFU);
+    const uint32_t cappedVerbrauch = (params::ecu.mo5_verbrauch_ul > 0x7FFFU) ? 0x7FFFU : params::ecu.mo5_verbrauch_ul;
+    const uint16_t rawVerbrauch = (uint16_t)cappedVerbrauch;
     writeBitsLE(frame.data, 9, 1, params::ecu.mo5_vorgluehen ? 1U : 0U);
     writeBitsLE(frame.data, 10, 1, params::ecu.mo5_e_gas ? 1U : 0U);
     writeBitsLE(frame.data, 11, 1, params::ecu.mo5_obd_2 ? 1U : 0U);

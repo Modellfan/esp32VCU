@@ -37,11 +37,16 @@
 #define MO2_KUEHLM_T_MAX_C ((MO2_KUEHLM_T_RAW_MAX * MO2_KUEHLM_T_FACTOR) + MO2_KUEHLM_T_OFFSET)
 
 // Needle values
-#define NEEDLE_REVERSE_VALUE 150
-#define NEEDLE_NEUTRAL_VALUE 750
-#define NEEDLE_OFFSET_VALUE 4090
-#define NEEDLE_DRIVE_MAX_VALUE 8400
-#define NEEDLE_REGEN_MIN_VALUE 1760
+#define NEEDLE_REVERSE_VALUE 35
+#define NEEDLE_NEUTRAL_VALUE 822
+#define NEEDLE_OFFSET_VALUE 4100
+#define NEEDLE_DRIVE_MAX_VALUE 7950
+#define NEEDLE_REGEN_MIN_VALUE 1600
+
+// Fuel simulation for MO5 consumption.
+#define FUEL_SLICE_PERIOD_MS 30U
+#define FUEL_STEP_UL 500U
+#define FUEL_MAX_L 20.0f
 
 namespace params {
 ClusterSignals cluster;
@@ -61,9 +66,7 @@ static inline float lerpf(float a, float b, float t) {
     return a + (b - a) * t;
 }
 
-static float powerPercentInternal(float battVoltage_V,
-                                  float motorCurrent_A,
-                                  uint8_t refMode) {
+float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode) {
     const bool isRegen = (motorCurrent_A < 0.0f);
     const float vRef = (refMode == REF_MODE_MAX_POWER) ? (float)REF_VOLTAGE_V : battVoltage_V;
 
@@ -84,12 +87,8 @@ static float powerPercentInternal(float battVoltage_V,
     return isRegen ? -percent : percent;
 }
 
-float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode) {
-    return powerPercentInternal(battVoltage_V, motorCurrent_A, refMode);
-}
-
 int needleFromPercent(int8_t dir, float percentSigned) {
-    if (dir < 0) return NEEDLE_REVERSE_VALUE;
+    if (dir > 0) return NEEDLE_REVERSE_VALUE;
     if (dir == 0) return NEEDLE_NEUTRAL_VALUE;
 
     const float p = clampf(percentSigned, -1.0f, 1.0f);
@@ -101,23 +100,41 @@ int needleFromPercent(int8_t dir, float percentSigned) {
     return (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_REGEN_MIN_VALUE, -p));
 }
 
-void updateClusterFromTeslaSdu() {
+void updateCluster() {
     const float battVoltage_V = params::tesla_sdu.udc;
     const float motorCurrent_A = params::tesla_sdu.idc;
     const int8_t direction = params::tesla_sdu.seldir;
+    static uint32_t s_lastFuelSliceMs = 0;
 
     params::cluster.power_percent_max = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_MAX_POWER);
     params::cluster.power_percent_dyn = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_DYN_POWER);
     params::cluster.needle_position = needleFromPercent(direction, params::cluster.power_percent_max);
-    params::ecu.cluster_needle_position = (uint16_t)((params::cluster.needle_position < 0) ? 0 : params::cluster.needle_position);
-
     params::cluster.heatsink_temp_critical = params::tesla_sdu.tmphs >= (float)MAX_HEATSINK_TEMP_C;
     params::cluster.motor_temp_critical = params::tesla_sdu.tmpm >= (float)MAX_MOTOR_TEMP_C;
 
     if (params::cluster.activated) {
+        // Cluster mode intentionally overwrites ECU values; UI reflects this through /api/live.
+        params::ecu.engine_speed_rpm = (float)params::cluster.needle_position;
         params::ecu.motor2_coolant_temperature =
             clampf(params::tesla_sdu.tmpm, (float)MO2_KUEHLM_T_MIN_C, (float)MO2_KUEHLM_T_MAX_C);
         params::ecu.motor2_coolant_temp_not_ok =
             params::cluster.heatsink_temp_critical || params::cluster.motor_temp_critical;
+
+        const uint32_t nowMs = millis();
+        if ((uint32_t)(nowMs - s_lastFuelSliceMs) >= FUEL_SLICE_PERIOD_MS) {
+            s_lastFuelSliceMs = nowMs;
+            if (params::cluster.total_fuel < (float)FUEL_MAX_L) {
+                params::cluster.total_fuel += ((float)FUEL_STEP_UL) * 0.000001f;
+                if (params::cluster.total_fuel > (float)FUEL_MAX_L) {
+                    params::cluster.total_fuel = (float)FUEL_MAX_L;
+                }
+                const float totalFuel_uL = params::cluster.total_fuel * 1000000.0f;
+                params::ecu.mo5_verbrauch_ul = (uint32_t)clampf(totalFuel_uL, 0.0f, 32767.0f);
+            } else {
+                params::ecu.mo5_verbrauch_ul = 32767U;
+            }
+        }
+    } else {
+        s_lastFuelSliceMs = millis();
     }
 }
