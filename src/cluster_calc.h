@@ -6,7 +6,7 @@
 namespace params {
 
 struct ClusterSignals {
-    bool activated = false;
+    bool activated = true;
     float total_fuel = 0.0f;
     float power_percent_max = 0.0f;
     float power_percent_dyn = 0.0f;

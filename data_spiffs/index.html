@@ -339,7 +339,14 @@ const ecuControlDefs = [
 ];
 
 let ecuControlTimer = null;
-function queueEcuControlUpdate(){
+const ecuPendingUntil = Object.create(null);
+const ecuPendingKeys = new Set();
+
+function queueEcuControlUpdate(key){
+  if (key) {
+    ecuPendingKeys.add(key);
+    ecuPendingUntil[key] = Date.now() + 1500;
+  }
   if (ecuControlTimer) clearTimeout(ecuControlTimer);
   ecuControlTimer = setTimeout(pushEcuControlUpdate, 180);
 }
@@ -384,7 +391,15 @@ async function pushEcuControlUpdate(){
     if (def.type === "bool") p.set(def.key, el.checked ? "1" : "0");
     else p.set(def.key, String(el.value));
   });
-  try { await fetch("/api/set-ecu?" + p.toString(), { cache:"no-store" }); } catch (_) {}
+  try {
+    const r = await fetch("/api/set-ecu?" + p.toString(), { cache:"no-store" });
+    if (r.ok) {
+      const d = await r.json();
+      updateEcuControlsFromLive(d);
+    }
+    ecuPendingKeys.forEach(k => { delete ecuPendingUntil[k]; });
+    ecuPendingKeys.clear();
+  } catch (_) {}
 }
 
 function initEcuControls(){
@@ -408,16 +423,18 @@ function initEcuControls(){
   ecuControlDefs.forEach(def => {
     const el = document.getElementById("ec_" + def.key);
     if (!el) return;
-    el.addEventListener("change", queueEcuControlUpdate);
-    if (def.type !== "bool") el.addEventListener("input", queueEcuControlUpdate);
+    el.addEventListener("change", () => queueEcuControlUpdate(def.key));
+    if (def.type !== "bool") el.addEventListener("input", () => queueEcuControlUpdate(def.key));
   });
 }
 
 function updateEcuControlsFromLive(d){
+  const now = Date.now();
   ecuControlDefs.forEach(def => {
     const el = document.getElementById("ec_" + def.key);
     const out = document.getElementById("ecv_" + def.key);
     if (!el || d[def.key] === undefined) return;
+    if ((ecuPendingUntil[def.key] || 0) > now) return;
     if (def.type === "bool") {
       const checked = !!d[def.key];
       el.checked = checked;
@@ -496,7 +513,7 @@ initVehicleTiles();
 initEcuControls();
 initClusterControls();
 refreshNow();
-setInterval(refreshNow, 500);
+setInterval(refreshNow, 800);
 </script>
 </body>
 </html>

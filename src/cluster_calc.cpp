@@ -42,11 +42,15 @@
 #define NEEDLE_OFFSET_VALUE 4100
 #define NEEDLE_DRIVE_MAX_VALUE 7950
 #define NEEDLE_REGEN_MIN_VALUE 1600
+#define NEEDLE_LAG 30
 
 // Fuel simulation for MO5 consumption.
-#define FUEL_SLICE_PERIOD_MS 30U
 #define FUEL_STEP_UL 500U
 #define FUEL_MAX_L 20.0f
+#define FUEL_SLICE_TICKS 5U
+#define NUM_FUEL_OVERFLOW_FLAG 5U
+#define MO5_VERBRAUCH_MAX 0x7FFFU
+#define MO5_VERBRAUCH_WRAP (MO5_VERBRAUCH_MAX + 1U)
 
 namespace params {
 ClusterSignals cluster;
@@ -64,6 +68,33 @@ static inline float clampf(float x, float lo, float hi) {
 
 static inline float lerpf(float a, float b, float t) {
     return a + (b - a) * t;
+}
+
+static uint32_t s_mo5LastOverflowCount = 0U;
+static uint8_t s_mo5OverflowFlagTicksRemaining = 0U;
+
+static void resetMo5FuelOverflowState() {
+    s_mo5LastOverflowCount = 0U;
+    s_mo5OverflowFlagTicksRemaining = 0U;
+    params::ecu.mo5_ueberlverb = false;
+}
+
+static void updateMo5FuelFromTotalFuel(float totalFuelL) {
+    const float fuelL = (totalFuelL < 0.0f) ? 0.0f : totalFuelL;
+    const uint32_t totalFuel_uL = (uint32_t)lroundf(fuelL * 1000000.0f);
+    const uint32_t overflowCount = totalFuel_uL / MO5_VERBRAUCH_WRAP;
+    const uint32_t rawAfterOverflow = totalFuel_uL % MO5_VERBRAUCH_WRAP;
+
+    if (overflowCount != s_mo5LastOverflowCount) {
+        s_mo5OverflowFlagTicksRemaining = NUM_FUEL_OVERFLOW_FLAG;
+        s_mo5LastOverflowCount = overflowCount;
+    }
+
+    params::ecu.mo5_verbrauch_ul = rawAfterOverflow;
+    params::ecu.mo5_ueberlverb = (s_mo5OverflowFlagTicksRemaining > 0U);
+    if (s_mo5OverflowFlagTicksRemaining > 0U) {
+        s_mo5OverflowFlagTicksRemaining--;
+    }
 }
 
 float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode) {
@@ -95,7 +126,9 @@ int needleFromPercent(int8_t dir, float percentSigned) {
     if (fabsf(p) < 0.05f) return NEEDLE_OFFSET_VALUE;
 
     if (p > 0.0f) {
-        return (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_DRIVE_MAX_VALUE, p));
+        const int base = (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_DRIVE_MAX_VALUE, p));
+        const int lagged = base + NEEDLE_LAG;
+        return (lagged > NEEDLE_DRIVE_MAX_VALUE) ? NEEDLE_DRIVE_MAX_VALUE : lagged;
     }
     return (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_REGEN_MIN_VALUE, -p));
 }
@@ -104,7 +137,7 @@ void updateCluster() {
     const float battVoltage_V = params::tesla_sdu.udc;
     const float motorCurrent_A = params::tesla_sdu.idc;
     const int8_t direction = params::tesla_sdu.seldir;
-    static uint32_t s_lastFuelSliceMs = 0;
+    static uint8_t s_fuelTickDivider = 0U;
 
     params::cluster.power_percent_max = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_MAX_POWER);
     params::cluster.power_percent_dyn = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_DYN_POWER);
@@ -120,21 +153,19 @@ void updateCluster() {
         params::ecu.motor2_coolant_temp_not_ok =
             params::cluster.heatsink_temp_critical || params::cluster.motor_temp_critical;
 
-        const uint32_t nowMs = millis();
-        if ((uint32_t)(nowMs - s_lastFuelSliceMs) >= FUEL_SLICE_PERIOD_MS) {
-            s_lastFuelSliceMs = nowMs;
+        s_fuelTickDivider++;
+        if (s_fuelTickDivider >= FUEL_SLICE_TICKS) {
+            s_fuelTickDivider = 0U;
             if (params::cluster.total_fuel < (float)FUEL_MAX_L) {
                 params::cluster.total_fuel += ((float)FUEL_STEP_UL) * 0.000001f;
                 if (params::cluster.total_fuel > (float)FUEL_MAX_L) {
                     params::cluster.total_fuel = (float)FUEL_MAX_L;
                 }
-                const float totalFuel_uL = params::cluster.total_fuel * 1000000.0f;
-                params::ecu.mo5_verbrauch_ul = (uint32_t)clampf(totalFuel_uL, 0.0f, 32767.0f);
-            } else {
-                params::ecu.mo5_verbrauch_ul = 32767U;
             }
+            updateMo5FuelFromTotalFuel(params::cluster.total_fuel);
         }
     } else {
-        s_lastFuelSliceMs = millis();
+        s_fuelTickDivider = 0U;
+        resetMo5FuelOverflowState();
     }
 }

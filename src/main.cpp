@@ -75,6 +75,9 @@ void emulateECUCAN()
     static uint8_t slot = 0;
     CANMessage outFrame;
 
+    // Keep cluster calculations time-aligned with ECU CAN emulation.
+    updateCluster();
+
     // 5 ECU frames x 6 ms slot = 30 ms full cycle, evenly distributed.
     switch (slot)
     {
@@ -146,6 +149,5 @@ void loop()
     runner.execute();
     pollVehicleCAN();
     pollTeslaCAN();
-    updateCluster();
     gvret_loop();
 }
