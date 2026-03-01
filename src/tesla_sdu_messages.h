@@ -27,6 +27,8 @@ struct TeslaSduSignals {
     int8_t seldir = 0;
     int8_t seldir43 = 0;
 
+    float tmphs = 0.0f;
+    float tmpm = 0.0f;
     float temperature_heatsink = 0.0f;
     float temperature_heatsink74 = 0.0f;
     float uaux = 0.0f;

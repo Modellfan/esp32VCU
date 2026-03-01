@@ -29,8 +29,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .app{position:fixed;inset:0;height:var(--vh);min-height:var(--vh);display:flex;flex-direction:column;padding:calc(12px + var(--safeT)) 16px calc(80px + var(--safeB));gap:10px}
 .header{font-size:24px;font-weight:750;padding:6px 0 10px}
 .pager{flex:1;min-height:0;overflow:hidden}
-.track{height:100%;display:flex;width:300%;transition:transform .25s ease}
-.page{width:33.3333%;height:100%;overflow:auto;padding:6px 0 calc(76px + var(--safeB));scrollbar-width:thin;scrollbar-color:#ff2d2d #101014}
+.track{height:100%;display:flex;width:400%;transition:transform .25s ease}
+.page{width:25%;height:100%;overflow:auto;padding:6px 0 calc(76px + var(--safeB));scrollbar-width:thin;scrollbar-color:#ff2d2d #101014}
 .page::-webkit-scrollbar{width:8px}
 .page::-webkit-scrollbar-track{background:#101014;border-radius:999px}
 .page::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#2d6cff,#ff2d2d);border-radius:999px}
@@ -102,9 +102,25 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
           <div class="tile"><div class="label">Regen Available 2</div><div class="value" id="sdu_regenpresent32">0.00 %</div></div>
           <div class="tile"><div class="label">Selected Direction</div><div class="value" id="sdu_seldir">0</div></div>
           <div class="tile"><div class="label">Selected Direction Aux</div><div class="value" id="sdu_seldir43">0</div></div>
-          <div class="tile"><div class="label">Heatsink Temperature 1</div><div class="value" id="sdu_temp_heatsink">0.00 degC</div></div>
-          <div class="tile"><div class="label">Heatsink Temperature 2</div><div class="value" id="sdu_temp_heatsink74">0.00 degC</div></div>
+          <div class="tile"><div class="label">tmphs</div><div class="value" id="sdu_tmphs">0.00 degC</div></div>
+          <div class="tile"><div class="label">tmpm</div><div class="value" id="sdu_tmpm">0.00 degC</div></div>
           <div class="tile"><div class="label">Auxiliary Voltage</div><div class="value" id="sdu_uaux">0.00 V</div></div>
+        </div>
+      </div>
+      <div class="page">
+        <div class="grid">
+          <div class="control-tile">
+            <div class="control-label">Cluster Activated</div>
+            <div class="switch-row">
+              <span class="switch-state" id="ccv_activated">OFF</span>
+              <label><input class="toggle" id="cc_activated" type="checkbox"><span class="toggle-ui"></span></label>
+            </div>
+          </div>
+          <div class="tile"><div class="label">Power Percent Max</div><div class="value" id="cc_power_percent_max">0.000</div></div>
+          <div class="tile"><div class="label">Power Percent Dyn</div><div class="value" id="cc_power_percent_dyn">0.000</div></div>
+          <div class="tile"><div class="label">Needle Position</div><div class="value" id="cc_needle_position">0</div></div>
+          <div class="tile"><div class="label">Heatsink Temp Critical</div><div class="value" id="cc_heatsink_temp_critical">OFF</div></div>
+          <div class="tile"><div class="label">Motor Temp Critical</div><div class="value" id="cc_motor_temp_critical">OFF</div></div>
         </div>
       </div>
     </div>
@@ -119,6 +135,7 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
     <div class="tab" id="tabTesla" role="button" aria-label="Electric Engine" tabindex="0">
       <img src="/i_sdu.svg" alt="Electric Engine">
     </div>
+    <div class="tab" id="tabCluster" role="button" aria-label="Cluster Calculation" tabindex="0">CL</div>
   </nav>
 </div>
 <script>
@@ -142,18 +159,20 @@ function setActiveTab(p){
   if (p === 0) document.getElementById("tabLive").classList.add("active");
   if (p === 1) document.getElementById("tabSettings").classList.add("active");
   if (p === 2) document.getElementById("tabTesla").classList.add("active");
+  if (p === 3) document.getElementById("tabCluster").classList.add("active");
 }
 
 function setPage(p){
-  page = Math.max(0, Math.min(2, p));
-  track.style.transform = "translateX(" + (-page * 33.333333) + "%)";
-  title.textContent = page === 0 ? "Vehicle Data" : (page === 1 ? "ECU Data" : "Tesla SDU");
+  page = Math.max(0, Math.min(3, p));
+  track.style.transform = "translateX(" + (-page * 25) + "%)";
+  title.textContent = page === 0 ? "Vehicle Data" : (page === 1 ? "ECU Data" : (page === 2 ? "Tesla SDU" : "Cluster Calculation"));
   setActiveTab(page);
 }
 
 document.getElementById("tabLive").onclick = () => setPage(0);
 document.getElementById("tabSettings").onclick = () => setPage(1);
 document.getElementById("tabTesla").onclick = () => setPage(2);
+document.getElementById("tabCluster").onclick = () => setPage(3);
 document.querySelectorAll(".tab").forEach(el => {
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
@@ -179,7 +198,7 @@ pager.addEventListener("pointermove", e => {
     return;
   }
   dx = mx;
-  track.style.transform = "translateX(" + (-page * 33.333333 + (dx / pager.clientWidth) * 100) + "%)";
+  track.style.transform = "translateX(" + (-page * 25 + (dx / pager.clientWidth) * 100) + "%)";
 });
 function endDrag(){
   if (!dragging) return;
@@ -381,6 +400,30 @@ function updateEcuControlsFromLive(d){
     }
   });
 }
+
+async function pushClusterSettings(){
+  const el = document.getElementById("cc_activated");
+  if (!el) return;
+  const p = new URLSearchParams();
+  p.set("activated", el.checked ? "1" : "0");
+  try { await fetch("/api/set-cluster?" + p.toString(), { cache:"no-store" }); } catch (_) {}
+}
+
+function initClusterControls(){
+  const el = document.getElementById("cc_activated");
+  if (!el) return;
+  el.addEventListener("change", pushClusterSettings);
+}
+
+function updateClusterControlsFromLive(d){
+  const el = document.getElementById("cc_activated");
+  const out = document.getElementById("ccv_activated");
+  if (!el || d.cluster_activated === undefined) return;
+  const checked = !!d.cluster_activated;
+  if (document.activeElement !== el) el.checked = checked;
+  if (out) out.textContent = checked ? "ON" : "OFF";
+}
+
 async function refreshNow(){
   try {
     const r = await fetch("/api/live", { cache: "no-store" });
@@ -388,6 +431,7 @@ async function refreshNow(){
     const d = await r.json();
     vehicleSignals.forEach(s => setText("vs_" + s.key, s.fmt(d)));
     updateEcuControlsFromLive(d);
+    updateClusterControlsFromLive(d);
     setText("sdu_opmode", d.sdu_opmode);
     setText("sdu_lasterr", d.sdu_lasterr);
     setText("sdu_status", d.sdu_status);
@@ -404,9 +448,14 @@ async function refreshNow(){
     setText("sdu_regenpresent32", Number(d.sdu_regenpresent32).toFixed(2) + " %");
     setText("sdu_seldir", d.sdu_seldir);
     setText("sdu_seldir43", d.sdu_seldir43);
-    setText("sdu_temp_heatsink", Number(d.sdu_temp_heatsink).toFixed(2) + " degC");
-    setText("sdu_temp_heatsink74", Number(d.sdu_temp_heatsink74).toFixed(2) + " degC");
+    setText("sdu_tmphs", Number(d.sdu_tmphs).toFixed(2) + " degC");
+    setText("sdu_tmpm", Number(d.sdu_tmpm).toFixed(2) + " degC");
     setText("sdu_uaux", Number(d.sdu_uaux).toFixed(2) + " V");
+    setText("cc_power_percent_max", Number(d.cluster_power_percent_max || 0).toFixed(3));
+    setText("cc_power_percent_dyn", Number(d.cluster_power_percent_dyn || 0).toFixed(3));
+    setText("cc_needle_position", String(d.cluster_needle_position ?? 0));
+    setText("cc_heatsink_temp_critical", d.cluster_heatsink_temp_critical ? "ON" : "OFF");
+    setText("cc_motor_temp_critical", d.cluster_motor_temp_critical ? "ON" : "OFF");
     setText("ssid", d.ap_ssid);
     setText("ip", d.ap_ip);
   } catch (_) {}
@@ -415,6 +464,7 @@ async function refreshNow(){
 setPage(0);
 initVehicleTiles();
 initEcuControls();
+initClusterControls();
 refreshNow();
 setInterval(refreshNow, 500);
 </script>

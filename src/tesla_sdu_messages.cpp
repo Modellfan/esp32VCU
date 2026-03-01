@@ -121,8 +121,10 @@ bool decodeTeslaSdu0x324(const CANMessage &frame) {
     const int16_t rawTempHeatsink = (int16_t)can986::signExtend(readBitsLE(frame.data, 0, 16), 16);
     const int16_t rawTempHeatsink74 = (int16_t)can986::signExtend(readBitsLE(frame.data, 16, 16), 16);
     const int16_t rawUaux = (int16_t)can986::signExtend(readBitsLE(frame.data, 32, 16), 16);
-    params::tesla_sdu.temperature_heatsink = rawTempHeatsink * 0.01f;
-    params::tesla_sdu.temperature_heatsink74 = rawTempHeatsink74 * 0.01f;
+    params::tesla_sdu.tmphs = rawTempHeatsink * 0.01f;
+    params::tesla_sdu.tmpm = rawTempHeatsink74 * 0.01f;
+    params::tesla_sdu.temperature_heatsink = params::tesla_sdu.tmphs;
+    params::tesla_sdu.temperature_heatsink74 = params::tesla_sdu.tmpm;
     params::tesla_sdu.uaux = rawUaux * 0.01f;
     return true;
 }
@@ -134,8 +136,8 @@ void encodeTeslaSdu0x324(CANMessage &frame) {
         frame.data[i] = 0;
     }
 
-    const int16_t rawTempHeatsink = (int16_t)(params::tesla_sdu.temperature_heatsink / 0.01f);
-    const int16_t rawTempHeatsink74 = (int16_t)(params::tesla_sdu.temperature_heatsink74 / 0.01f);
+    const int16_t rawTempHeatsink = (int16_t)(params::tesla_sdu.tmphs / 0.01f);
+    const int16_t rawTempHeatsink74 = (int16_t)(params::tesla_sdu.tmpm / 0.01f);
     const int16_t rawUaux = (int16_t)(params::tesla_sdu.uaux / 0.01f);
     writeBitsLE(frame.data, 0, 16, (uint16_t)rawTempHeatsink);
     writeBitsLE(frame.data, 16, 16, (uint16_t)rawTempHeatsink74);

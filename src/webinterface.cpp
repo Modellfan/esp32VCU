@@ -7,6 +7,7 @@
 #include "tesla_sdu_messages.h"
 #include "986_vehicle_messages.h"
 #include "986_ecu_messages.h"
+#include "cluster_calc.h"
 
 static constexpr const char *kApSsid = "eboxster";
 static WebServer server(80);
@@ -182,7 +183,15 @@ static String getLiveJson() {
 
     addNum("sdu_temp_heatsink", params::tesla_sdu.temperature_heatsink, 2);
     addNum("sdu_temp_heatsink74", params::tesla_sdu.temperature_heatsink74, 2);
+    addNum("sdu_tmphs", params::tesla_sdu.tmphs, 2);
+    addNum("sdu_tmpm", params::tesla_sdu.tmpm, 2);
     addNum("sdu_uaux", params::tesla_sdu.uaux, 2);
+    addBool("cluster_activated", params::cluster.activated);
+    addNum("cluster_power_percent_max", params::cluster.power_percent_max, 3);
+    addNum("cluster_power_percent_dyn", params::cluster.power_percent_dyn, 3);
+    addInt("cluster_needle_position", params::cluster.needle_position);
+    addBool("cluster_heatsink_temp_critical", params::cluster.heatsink_temp_critical);
+    addBool("cluster_motor_temp_critical", params::cluster.motor_temp_critical);
 
     // ECU control page fields
     addNum("motor2_coolant_temperature", params::ecu.motor2_coolant_temperature, 2);
@@ -329,6 +338,13 @@ static void handleSetEcu() {
     server.send(200, "application/json", getLiveJson());
 }
 
+static void handleSetCluster() {
+    if (server.hasArg("activated")) {
+        params::cluster.activated = parseBoolArg(server.arg("activated"));
+    }
+    server.send(200, "application/json", getLiveJson());
+}
+
 static void handleNotFound() {
     server.send(404, "text/plain", "Not found");
 }
@@ -343,6 +359,7 @@ void webinterfaceBegin() {
     server.on("/api/live", HTTP_GET, handleLive);
     server.on("/api/set", HTTP_GET, handleSet);
     server.on("/api/set-ecu", HTTP_GET, handleSetEcu);
+    server.on("/api/set-cluster", HTTP_GET, handleSetCluster);
     if (fsOk) {
         server.serveStatic("/assets/", SPIFFS, "/assets/");
         // Serve PWA and nav icons from short SPIFFS paths to avoid SPIFFS file-name limits.

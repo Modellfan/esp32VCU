@@ -13,6 +13,7 @@
 #include "tesla_sdu_messages.h"
 #include "986_ecu_messages.h"
 #include "986_vehicle_messages.h"
+#include "cluster_calc.h"
 #include "utils.h"
 #include "can_utils.h"
 
@@ -145,5 +146,6 @@ void loop()
     runner.execute();
     pollVehicleCAN();
     pollTeslaCAN();
+    updateClusterFromTeslaSdu();
     gvret_loop();
 }
