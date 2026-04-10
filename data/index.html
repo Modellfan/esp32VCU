@@ -29,8 +29,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .app{position:fixed;inset:0;height:var(--vh);min-height:var(--vh);display:flex;flex-direction:column;padding:calc(12px + var(--safeT)) 16px calc(80px + var(--safeB));gap:10px}
 .header{font-size:24px;font-weight:750;padding:6px 0 10px}
 .pager{flex:1;min-height:0;overflow:hidden}
-.track{height:100%;display:flex;width:400%;transition:transform .25s ease}
-.page{width:25%;height:100%;overflow:auto;padding:6px 0 calc(76px + var(--safeB));scrollbar-width:thin;scrollbar-color:#ff2d2d #101014}
+.track{height:100%;display:flex;width:500%;transition:transform .25s ease}
+.page{width:20%;height:100%;overflow:auto;padding:6px 0 calc(76px + var(--safeB));scrollbar-width:thin;scrollbar-color:#ff2d2d #101014}
 .page::-webkit-scrollbar{width:8px}
 .page::-webkit-scrollbar-track{background:#101014;border-radius:999px}
 .page::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#2d6cff,#ff2d2d);border-radius:999px}
@@ -71,6 +71,11 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
 .tab.active{color:var(--accent)}
 .tab img{width:26px;height:26px;object-fit:contain;filter:brightness(0) invert(0.75);opacity:.95}
 .tab.active img{filter:brightness(0) saturate(100%) invert(26%) sepia(98%) saturate(4991%) hue-rotate(351deg) brightness(109%) contrast(102%)}
+.graph-tile{grid-column:1 / -1;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;min-height:220px}
+.graph-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.graph-label{font-size:14px;color:var(--muted);font-weight:700}
+.graph-latest{font-size:14px;font-weight:800}
+.graph-canvas{width:100%;height:170px;display:block;background:#080808;border-radius:12px;border:none}
 </style>
 </head>
 <body>
@@ -124,6 +129,24 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
           <div class="tile"><div class="label">Motor Temp Critical</div><div class="value" id="cc_motor_temp_critical">OFF</div></div>
         </div>
       </div>
+      <div class="page">
+        <div class="grid">
+          <div class="graph-tile">
+            <div class="graph-head">
+              <span class="graph-label">Tesla Motor Temperature</span>
+              <span class="graph-latest" id="gt_tmpm_latest">0.00 degC</span>
+            </div>
+            <canvas class="graph-canvas" id="graphTmpm" width="640" height="170"></canvas>
+          </div>
+          <div class="graph-tile">
+            <div class="graph-head">
+              <span class="graph-label">Tesla Motor Current</span>
+              <span class="graph-latest" id="gt_idc_latest">0.00 A</span>
+            </div>
+            <canvas class="graph-canvas" id="graphIdc" width="640" height="170"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <nav class="nav" aria-label="Bottom navigation">
@@ -138,6 +161,9 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
     </div>
     <div class="tab" id="tabCluster" role="button" aria-label="Cluster Calculation" tabindex="0">
       <img src="/i_cluster.svg" alt="Cluster Calculation">
+    </div>
+    <div class="tab" id="tabGraph" role="button" aria-label="Graph Page" tabindex="0">
+      <img src="/assets/i_graph.svg" alt="Graph Page">
     </div>
   </nav>
 </div>
@@ -163,12 +189,13 @@ function setActiveTab(p){
   if (p === 1) document.getElementById("tabSettings").classList.add("active");
   if (p === 2) document.getElementById("tabTesla").classList.add("active");
   if (p === 3) document.getElementById("tabCluster").classList.add("active");
+  if (p === 4) document.getElementById("tabGraph").classList.add("active");
 }
 
 function setPage(p){
-  page = Math.max(0, Math.min(3, p));
-  track.style.transform = "translateX(" + (-page * 25) + "%)";
-  title.textContent = page === 0 ? "Vehicle Data" : (page === 1 ? "ECU Data" : (page === 2 ? "Tesla SDU" : "Cluster Calculation"));
+  page = Math.max(0, Math.min(4, p));
+  track.style.transform = "translateX(" + (-page * 20) + "%)";
+  title.textContent = page === 0 ? "Vehicle Data" : (page === 1 ? "ECU Data" : (page === 2 ? "Tesla SDU" : (page === 3 ? "Cluster Calculation" : "Graph Page")));
   setActiveTab(page);
 }
 
@@ -176,6 +203,7 @@ document.getElementById("tabLive").onclick = () => setPage(0);
 document.getElementById("tabSettings").onclick = () => setPage(1);
 document.getElementById("tabTesla").onclick = () => setPage(2);
 document.getElementById("tabCluster").onclick = () => setPage(3);
+document.getElementById("tabGraph").onclick = () => setPage(4);
 document.querySelectorAll(".tab").forEach(el => {
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
@@ -220,6 +248,49 @@ function setText(id, v){
   const el = document.getElementById(id);
   if (el) el.textContent = v;
 }
+function createGraphState(canvasId, color){
+  const canvas = document.getElementById(canvasId);
+  return { canvas, ctx: canvas ? canvas.getContext("2d") : null, color, buf: new Float32Array(240), idx:0, filled:0 };
+}
+function pushGraphPoint(gs, value){
+  if (!gs || !gs.ctx) return;
+  const v = Number.isFinite(value) ? value : 0;
+  gs.buf[gs.idx] = v;
+  gs.idx = (gs.idx + 1) % gs.buf.length;
+  gs.filled = Math.min(gs.filled + 1, gs.buf.length);
+  drawGraph(gs);
+}
+function drawGraph(gs){
+  const ctx = gs.ctx;
+  const c = gs.canvas;
+  const count = gs.filled;
+  if (!ctx || !c) return;
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (count <= 1) return;
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < count; i++) {
+    const bi = (gs.idx - count + i + gs.buf.length) % gs.buf.length;
+    const v = gs.buf[bi];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) { min -= 1; max += 1; }
+  const left = 34, right = c.width - 10, top = 10, bottom = c.height - 22;
+  const w = right - left, h = bottom - top;
+  ctx.strokeStyle = gs.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < count; i++) {
+    const bi = (gs.idx - count + i + gs.buf.length) % gs.buf.length;
+    const v = gs.buf[bi];
+    const x = left + (i / (gs.buf.length - 1)) * w;
+    const y = bottom - ((v - min) / (max - min)) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+const graphTmpm = createGraphState("graphTmpm", "#ff5a5a");
+const graphIdc = createGraphState("graphIdc", "#57a1ff");
 function boolTxt(v){ return v ? "ON" : "OFF"; }
 function numTxt(v, decimals, suffix){
   const n = Number(v || 0);
@@ -497,6 +568,10 @@ async function refreshNow(){
     setText("sdu_tmphs", Number(d.sdu_tmphs).toFixed(2) + " degC");
     setText("sdu_tmpm", Number(d.sdu_tmpm).toFixed(2) + " degC");
     setText("sdu_uaux", Number(d.sdu_uaux).toFixed(2) + " V");
+    setText("gt_tmpm_latest", Number(d.sdu_tmpm || 0).toFixed(2) + " degC");
+    setText("gt_idc_latest", Number(d.sdu_idc || 0).toFixed(2) + " A");
+    pushGraphPoint(graphTmpm, Number(d.sdu_tmpm || 0));
+    pushGraphPoint(graphIdc, Number(d.sdu_idc || 0));
     setText("cc_power_percent_max", Number(d.cluster_power_percent_max || 0).toFixed(3));
     setText("cc_power_percent_dyn", Number(d.cluster_power_percent_dyn || 0).toFixed(3));
     setText("cc_needle_position", String(d.cluster_needle_position ?? 0));
