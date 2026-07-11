@@ -79,8 +79,8 @@ def main():
     if not src_icon.exists():
         raise FileNotFoundError(f"Missing source icon: {src_icon}")
 
+    # Keep data/ as the single source of truth for filesystem web assets.
     ensure_assets(src_icon, root / "data" / "assets")
-    ensure_assets(src_icon, root / "data_spiffs" / "assets")
     print("ICON_GEN_OK")
 
 

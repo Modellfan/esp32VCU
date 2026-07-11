@@ -1,0 +1,66 @@
+{
+  "base_url": "http://127.0.0.1:8080",
+  "ok": true,
+  "checks": {
+    "touch_html": {
+      "url": "http://127.0.0.1:8080/touch.html",
+      "contains": "Touchscreen dashboard",
+      "matched": true,
+      "bytes": 5117
+    },
+    "touch_css": {
+      "url": "http://127.0.0.1:8080/touch/css/app.css",
+      "contains": ".hero-metrics",
+      "matched": true,
+      "bytes": 15814
+    },
+    "touch_js": {
+      "url": "http://127.0.0.1:8080/touch/js/app.js",
+      "contains": "const sections",
+      "matched": true,
+      "bytes": 41740
+    },
+    "touch_home_battery_js": {
+      "url": "http://127.0.0.1:8080/touch/js/home-battery.js",
+      "contains": "window.TouchHomeBattery",
+      "matched": true,
+      "bytes": 13454
+    },
+    "touch_battery_modal_js": {
+      "url": "http://127.0.0.1:8080/touch/js/bset.js",
+      "contains": "window.TouchBatterySettingsModal",
+      "matched": true,
+      "bytes": 12565
+    },
+    "touch_coolant_stage_js": {
+      "url": "http://127.0.0.1:8080/touch/js/coolant-stage.js",
+      "contains": "window.TouchCoolantStage",
+      "matched": true,
+      "bytes": 4902
+    },
+    "touch_api": {
+      "url": "http://127.0.0.1:8080/api/live",
+      "contains": "\"vehicle_speed_510\"",
+      "matched": true,
+      "bytes": 3336
+    },
+    "touch_dynamic_api": {
+      "url": "http://127.0.0.1:8080/api/live",
+      "keys": [
+        "sdu_udc",
+        "sdu_idc",
+        "sdu_speed",
+        "sdu_pot",
+        "sdu_tmpm"
+      ],
+      "changed": {
+        "sdu_udc": true,
+        "sdu_idc": true,
+        "sdu_speed": true,
+        "sdu_pot": true,
+        "sdu_tmpm": true
+      },
+      "matched": true
+    }
+  }
+}

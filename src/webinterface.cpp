@@ -9,14 +9,23 @@
 #include "986_vehicle_messages.h"
 #include "986_ecu_messages.h"
 #include "cluster_calc.h"
+#include "digipot_control.h"
+#include "coolant_fan_control.h"
 
-static constexpr const char *kApSsid = "eboxster";
+static constexpr const char *kStaSsid = "Blacknet@Ueberlingen";
+static constexpr const char *kStaPassword = "Ueberlingen2019";
 static WebServer server(80);
+static float gTargetChargePct = 80.0f;
+static float gAcCurrentLimitA = 16.0f;
+
+static String ipToString(const IPAddress &ip) {
+    return String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+}
 
 static String getLiveJson() {
-    const IPAddress ip = WiFi.softAPIP();
+    const IPAddress staIp = WiFi.localIP();
     String payload;
-    payload.reserve(2300);
+    payload.reserve(4200);
     payload += "{";
 
     auto addSep = [&payload]() {
@@ -164,29 +173,52 @@ static String getLiveJson() {
 
     addInt("sdu_opmode", params::tesla_sdu.opmode);
     addInt("sdu_lasterr", params::tesla_sdu.lasterr);
-    addInt("sdu_status", params::tesla_sdu.status);
+    addUInt("sdu_status", params::tesla_sdu.status);
+    addNum("sdu_udc", params::tesla_sdu.udc, 3);
+    addNum("sdu_idc", params::tesla_sdu.idc, 3);
+    addNum("sdu_il1", params::tesla_sdu.il1, 2);
+    addNum("sdu_il2", params::tesla_sdu.il2, 2);
+    addNum("sdu_fstat", params::tesla_sdu.fstat, 2);
+    addInt("sdu_speed", params::tesla_sdu.speed);
+    addInt("sdu_cruisespeed", params::tesla_sdu.cruisespeed);
+    addInt("sdu_turns", params::tesla_sdu.turns);
+    addNum("sdu_amp", params::tesla_sdu.amp, 2);
+    addNum("sdu_angle", params::tesla_sdu.angle, 1);
+    addInt("sdu_pot", params::tesla_sdu.pot);
+    addInt("sdu_pot2", params::tesla_sdu.pot2);
+    addNum("sdu_potnom", params::tesla_sdu.potnom, 2);
+    addNum("sdu_regenpreset", params::tesla_sdu.regenpreset, 2);
     addInt("sdu_din_ocur", params::tesla_sdu.din_ocur);
     addInt("sdu_din_ocur51", params::tesla_sdu.din_ocur51);
     addInt("sdu_din_bms", params::tesla_sdu.din_bms);
-
-    addNum("sdu_udc", params::tesla_sdu.udc, 3);
-    addNum("sdu_idc", params::tesla_sdu.idc, 3);
-
-    addInt("sdu_speed", params::tesla_sdu.speed);
-    addInt("sdu_cruisespeed", params::tesla_sdu.cruisespeed);
-    addInt("sdu_pot", params::tesla_sdu.pot);
-    addInt("sdu_pot2", params::tesla_sdu.pot2);
-
     addNum("sdu_regenpresent", params::tesla_sdu.regenpresent, 2);
     addNum("sdu_regenpresent32", params::tesla_sdu.regenpresent32, 2);
     addInt("sdu_seldir", params::tesla_sdu.seldir);
+    addInt("sdu_rotordir", params::tesla_sdu.rotordir);
     addInt("sdu_seldir43", params::tesla_sdu.seldir43);
-
     addNum("sdu_temp_heatsink", params::tesla_sdu.temperature_heatsink, 2);
     addNum("sdu_temp_heatsink74", params::tesla_sdu.temperature_heatsink74, 2);
     addNum("sdu_tmphs", params::tesla_sdu.tmphs, 2);
     addNum("sdu_tmpm", params::tesla_sdu.tmpm, 2);
     addNum("sdu_uaux", params::tesla_sdu.uaux, 2);
+    addUInt("sdu_pwmio", params::tesla_sdu.pwmio);
+    addUInt("sdu_canio", params::tesla_sdu.canio);
+    addInt("sdu_din_cruise", params::tesla_sdu.din_cruise);
+    addInt("sdu_din_start", params::tesla_sdu.din_start);
+    addInt("sdu_din_brake", params::tesla_sdu.din_brake);
+    addInt("sdu_din_mprot", params::tesla_sdu.din_mprot);
+    addInt("sdu_din_forward", params::tesla_sdu.din_forward);
+    addInt("sdu_din_reverse", params::tesla_sdu.din_reverse);
+    addInt("sdu_din_emcystop", params::tesla_sdu.din_emcystop);
+    addInt("sdu_din_desat", params::tesla_sdu.din_desat);
+    addUInt("sdu_uptime", params::tesla_sdu.uptime);
+    addNum("sdu_cpuload", params::tesla_sdu.cpuload, 1);
+    addNum("sdu_ilmax", params::tesla_sdu.ilmax, 2);
+    addNum("sdu_uac", params::tesla_sdu.uac, 2);
+    addNum("sdu_il1rms", params::tesla_sdu.il1rms, 2);
+    addNum("sdu_il2rms", params::tesla_sdu.il2rms, 2);
+    addNum("sdu_boostcalc", params::tesla_sdu.boostcalc, 2);
+    addNum("sdu_fweakcalc", params::tesla_sdu.fweakcalc, 2);
     addBool("cluster_activated", params::cluster.activated);
     addNum("cluster_power_percent_max", params::cluster.power_percent_max, 3);
     addNum("cluster_power_percent_dyn", params::cluster.power_percent_dyn, 3);
@@ -194,6 +226,13 @@ static String getLiveJson() {
     addNum("cluster_total_fuel_l", params::cluster.total_fuel, 3);
     addBool("cluster_heatsink_temp_critical", params::cluster.heatsink_temp_critical);
     addBool("cluster_motor_temp_critical", params::cluster.motor_temp_critical);
+    addNum("target_charge_pct", gTargetChargePct, 0);
+    addNum("ac_current_limit_a", gAcCurrentLimitA, 0);
+    addUInt("digital_pot_pct", digipotPercent());
+    addUInt("digital_pot_wiper", digipotWiper());
+    addUInt("coolant_fan_level", coolantFanLevel());
+    addBool("coolant_fan_low_output", coolantFanLowOutput());
+    addBool("coolant_fan_high_output", coolantFanHighOutput());
 
     // ECU control page fields
     addNum("motor2_coolant_temperature", params::ecu.motor2_coolant_temperature, 2);
@@ -236,21 +275,32 @@ static String getLiveJson() {
     addBool("engine_stat_bool6", params::ecu.engine_stat_bool6);
     addBool("engine_stat_bool7", params::ecu.engine_stat_bool7);
 
-    addStr("ap_ssid", String(kApSsid));
-    addStr("ap_ip", String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]));
+    addStr("ap_ssid", String(kStaSsid));
+    addStr("ap_ip", ipToString(staIp));
+    addStr("sta_ssid", String(kStaSsid));
+    addBool("sta_connected", WiFi.status() == WL_CONNECTED);
+    addStr("sta_ip", ipToString(staIp));
 
     payload += "}";
     return payload;
 }
 
-static void handleRoot() {
-    if (!SPIFFS.exists("/index.html")) {
-        server.send(500, "text/plain", "index.html missing on SPIFFS");
+static void streamHtmlFile(const char *path) {
+    if (!SPIFFS.exists(path)) {
+        server.send(500, "text/plain", String(path) + " missing on SPIFFS");
         return;
     }
-    File file = SPIFFS.open("/index.html", FILE_READ);
+    File file = SPIFFS.open(path, FILE_READ);
     server.streamFile(file, "text/html; charset=utf-8");
     file.close();
+}
+
+static void handleRoot() {
+    streamHtmlFile("/index.html");
+}
+
+static void handleTouch() {
+    streamHtmlFile("/touch.html");
 }
 
 static void handleLive() {
@@ -258,6 +308,15 @@ static void handleLive() {
 }
 
 static void handleSet() {
+    auto clampFloat = [](float value, float minimum, float maximum) {
+        if (value < minimum) {
+            return minimum;
+        }
+        if (value > maximum) {
+            return maximum;
+        }
+        return value;
+    };
     if (server.hasArg("rpm")) {
         params::ecu.engine_speed_rpm = server.arg("rpm").toFloat();
     }
@@ -266,6 +325,19 @@ static void handleSet() {
     }
     if (server.hasArg("oil")) {
         params::ecu.mo5_verbrauch_ul = (uint32_t)strtoul(server.arg("oil").c_str(), nullptr, 10);
+    }
+    if (server.hasArg("target_charge_pct")) {
+        gTargetChargePct = clampFloat(server.arg("target_charge_pct").toFloat(), 50.0f, 100.0f);
+    }
+    if (server.hasArg("ac_current_limit_a")) {
+        gAcCurrentLimitA = clampFloat(server.arg("ac_current_limit_a").toFloat(), 6.0f, 32.0f);
+    }
+    if (server.hasArg("digital_pot_pct")) {
+        const float pct = clampFloat(server.arg("digital_pot_pct").toFloat(), 0.0f, 100.0f);
+        digipotSetPercent((uint8_t)(pct + 0.5f));
+    }
+    if (server.hasArg("coolant_fan_level")) {
+        coolantFanSetLevel((uint8_t)constrain(server.arg("coolant_fan_level").toInt(), 0, 2));
     }
     server.send(200, "application/json", getLiveJson());
 }
@@ -336,6 +408,13 @@ static void handleSetEcu() {
     setBool("engine_stat_bool5", params::ecu.engine_stat_bool5);
     setBool("engine_stat_bool6", params::ecu.engine_stat_bool6);
     setBool("engine_stat_bool7", params::ecu.engine_stat_bool7);
+    if (server.hasArg("digital_pot_pct")) {
+        const int value = server.arg("digital_pot_pct").toInt();
+        digipotSetPercent((uint8_t)constrain(value, 0, 100));
+    }
+    if (server.hasArg("coolant_fan_level")) {
+        coolantFanSetLevel((uint8_t)constrain(server.arg("coolant_fan_level").toInt(), 0, 2));
+    }
 
     server.send(200, "application/json", getLiveJson());
 }
@@ -352,18 +431,26 @@ static void handleNotFound() {
 }
 
 void webinterfaceBegin() {
-    WiFi.mode(WIFI_AP);
-    const bool apOk = WiFi.softAP(kApSsid);
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname("eboxster-vcu");
+    WiFi.begin(kStaSsid, kStaPassword);
+
+    const uint32_t connectStart = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - connectStart) < 15000UL) {
+        delay(250);
+    }
 
     const bool fsOk = SPIFFS.begin(true);
     server.on("/", HTTP_GET, handleRoot);
     server.on("/index.html", HTTP_GET, handleRoot);
+    server.on("/touch.html", HTTP_GET, handleTouch);
     server.on("/api/live", HTTP_GET, handleLive);
     server.on("/api/set", HTTP_GET, handleSet);
     server.on("/api/set-ecu", HTTP_GET, handleSetEcu);
     server.on("/api/set-cluster", HTTP_GET, handleSetCluster);
     if (fsOk) {
         server.serveStatic("/assets/", SPIFFS, "/assets/");
+        server.serveStatic("/touch/", SPIFFS, "/touch/");
         // Serve PWA and nav icons from short SPIFFS paths to avoid SPIFFS file-name limits.
         server.serveStatic("/favicon-16x16.png", SPIFFS, "/fav16.png");
         server.serveStatic("/favicon-32x32.png", SPIFFS, "/fav32.png");
@@ -383,10 +470,10 @@ void webinterfaceBegin() {
     server.onNotFound(handleNotFound);
     server.begin();
 
-    const IPAddress ip = WiFi.softAPIP();
-    Serial.printf("[WEB986] AP started SSID=%s OPEN=%s IP=%u.%u.%u.%u SPIFFS=%s\n",
-                  kApSsid,
-                  apOk ? "true" : "false",
+    const IPAddress ip = WiFi.localIP();
+    Serial.printf("[WEB986] STA SSID=%s connected=%s IP=%u.%u.%u.%u SPIFFS=%s\n",
+                  kStaSsid,
+                  WiFi.status() == WL_CONNECTED ? "true" : "false",
                   ip[0],
                   ip[1],
                   ip[2],
@@ -399,9 +486,9 @@ void webinterfaceHandle() {
 }
 
 const char *webinterfaceApSsid() {
-    return kApSsid;
+    return kStaSsid;
 }
 
 IPAddress webinterfaceApIp() {
-    return WiFi.softAPIP();
+    return WiFi.localIP();
 }

@@ -12,7 +12,7 @@ bool decodeTeslaSdu0x320(const CANMessage &frame) {
 
     params::tesla_sdu.opmode = (int8_t)can986::signExtend(readBitsLE(frame.data, 0, 8), 8);
     params::tesla_sdu.lasterr = (int8_t)can986::signExtend(readBitsLE(frame.data, 8, 8), 8);
-    params::tesla_sdu.status = (int8_t)can986::signExtend(readBitsLE(frame.data, 16, 8), 8);
+    params::tesla_sdu.status = (uint16_t)readBitsLE(frame.data, 16, 8);
     params::tesla_sdu.din_ocur = (int8_t)can986::signExtend(readBitsLE(frame.data, 24, 8), 8);
     params::tesla_sdu.din_ocur51 = (int8_t)can986::signExtend(readBitsLE(frame.data, 32, 8), 8);
     params::tesla_sdu.din_bms = (int8_t)can986::signExtend(readBitsLE(frame.data, 40, 8), 8);
@@ -93,8 +93,10 @@ bool decodeTeslaSdu0x323(const CANMessage &frame) {
     const int16_t rawRegenPresent32 = (int16_t)can986::signExtend(readBitsLE(frame.data, 16, 16), 16);
     params::tesla_sdu.regenpresent = rawRegenPresent * 0.01f;
     params::tesla_sdu.regenpresent32 = rawRegenPresent32 * 0.01f;
+    params::tesla_sdu.regenpreset = params::tesla_sdu.regenpresent;
     params::tesla_sdu.seldir = (int8_t)can986::signExtend(readBitsLE(frame.data, 32, 8), 8);
     params::tesla_sdu.seldir43 = (int8_t)can986::signExtend(readBitsLE(frame.data, 40, 8), 8);
+    params::tesla_sdu.rotordir = params::tesla_sdu.seldir43;
     return true;
 }
 

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#020407">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="preload" as="video" href="/touch/img/intro.mp4" type="video/mp4">
+<style>
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #000000;
+}
+
+body.is-booting #screenRoot[hidden] {
+  display: none !important;
+}
+
+#introSplash {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000000;
+}
+
+#introSplash.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#introSplash .intro-splash-frame {
+  width: min(100vw, 1024px);
+  height: min(100dvh, 600px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000000;
+}
+
+#introSplash .intro-splash-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000000;
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+
+#introSplash .intro-splash-video.is-ready {
+  opacity: 1;
+}
+</style>
+<title>ESP32 Touch UI</title>
+<link rel="stylesheet" href="/touch/css/app.css">
+</head>
+<body class="is-booting">
+  <div class="intro-splash" id="introSplash" aria-hidden="true">
+    <div class="intro-splash-frame">
+      <video
+        class="intro-splash-video"
+        id="introSplashVideo"
+        autoplay
+        muted
+        playsinline
+        preload="auto"
+      >
+        <source src="/touch/img/intro.mp4" type="video/mp4">
+      </video>
+    </div>
+  </div>
+  <main class="screen" id="screenRoot" hidden aria-label="Touchscreen dashboard 1024 by 600">
+    <aside class="left-nav" aria-label="First level navigation">
+      <button class="l1-icon" type="button" data-section="home" aria-label="Overview">
+        <img src="/touch/assets/home.svg" alt="Overview">
+      </button>
+      <button class="l1-icon active" type="button" data-section="vehicle" aria-label="Vehicle">
+        <img src="/touch/assets/i_car.svg" alt="Vehicle">
+      </button>
+      <button class="l1-icon" type="button" data-section="coolant" aria-label="Coolant system">
+        <img src="/touch/assets/i_ecu.svg" alt="Coolant system">
+      </button>
+      <button class="l1-icon" type="button" data-section="sdu" aria-label="SDU">
+        <img src="/touch/assets/i_sdu.svg" alt="SDU">
+      </button>
+      <button class="l1-icon" type="button" data-section="cluster" aria-label="Cluster">
+        <img src="/touch/assets/i_cluster.svg" alt="Cluster">
+      </button>
+    </aside>
+
+    <section class="main-area">
+      <header class="topbar" aria-label="Section tabs">
+        <button class="tab active" type="button" data-tab-index="0">Drive</button>
+        <button class="tab" type="button" data-tab-index="1">Brake</button>
+        <button class="tab" type="button" data-tab-index="2">Stability</button>
+        <button class="tab" type="button" data-tab-index="3">Steering</button>
+      </header>
+
+      <section class="content">
+        <section class="home-stage" id="homeStage" hidden aria-label="Home landing page">
+          <div class="home-battery-slot" id="homeBatteryMount" aria-label="Battery overview"></div>
+          <div class="home-hero">
+            <img id="homeHeroImage" src="/touch/img/half_front.png" alt="Home hero image">
+          </div>
+        </section>
+        <section class="coolant-stage" id="coolantStage" hidden aria-label="Coolant system overview">
+          <div class="coolant-stage-mount" id="coolantStageMount"></div>
+        </section>
+        <section class="table-panel" aria-label="Live values table">
+          <div class="table-head">
+            <h1 id="pageHeading">Vehicle Drive</h1>
+            <p id="statusText">Waiting for live data</p>
+          </div>
+          <div class="table-scroll" id="tableScroll">
+            <table class="value-table">
+              <tbody id="valueRows"></tbody>
+            </table>
+            <div class="metric-board" id="metricBoard" hidden></div>
+          </div>
+        </section>
+
+        <aside class="image-panel" aria-label="Touch dashboard summary">
+          <div class="image-wrap">
+            <img id="heroImage" src="/touch/assets/car.svg" alt="Section overview">
+          </div>
+          <div class="hero-copy">
+            <h2 id="heroTitle">Vehicle Drive</h2>
+            <p id="heroSubtitle">Primary drivetrain telemetry for the large-format touchscreen.</p>
+          </div>
+          <div class="hero-metrics" id="heroMetrics"></div>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <script src="/touch/js/home-battery.js"></script>
+  <script src="/touch/js/bset.js"></script>
+  <script src="/touch/js/coolant-stage.js"></script>
+  <script src="/touch/js/app.js"></script>
+</body>
+</html>

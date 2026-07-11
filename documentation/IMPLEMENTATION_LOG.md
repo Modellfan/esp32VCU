@@ -3804,3 +3804,209 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - None.
+
+---
+
+## 2026-04-11 01:31:07 +02:00 - Consolidate duplicated SPIFFS web asset folders
+
+### Planned Steps
+- Point PlatformIO at a single web asset directory.
+- Remove remaining tooling references to `data_spiffs/`.
+- Delete the duplicated tracked files under `data_spiffs/`.
+- Verify the project still builds and the filesystem image resolves from `data/`.
+
+### Changes Made
+- `platformio.ini`: Switched `data_dir` from `data_spiffs` to `data`.
+- `tools/generate_web_icons.py`: Removed the duplicate `data_spiffs` output so generated assets target only `data/`.
+- `data_spiffs/*`: Removed the duplicated tracked SPIFFS web asset files; `data/` is now the single source of truth.
+
+### Automated Tests Run
+- `rg -n "\bdata_spiffs\b" -S --glob '!documentation/IMPLEMENTATION_LOG.md' --glob '!**/.git/**'`: PASS (no live references remain outside the historical log)
+- `git ls-files data_spiffs`: PASS (no tracked files remain)
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run`: PASS
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run -t buildfs`: PASS
+
+### Result
+- single_web_asset_dir: `data/`
+- firmware_build: success
+- spiffs_image_build: success
+- duplicate_folder_removed: true
+
+### Artifacts
+- [platformio config](platformio.ini)
+- [web ui](data/index.html)
+- [icon generator](tools/generate_web_icons.py)
+
+### Notes
+- Historical log entries still mention `data_spiffs/`; those references are now legacy path names only.
+
+---
+
+## 2026-04-11 02:13:08 +02:00 - Integrate separate touch UI at /touch.html and retire reference folder
+
+### Planned Steps
+- Add a dedicated touch UI entry point and asset subtree without changing the existing mobile UI.
+- Convert the provided local reference prototype into a live `/api/live` dashboard and route it from SPIFFS.
+- Bring the reference validation tools into the repo, retarget them to the integrated page, and run them.
+- Build firmware and SPIFFS, then remove the temporary reference folder after successful validation.
+
+### Changes Made
+- `src/webinterface.cpp`: Added a reusable SPIFFS HTML streamer, registered `/touch.html`, and exposed `/touch/` as a separate static subtree.
+- `data/touch.html`: Added the new touch-oriented entry page while leaving `/index.html` unchanged.
+- `data/touch/css/app.css`: Added the 1024x600 touch layout styling based on the provided reference look and adapted for the integrated dashboard.
+- `data/touch/js/app.js`: Replaced the reference demo script with a live `/api/live` dashboard using project telemetry groups for Home, Vehicle, ECU, SDU, and Cluster views.
+- `data/touch/assets/*`: Added the touch-specific icon and hero assets copied from the provided reference.
+- `tools/touch_ui_test_support.py`: Added a local mock `/api/live` server helper for deterministic touch UI validation outside the ESP32.
+- `tools/touch_ui_local_server_test.py`: Added fetch-based validation for `/touch.html`, touch CSS/JS assets, and the mocked `/api/live` endpoint.
+- `tools/touch_ui_screenshot_validate.py`: Added Playwright-based 1024x600 screenshot validation for the integrated touch UI.
+- `refrence/`: Removed the temporary reference folder after the integrated page and validation tools passed.
+
+### Automated Tests Run
+- `python -m py_compile tools\touch_ui_test_support.py tools\touch_ui_local_server_test.py tools\touch_ui_screenshot_validate.py`: PASS
+- `python tools\touch_ui_local_server_test.py`: PASS
+- `python tools\touch_ui_screenshot_validate.py`: PASS
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run`: PASS
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run -t buildfs`: PASS
+
+### Result
+- touch_route: `/touch.html`
+- existing_mobile_ui_preserved: true
+- touch_asset_subtree: `/touch/`
+- local_touch_validation: success
+- screenshot_validation_1024x600: success
+- firmware_build: success
+- spiffs_image_build: success
+- reference_folder_removed: true
+
+### Artifacts
+- [touch entry page](data/touch.html)
+- [touch stylesheet](data/touch/css/app.css)
+- [touch script](data/touch/js/app.js)
+- [touch UI local test](tools/touch_ui_local_server_test.py)
+- [touch UI screenshot validator](tools/touch_ui_screenshot_validate.py)
+- [touch screenshot](archives/touch_ui_1024x600/layout_1024x600.png)
+
+### Notes
+- The local validation scripts serve `data/` with a mocked `/api/live` response so the integrated touch UI can be tested on the PC without flashing hardware.
+
+---
+
+## 2026-04-11 12:12:13 +02:00 - Add 1-second fullscreen intro splash to touch UI and optimize asset for SPIFFS
+
+### Planned Steps
+- Show the provided intro image full-screen for 1 second on `/touch.html` load.
+- Keep the splash isolated to the touch UI so the existing mobile UI remains unchanged.
+- Validate the touch UI locally and confirm the SPIFFS image still builds.
+- If the raw image is too large for SPIFFS, preserve the original source and generate an optimized deployed asset.
+
+### Changes Made
+- `data/touch.html`: Added an intro splash overlay and preloaded the deployed intro image for immediate display on page open.
+- `data/touch/css/app.css`: Added full-screen splash overlay styling and hide transition behavior.
+- `data/touch/js/app.js`: Added a 1-second timer that dismisses the splash after page load and removes the overlay node.
+- `img/touch-source/intro.png`: Preserved the original provided intro source image outside the SPIFFS payload.
+- `img/touch-source/front.png`: Preserved the additional large touch source image outside the SPIFFS payload.
+- `img/touch-source/vent.png`: Preserved the additional large touch source image outside the SPIFFS payload.
+- `data/touch/img/intro.jpg`: Added an optimized 1024x600 deployed intro image for the touch splash so SPIFFS packaging succeeds.
+
+### Automated Tests Run
+- `python tools\touch_ui_local_server_test.py`: PASS
+- `python tools\touch_ui_screenshot_validate.py --screenshot artifacts\touch_ui_1024x600\layout_1024x600_intro.png`: PASS
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run -t buildfs`: PASS
+
+### Result
+- touch_intro_splash: enabled
+- splash_duration_ms: 1000
+- deployed_intro_asset: `data/touch/img/intro.jpg`
+- deployed_intro_size_bytes: 67097
+- original_intro_preserved: true
+- local_touch_validation: success
+- spiffs_image_build: success
+
+### Artifacts
+- [touch entry page](data/touch.html)
+- [touch stylesheet](data/touch/css/app.css)
+- [touch script](data/touch/js/app.js)
+- [deployed intro image](data/touch/img/intro.jpg)
+- [source intro image](img/touch-source/intro.png)
+- [touch screenshot with intro change](artifacts/touch_ui_1024x600/layout_1024x600_intro.png)
+
+### Notes
+- The initial raw intro image plus the other large touch images exceeded the SPIFFS partition size, so the originals were preserved under `img/touch-source/` and a device-sized deployed asset was generated for runtime use.
+
+---
+
+## 2026-04-11 12:20:16 +02:00 - Fix intro validation timing and keep splash over UI until initial ready state
+
+### Planned Steps
+- Investigate why the existing screenshot artifact did not show the intro splash.
+- Keep the splash in front until the first live-data render and window load complete, while still enforcing the 1-second minimum duration.
+- Extend the screenshot validator so it can capture both intro and ready states explicitly.
+- Re-run local validation and confirm the SPIFFS image still builds.
+
+### Changes Made
+- `data/touch/js/app.js`: Replaced the fixed splash-hide timer with a gated hide flow that waits for minimum elapsed time, first live-data completion, and window load before dismissing the intro.
+- `tools/touch_ui_screenshot_validate.py`: Added `--phase intro|ready` support so the validator can capture and verify either the visible splash state or the ready UI state.
+
+### Automated Tests Run
+- `python -m py_compile tools\touch_ui_screenshot_validate.py`: PASS
+- `python tools\touch_ui_local_server_test.py`: PASS
+- `python tools\touch_ui_screenshot_validate.py --phase intro --screenshot artifacts\touch_ui_1024x600\intro_1024x600.png`: PASS
+- `python tools\touch_ui_screenshot_validate.py --phase ready --screenshot artifacts\touch_ui_1024x600\ready_1024x600.png`: PASS
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run -t buildfs`: PASS
+
+### Result
+- intro_validator_phase: available
+- ready_validator_phase: available
+- intro_screenshot_proves_visibility: true
+- splash_hidden_until_initial_ready: true
+- spiffs_image_build: success
+
+### Artifacts
+- [touch script](data/touch/js/app.js)
+- [touch screenshot validator](tools/touch_ui_screenshot_validate.py)
+- [intro splash screenshot](artifacts/touch_ui_1024x600/intro_1024x600.png)
+- [ready-state screenshot](artifacts/touch_ui_1024x600/ready_1024x600.png)
+
+### Notes
+- The previous validator always waited long enough for the splash to disappear, so its screenshot could not prove the intro overlay was working.
+
+---
+
+## 2026-04-11 15:52:47 +02:00 - Replace touch intro image splash with intro MP4
+
+### Planned Steps
+- Swap the touch intro overlay from the deployed still image to the provided `intro.mp4`.
+- Keep the splash fullscreen and in front of the UI until the page is ready and the intro media is complete.
+- Update validation so intro-phase screenshots assert the presence of the video-based splash.
+- Re-run local touch validation and SPIFFS filesystem packaging.
+
+### Changes Made
+- `data/touch.html`: Replaced the intro splash media from the preloaded image to a preloaded `intro.mp4` video with the existing intro JPG as poster fallback.
+- `data/touch/css/app.css`: Switched the splash media selector from image to video while preserving fullscreen stretch behavior.
+- `data/touch/js/app.js`: Added intro-video completion gating, autoplay retry on load, and a safety timeout so the UI can still recover if video playback fails.
+- `tools/touch_ui_screenshot_validate.py`: Updated intro-phase checks to validate the presence and readiness of the intro video instead of the previous image element.
+
+### Automated Tests Run
+- `python -m py_compile tools\touch_ui_screenshot_validate.py`: PASS
+- `python tools\touch_ui_local_server_test.py`: PASS
+- `python tools\touch_ui_screenshot_validate.py --phase intro --screenshot artifacts\touch_ui_1024x600\intro_video_1024x600.png`: PASS
+- `python tools\touch_ui_screenshot_validate.py --phase ready --screenshot artifacts\touch_ui_1024x600\ready_video_1024x600.png`: PASS
+- `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run -t buildfs`: PASS
+
+### Result
+- touch_intro_media: `data/touch/img/intro.mp4`
+- intro_video_size_bytes: 735490
+- intro_video_phase_validation: success
+- ready_phase_validation: success
+- spiffs_image_build: success
+
+### Artifacts
+- [touch entry page](data/touch.html)
+- [touch stylesheet](data/touch/css/app.css)
+- [touch script](data/touch/js/app.js)
+- [touch screenshot validator](tools/touch_ui_screenshot_validate.py)
+- [intro video splash screenshot](artifacts/touch_ui_1024x600/intro_video_1024x600.png)
+- [ready-state screenshot after video intro](artifacts/touch_ui_1024x600/ready_video_1024x600.png)
+
+### Notes
+- The local server on port `8080` was restarted after the change so browser testing can pick up the MP4-based splash instead of the previous image-based version.

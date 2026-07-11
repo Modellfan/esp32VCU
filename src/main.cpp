@@ -16,6 +16,8 @@
 #include "cluster_calc.h"
 #include "utils.h"
 #include "can_utils.h"
+#include "digipot_control.h"
+#include "coolant_fan_control.h"
 
 // RGB LED Config is handled in src/utils.h via RGB_BUILTIN / RGB_BRIGHTNESS.
 
@@ -131,10 +133,16 @@ void blinkLED()
 void setup()
 {
     // Initialize the primary Serial port for GVRET communication.
-    Serial.begin(250000);
+    Serial.begin(115200);
 
     // Initialize built-in RGB LED utility.
     fastledInit();
+
+    // Initialize the X9C103S digital potentiometer.
+    digipotBegin();
+
+    // Initialize coolant fan staged digital outputs.
+    coolantFanBegin();
 
     // Initialize the CAN buses using the CAN manager.
     canManager_setup();
