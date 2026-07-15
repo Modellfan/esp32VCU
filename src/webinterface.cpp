@@ -226,6 +226,14 @@ static String getLiveJson() {
     addNum("cluster_total_fuel_l", params::cluster.total_fuel, 3);
     addBool("cluster_heatsink_temp_critical", params::cluster.heatsink_temp_critical);
     addBool("cluster_motor_temp_critical", params::cluster.motor_temp_critical);
+    addBool("cluster_acceleration_run_active", params::cluster.acceleration_run_active);
+    addNum("cluster_acceleration_run_time_s", params::cluster.acceleration_run_time_s, 3);
+    addNum("cluster_acceleration_0_50_last_s", params::cluster.acceleration_0_50_last_s, 3);
+    addNum("cluster_acceleration_0_50_best_s", params::cluster.acceleration_0_50_best_s, 3);
+    addNum("cluster_acceleration_0_100_last_s", params::cluster.acceleration_0_100_last_s, 3);
+    addNum("cluster_acceleration_0_100_best_s", params::cluster.acceleration_0_100_best_s, 3);
+    addBool("cluster_acceleration_0_50_valid", params::cluster.acceleration_0_50_valid);
+    addBool("cluster_acceleration_0_100_valid", params::cluster.acceleration_0_100_valid);
     addNum("target_charge_pct", gTargetChargePct, 0);
     addNum("ac_current_limit_a", gAcCurrentLimitA, 0);
     addUInt("digital_pot_pct", digipotPercent());

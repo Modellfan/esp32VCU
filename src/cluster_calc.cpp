@@ -4,6 +4,7 @@
 #include <math.h>
 
 #include "986_ecu_messages.h"
+#include "986_vehicle_messages.h"
 #include "tesla_sdu_messages.h"
 
 // =====================================================
@@ -27,6 +28,13 @@
 // Critical temperature limits
 #define MAX_HEATSINK_TEMP_C 80.0f
 #define MAX_MOTOR_TEMP_C 160.0f
+
+// Automatic acceleration timing. Separate stop/start thresholds prevent a
+// noisy speed signal around 0 km/h from repeatedly starting a new run.
+#define ACCEL_STOP_SPEED_KMH 0.5f
+#define ACCEL_START_SPEED_KMH 1.0f
+#define ACCEL_TARGET_50_KMH 50.0f
+#define ACCEL_TARGET_100_KMH 100.0f
 
 // DBC: MO2_Kuehlm_T = raw_u8 * 0.75 - 48
 #define MO2_KUEHLM_T_RAW_MIN 0.0f
@@ -72,6 +80,56 @@ static inline float lerpf(float a, float b, float t) {
 
 static uint32_t s_mo5LastOverflowCount = 0U;
 static uint8_t s_mo5OverflowFlagTicksRemaining = 0U;
+
+static void updateAccelerationTiming(float vehicleSpeedKmh) {
+    static bool armed = false;
+    static bool reached50 = false;
+    static uint32_t runStartMs = 0U;
+
+    const uint32_t nowMs = millis();
+    const float speedKmh = isfinite(vehicleSpeedKmh) ? vehicleSpeedKmh : 0.0f;
+
+    if (speedKmh <= ACCEL_STOP_SPEED_KMH) {
+        armed = true;
+        reached50 = false;
+        params::cluster.acceleration_run_active = false;
+        params::cluster.acceleration_run_time_s = 0.0f;
+        return;
+    }
+
+    if (armed && speedKmh >= ACCEL_START_SPEED_KMH) {
+        armed = false;
+        reached50 = false;
+        runStartMs = nowMs;
+        params::cluster.acceleration_run_active = true;
+        params::cluster.acceleration_run_time_s = 0.0f;
+    }
+
+    if (!params::cluster.acceleration_run_active) return;
+
+    const float elapsedS = (float)(nowMs - runStartMs) * 0.001f;
+    params::cluster.acceleration_run_time_s = elapsedS;
+
+    if (!reached50 && speedKmh >= ACCEL_TARGET_50_KMH) {
+        reached50 = true;
+        params::cluster.acceleration_0_50_last_s = elapsedS;
+        if (!params::cluster.acceleration_0_50_valid ||
+            elapsedS < params::cluster.acceleration_0_50_best_s) {
+            params::cluster.acceleration_0_50_best_s = elapsedS;
+        }
+        params::cluster.acceleration_0_50_valid = true;
+    }
+
+    if (speedKmh >= ACCEL_TARGET_100_KMH) {
+        params::cluster.acceleration_0_100_last_s = elapsedS;
+        if (!params::cluster.acceleration_0_100_valid ||
+            elapsedS < params::cluster.acceleration_0_100_best_s) {
+            params::cluster.acceleration_0_100_best_s = elapsedS;
+        }
+        params::cluster.acceleration_0_100_valid = true;
+        params::cluster.acceleration_run_active = false;
+    }
+}
 
 static void resetMo5FuelOverflowState() {
     s_mo5LastOverflowCount = 0U;
@@ -138,6 +196,8 @@ void updateCluster() {
     const float motorCurrent_A = params::tesla_sdu.idc;
     const int8_t direction = params::tesla_sdu.seldir;
     static uint8_t s_fuelTickDivider = 0U;
+
+    updateAccelerationTiming(params::vehicle.vehicle_speed_510);
 
     params::cluster.power_percent_max = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_MAX_POWER);
     params::cluster.power_percent_dyn = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_DYN_POWER);

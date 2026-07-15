@@ -339,6 +339,15 @@
     };
   }
 
+  function accelerationTimeField(key, validKey) {
+    return function (live) {
+      if (!live || !live[validKey]) {
+        return "--";
+      }
+      return formatFixed(live[key], 2, "s");
+    };
+  }
+
   function intField(key, unit) {
     return function (live) {
       return formatInteger(live ? live[key] : null, unit || "");
@@ -815,6 +824,25 @@
             field("Coolant", fixedField("motor2_coolant_temperature", 1, "C")),
             field("Heatsink", fixedField("sdu_tmphs", 2, "C")),
             field("Motor", fixedField("sdu_tmpm", 2, "C"))
+          ]
+        },
+        {
+          label: "Acceleration",
+          title: "Acceleration Timing",
+          subtitle: "Automatic stopwatch and fastest acceleration runs since controller start.",
+          rows: [
+            field("Run Active", boolField("cluster_acceleration_run_active", "RUNNING", "READY")),
+            field("Current Run", fixedField("cluster_acceleration_run_time_s", 2, "s")),
+            field("Last 0-50", accelerationTimeField("cluster_acceleration_0_50_last_s", "cluster_acceleration_0_50_valid")),
+            field("Best 0-50", accelerationTimeField("cluster_acceleration_0_50_best_s", "cluster_acceleration_0_50_valid")),
+            field("Last 0-100", accelerationTimeField("cluster_acceleration_0_100_last_s", "cluster_acceleration_0_100_valid")),
+            field("Best 0-100", accelerationTimeField("cluster_acceleration_0_100_best_s", "cluster_acceleration_0_100_valid")),
+            field("Vehicle Speed", fixedField("vehicle_speed_510", 1, "km/h"))
+          ],
+          hero: [
+            field("Stopwatch", fixedField("cluster_acceleration_run_time_s", 2, "s")),
+            field("Best 0-50", accelerationTimeField("cluster_acceleration_0_50_best_s", "cluster_acceleration_0_50_valid")),
+            field("Best 0-100", accelerationTimeField("cluster_acceleration_0_100_best_s", "cluster_acceleration_0_100_valid"))
           ]
         },
         {

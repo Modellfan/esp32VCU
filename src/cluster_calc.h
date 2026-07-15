@@ -13,6 +13,14 @@ struct ClusterSignals {
     int needle_position = 0;
     bool heatsink_temp_critical = false;
     bool motor_temp_critical = false;
+    bool acceleration_run_active = false;
+    float acceleration_run_time_s = 0.0f;
+    float acceleration_0_50_last_s = 0.0f;
+    float acceleration_0_50_best_s = 0.0f;
+    float acceleration_0_100_last_s = 0.0f;
+    float acceleration_0_100_best_s = 0.0f;
+    bool acceleration_0_50_valid = false;
+    bool acceleration_0_100_valid = false;
 };
 
 extern ClusterSignals cluster;

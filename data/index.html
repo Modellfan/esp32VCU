@@ -127,6 +127,12 @@ input{height:52px;border-radius:14px;border:1px solid var(--line);background:#00
           <div class="tile"><div class="label">Total Fuel</div><div class="value" id="cc_total_fuel_l">0.000 L</div></div>
           <div class="tile"><div class="label">Heatsink Temp Critical</div><div class="value" id="cc_heatsink_temp_critical">OFF</div></div>
           <div class="tile"><div class="label">Motor Temp Critical</div><div class="value" id="cc_motor_temp_critical">OFF</div></div>
+          <div class="tile"><div class="label">Acceleration Run</div><div class="value" id="cc_acceleration_run_active">READY</div></div>
+          <div class="tile"><div class="label">Current Run</div><div class="value" id="cc_acceleration_run_time_s">0.00 s</div></div>
+          <div class="tile"><div class="label">Last 0-50</div><div class="value" id="cc_acceleration_0_50_last_s">--</div></div>
+          <div class="tile"><div class="label">Best 0-50</div><div class="value" id="cc_acceleration_0_50_best_s">--</div></div>
+          <div class="tile"><div class="label">Last 0-100</div><div class="value" id="cc_acceleration_0_100_last_s">--</div></div>
+          <div class="tile"><div class="label">Best 0-100</div><div class="value" id="cc_acceleration_0_100_best_s">--</div></div>
         </div>
       </div>
       <div class="page">
@@ -579,6 +585,12 @@ async function refreshNow(){
     setText("cc_total_fuel_l", Number(d.cluster_total_fuel_l || 0).toFixed(3) + " L");
     setText("cc_heatsink_temp_critical", d.cluster_heatsink_temp_critical ? "ON" : "OFF");
     setText("cc_motor_temp_critical", d.cluster_motor_temp_critical ? "ON" : "OFF");
+    setText("cc_acceleration_run_active", d.cluster_acceleration_run_active ? "RUNNING" : "READY");
+    setText("cc_acceleration_run_time_s", Number(d.cluster_acceleration_run_time_s || 0).toFixed(2) + " s");
+    setText("cc_acceleration_0_50_last_s", d.cluster_acceleration_0_50_valid ? Number(d.cluster_acceleration_0_50_last_s).toFixed(2) + " s" : "--");
+    setText("cc_acceleration_0_50_best_s", d.cluster_acceleration_0_50_valid ? Number(d.cluster_acceleration_0_50_best_s).toFixed(2) + " s" : "--");
+    setText("cc_acceleration_0_100_last_s", d.cluster_acceleration_0_100_valid ? Number(d.cluster_acceleration_0_100_last_s).toFixed(2) + " s" : "--");
+    setText("cc_acceleration_0_100_best_s", d.cluster_acceleration_0_100_valid ? Number(d.cluster_acceleration_0_100_best_s).toFixed(2) + " s" : "--");
     setText("ssid", d.ap_ssid);
     setText("ip", d.ap_ip);
   } catch (_) {}
