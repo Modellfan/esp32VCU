@@ -11,6 +11,7 @@
   const homeHeroImage = document.getElementById("homeHeroImage");
   const coolantStage = document.getElementById("coolantStage");
   const coolantStageMount = document.getElementById("coolantStageMount");
+  const styleTestStage = document.getElementById("styleTestStage");
   const tableHead = document.querySelector(".table-head");
   const tableScroll = document.getElementById("tableScroll");
   const valueTable = document.querySelector(".value-table");
@@ -19,11 +20,14 @@
   const introSplash = document.getElementById("introSplash");
   const introSplashVideo = document.getElementById("introSplashVideo");
   const screenRoot = document.getElementById("screenRoot");
+  const topbarTime = document.getElementById("topbarTime");
   const l1Icons = Array.from(document.querySelectorAll(".l1-icon"));
   const tabs = Array.from(document.querySelectorAll(".tab"));
   let homeBattery = null;
   let coolantStageView = null;
   let batterySettingsModal = null;
+  const ENGINEERING_STORAGE_KEY = "touchEngineeringMode";
+  const ENGINEERING_SECTIONS = ["cluster", "adjust"];
   const bootState = {
     introElapsed: !introSplashVideo,
     windowLoaded: document.readyState === "complete",
@@ -91,6 +95,22 @@
       return fallback;
     }
     return Math.max(min, Math.min(max, numeric));
+  }
+
+  function readEngineeringMode() {
+    try {
+      return window.localStorage.getItem(ENGINEERING_STORAGE_KEY) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function persistEngineeringMode(enabled) {
+    try {
+      window.localStorage.setItem(ENGINEERING_STORAGE_KEY, enabled ? "1" : "0");
+    } catch (_) {
+      // Keep the in-memory state even when storage is unavailable.
+    }
   }
 
   function firstNumericField(live, keys) {
@@ -213,6 +233,22 @@
     return resolveChargePowerKw(live) > 0.1;
   }
 
+  function resolveChargeCableConnected(live) {
+    const explicitState = firstBooleanField(live, [
+      "charge_cable_connected",
+      "charging_cable_connected",
+      "plug_connected",
+      "charge_plug_connected",
+      "charger_connected",
+      "evse_connected",
+      "ac_plug_connected"
+    ]);
+    if (explicitState !== null) {
+      return explicitState;
+    }
+    return resolveChargeActive(live);
+  }
+
   function estimateChargeFinishTimestamp(live, batteryLevel) {
     if (!resolveChargeActive(live)) {
       return null;
@@ -243,42 +279,81 @@
   }
 
   function batteryLevelField() {
-    return customField(function (live) {
+    const render = customField(function (live) {
       const value = resolveBatteryLevel(live);
       return formatInteger(value === null ? 28 : value, "%");
     });
+    render.chartKey = "battery_level_pct";
+    render.chartUnit = "%";
+    render.chartValue = function (live) {
+      const value = resolveBatteryLevel(live || {});
+      return value === null ? 28 : Number(value);
+    };
+    return render;
   }
 
   function batteryRangeKmField() {
-    return customField(function (live) {
+    const render = customField(function (live) {
       const level = resolveBatteryLevel(live);
       return formatInteger(resolveBatteryRangeKm(live, level), "km");
     });
+    render.chartKey = "battery_range_km";
+    render.chartUnit = "km";
+    render.chartValue = function (live) {
+      const level = resolveBatteryLevel(live || {});
+      return Number(resolveBatteryRangeKm(live || {}, level));
+    };
+    return render;
   }
 
   function batteryPowerKwField() {
-    return customField(function (live) {
+    const render = customField(function (live) {
       const level = resolveBatteryLevel(live);
       return formatFixed(resolveBatteryPowerKw(live, level), 1, "kW");
     });
+    render.chartKey = "battery_power_kw";
+    render.chartUnit = "kW";
+    render.chartValue = function (live) {
+      const level = resolveBatteryLevel(live || {});
+      return Number(resolveBatteryPowerKw(live || {}, level));
+    };
+    return render;
   }
 
   function batteryTargetChargeField() {
-    return customField(function () {
+    const render = customField(function () {
       return formatInteger(state.batteryControls.targetChargePct, "%");
     });
+    render.chartKey = "target_charge_pct";
+    render.chartUnit = "%";
+    render.chartValue = function () {
+      return Number(state.batteryControls.targetChargePct);
+    };
+    return render;
   }
 
   function batteryAcCurrentLimitField() {
-    return customField(function () {
+    const render = customField(function () {
       return formatInteger(state.batteryControls.acCurrentLimitA, "A");
     });
+    render.chartKey = "ac_current_limit_a";
+    render.chartUnit = "A";
+    render.chartValue = function () {
+      return Number(state.batteryControls.acCurrentLimitA);
+    };
+    return render;
   }
 
   function digitalPotField() {
-    return customField(function () {
+    const render = customField(function () {
       return formatInteger(state.batteryControls.digitalPotPct, "%");
     });
+    render.chartKey = "digital_pot_pct";
+    render.chartUnit = "%";
+    render.chartValue = function () {
+      return Number(state.batteryControls.digitalPotPct);
+    };
+    return render;
   }
 
   function formatFixed(value, digits, unit) {
@@ -334,9 +409,15 @@
   }
 
   function fixedField(key, digits, unit) {
-    return function (live) {
+    const render = function (live) {
       return formatFixed(live ? live[key] : null, digits, unit || "");
     };
+    render.chartKey = key;
+    render.chartUnit = unit || "";
+    render.chartValue = function (live) {
+      return live ? Number(live[key]) : NaN;
+    };
+    return render;
   }
 
   function accelerationTimeField(key, validKey) {
@@ -349,9 +430,15 @@
   }
 
   function intField(key, unit) {
-    return function (live) {
+    const render = function (live) {
       return formatInteger(live ? live[key] : null, unit || "");
     };
+    render.chartKey = key;
+    render.chartUnit = unit || "";
+    render.chartValue = function (live) {
+      return live ? Number(live[key]) : NaN;
+    };
+    return render;
   }
 
   function boolField(key, onLabel, offLabel) {
@@ -381,6 +468,13 @@
     if (options && options.chartKey) {
       row.chartKey = options.chartKey;
       row.chartUnit = options.chartUnit || "";
+    }
+    if (!row.chartKey && render && render.chartKey) {
+      row.chartKey = render.chartKey;
+      row.chartUnit = render.chartUnit || "";
+    }
+    if (render && render.chartValue) {
+      row.chartValue = render.chartValue;
     }
     return row;
   }
@@ -438,6 +532,225 @@
       "0": "Error",
       "1": "Ok",
       "2": "na"
+    },
+    adjust: {
+      image: "/touch/assets/adjust.svg",
+      tabs: [
+        {
+          label: "Setup",
+          title: "Adjust Setup",
+          subtitle: "Adjustment shortcuts and display calibration values.",
+          rows: [
+            field("Light Dimmer", intField("light_dimmer", "")),
+            field("Target Charge", batteryTargetChargeField(), { controlKey: "target_charge_pct" }),
+            field("AC Current Limit", batteryAcCurrentLimitField(), { controlKey: "ac_current_limit_a" }),
+            field("Digital Potentiometer", digitalPotField(), { controlKey: "digital_pot_pct" }),
+            field("Access Point IP", textField("ap_ip", "--"))
+          ],
+          hero: [
+            field("Dimmer", intField("light_dimmer", "")),
+            field("Target", batteryTargetChargeField()),
+            field("AC Limit", batteryAcCurrentLimitField())
+          ]
+        },
+        {
+          label: "Drive",
+          title: "Adjust Drive",
+          subtitle: "Drive-related controls and live reference values.",
+          rows: [
+            field("Vehicle Speed", fixedField("vehicle_speed_510", 1, "km/h")),
+            field("Pedal Position 1", fixedField("pedal_position_1", 1, "%")),
+            field("Pedal Position 2", fixedField("pedal_position_2", 1, "%")),
+            field("Throttle Position", fixedField("throttle_position_280", 1, "%")),
+            field("Brake Offset", fixedField("brake_normal_or_offset", 2, "%"))
+          ],
+          hero: [
+            field("Speed", fixedField("vehicle_speed_510", 1, "km/h")),
+            field("Pedal", fixedField("pedal_position_1", 1, "%")),
+            field("Brake", fixedField("brake_normal_or_offset", 2, "%"))
+          ]
+        },
+        {
+          label: "Power",
+          title: "Adjust Power",
+          subtitle: "Power calibration values for battery and SDU context.",
+          rows: [
+            field("Battery Charge", batteryLevelField()),
+            field("Estimated Range", batteryRangeKmField()),
+            field("Battery Power", batteryPowerKwField()),
+            field("DC Bus Voltage", fixedField("sdu_udc", 2, "V")),
+            field("DC Bus Current", fixedField("sdu_idc", 2, "A"))
+          ],
+          hero: [
+            field("Charge", batteryLevelField()),
+            field("Power", batteryPowerKwField()),
+            field("UDC", fixedField("sdu_udc", 2, "V"))
+          ]
+        },
+        {
+          label: "Info",
+          title: "Adjust Info",
+          subtitle: "Reference state used by the adjustment page.",
+          rows: [
+            field("AP SSID", textField("ap_ssid", "eboxster")),
+            field("Cluster Counter", intField("cluster_counter", "")),
+            field("ACC Receipt", boolField("receipt_for_acc_message", "YES", "NO")),
+            field("Tempomat Button", boolField("tempomat_button", "PRESSED", "IDLE")),
+            field("Driver Braking", boolField("driver_braking", "YES", "NO"))
+          ],
+          hero: [
+            field("SSID", textField("ap_ssid", "eboxster")),
+            field("Counter", intField("cluster_counter", "")),
+            field("ACC", boolField("receipt_for_acc_message", "YES", "NO"))
+          ]
+        }
+      ]
+    },
+    ventilation: {
+      image: "/touch/assets/active-cabin-ventilation.svg",
+      tabs: [
+        {
+          label: "Active",
+          title: "Active Ventilation",
+          subtitle: "Cabin ventilation and thermal context.",
+          rows: [
+            field("Ambient Temperature", fixedField("ambient_c", 1, "C")),
+            field("Inlet Air", fixedField("inlet_air_temperature", 1, "C")),
+            field("ECU Coolant", fixedField("motor2_coolant_temperature", 1, "C")),
+            field("AC Compressor", boolField("motor2_ac_compressor_active", "ON", "OFF")),
+            field("Fan Level", coolantFanField())
+          ],
+          hero: [
+            field("Ambient", fixedField("ambient_c", 1, "C")),
+            field("Inlet", fixedField("inlet_air_temperature", 1, "C")),
+            field("Fan", coolantFanField())
+          ]
+        },
+        {
+          label: "Thermal",
+          title: "Ventilation Thermal",
+          subtitle: "Temperature channels that influence cabin ventilation decisions.",
+          rows: [
+            field("SDU Heatsink", fixedField("sdu_tmphs", 2, "C")),
+            field("SDU Motor", fixedField("sdu_tmpm", 2, "C")),
+            field("Motor Critical", boolField("cluster_motor_temp_critical", "YES", "NO")),
+            field("Heatsink Critical", boolField("cluster_heatsink_temp_critical", "YES", "NO")),
+            field("Oil Pressure", fixedField("oil_pressure_bar", 2, "bar"))
+          ],
+          hero: [
+            field("Heatsink", fixedField("sdu_tmphs", 2, "C")),
+            field("Motor", fixedField("sdu_tmpm", 2, "C")),
+            field("Oil", fixedField("oil_pressure_bar", 2, "bar"))
+          ]
+        },
+        {
+          label: "Outputs",
+          title: "Ventilation Outputs",
+          subtitle: "Cooling and auxiliary output states.",
+          rows: [
+            field("Coolant Fan Low", boolField("coolant_fan_low_output", "ON", "OFF")),
+            field("Coolant Fan High", boolField("coolant_fan_high_output", "ON", "OFF")),
+            field("Fan Error", boolField("fan_error", "YES", "NO")),
+            field("Auxiliary Voltage", fixedField("sdu_uaux", 2, "V")),
+            field("Light Dimmer", intField("light_dimmer", ""))
+          ],
+          hero: [
+            field("Fan Low", boolField("coolant_fan_low_output", "ON", "OFF")),
+            field("Fan High", boolField("coolant_fan_high_output", "ON", "OFF")),
+            field("UAux", fixedField("sdu_uaux", 2, "V"))
+          ]
+        },
+        {
+          label: "Cabin",
+          title: "Cabin State",
+          subtitle: "Driver input and cabin-related state overview.",
+          rows: [
+            field("Indicator Left", boolField("indicator_left", "ON", "OFF")),
+            field("Indicator Right", boolField("indicator_right", "ON", "OFF")),
+            field("Tempomat Button", boolField("tempomat_button", "PRESSED", "IDLE")),
+            field("Wheel Up Button", boolField("steeringwheel_button_up", "PRESSED", "IDLE")),
+            field("Wheel Down Button", boolField("steeringwheel_button_down", "PRESSED", "IDLE"))
+          ],
+          hero: [
+            field("Left", boolField("indicator_left", "ON", "OFF")),
+            field("Right", boolField("indicator_right", "ON", "OFF")),
+            field("Tempomat", boolField("tempomat_button", "PRESSED", "IDLE"))
+          ]
+        }
+      ]
+    },
+    stopwatch: {
+      image: "/touch/assets/stopwatch.svg",
+      tabs: [
+        {
+          label: "Timer",
+          title: "Stopwatch Timer",
+          subtitle: "Timing context derived from live counters and speed.",
+          rows: [
+            field("SDU Uptime", intField("sdu_uptime", "10ms")),
+            field("Cluster Counter", intField("cluster_counter", "")),
+            field("Vehicle Speed", fixedField("vehicle_speed_510", 1, "km/h")),
+            field("Reference Speed", fixedField("vref_kmh", 1, "km/h")),
+            field("Acceleration", fixedField("acceleration", 3, "g"))
+          ],
+          hero: [
+            field("Uptime", intField("sdu_uptime", "10ms")),
+            field("Speed", fixedField("vehicle_speed_510", 1, "km/h")),
+            field("Accel", fixedField("acceleration", 3, "g"))
+          ]
+        },
+        {
+          label: "Lap",
+          title: "Stopwatch Lap",
+          subtitle: "Lap-style signal snapshot for drivetrain timing.",
+          rows: [
+            field("Motor Speed", intField("sdu_speed", "rpm")),
+            field("Cruise Speed", intField("sdu_cruisespeed", "rpm")),
+            field("Turns", intField("sdu_turns", "")),
+            field("Angle", fixedField("sdu_angle", 1, "deg")),
+            field("Frequency", fixedField("sdu_fstat", 2, "Hz"))
+          ],
+          hero: [
+            field("Speed", intField("sdu_speed", "rpm")),
+            field("Turns", intField("sdu_turns", "")),
+            field("Freq", fixedField("sdu_fstat", 2, "Hz"))
+          ]
+        },
+        {
+          label: "Trip",
+          title: "Stopwatch Trip",
+          subtitle: "Trip timing reference values.",
+          rows: [
+            field("Battery Charge", batteryLevelField()),
+            field("Estimated Range", batteryRangeKmField()),
+            field("Battery Power", batteryPowerKwField()),
+            field("Consumption", intField("mo5_verbrauch_ul", "uL")),
+            field("Cluster Power Dyn", fixedField("cluster_power_percent_dyn", 3, "%"))
+          ],
+          hero: [
+            field("Charge", batteryLevelField()),
+            field("Range", batteryRangeKmField()),
+            field("Dyn", fixedField("cluster_power_percent_dyn", 3, "%"))
+          ]
+        },
+        {
+          label: "Status",
+          title: "Stopwatch Status",
+          subtitle: "Status and warning context for timed runs.",
+          rows: [
+            field("TCS", boolField("tcs", "ACTIVE", "OFF")),
+            field("ABS", boolField("abs", "ACTIVE", "OFF")),
+            field("FDR", boolField("fdr", "ACTIVE", "OFF")),
+            field("FDR Lamp", boolField("fdr_lamp", "ON", "OFF")),
+            field("PSM Lamp", boolField("psm_button_lamp", "ON", "OFF"))
+          ],
+          hero: [
+            field("TCS", boolField("tcs", "ACTIVE", "OFF")),
+            field("ABS", boolField("abs", "ACTIVE", "OFF")),
+            field("FDR", boolField("fdr", "ACTIVE", "OFF"))
+          ]
+        }
+      ]
     }
   };
 
@@ -683,6 +996,39 @@
         }
       ]
     },
+    styleTest: {
+      image: "/touch/assets/i_sdu.svg",
+      tabs: [
+        {
+          label: "Drive",
+          title: "Porsche Drive Reference",
+          subtitle: "Reference recreation test page.",
+          rows: [],
+          hero: []
+        },
+        {
+          label: "Assistance",
+          title: "Porsche Assistance Reference",
+          subtitle: "Reference recreation test page.",
+          rows: [],
+          hero: []
+        },
+        {
+          label: "Trip",
+          title: "Porsche Trip Reference",
+          subtitle: "Reference recreation test page.",
+          rows: [],
+          hero: []
+        },
+        {
+          label: "Comfort",
+          title: "Porsche Comfort Reference",
+          subtitle: "Reference recreation test page.",
+          rows: [],
+          hero: []
+        }
+      ]
+    },
     sdu: {
       image: "/touch/assets/i_sdu.svg",
       tabs: [
@@ -869,14 +1215,30 @@
     }
   };
 
+  sections.adjust = SDU_ENUMS.adjust;
+  sections.ventilation = SDU_ENUMS.ventilation;
+  sections.stopwatch = SDU_ENUMS.stopwatch;
+
   const state = {
     section: "home",
     tabIndex: 0,
+    engineeringMode: readEngineeringMode(),
     batteryControls: {
       acCurrentLimitA: 16,
       digitalPotPct: 0,
       targetChargePct: 80
     },
+    styleTestControls: {
+      brakeComfort: false,
+      chassisLevel: "Medium",
+      electricSportSound: true,
+      powerSteeringAssist: 72,
+      simulateHostLost: false,
+      simulatePlugConnected: false,
+      targetChargePct: 85
+    },
+    styleTestPopup: null,
+    styleTestScroll: {},
     live: null,
     lastUpdated: "",
     error: "",
@@ -949,7 +1311,11 @@
 
   function updateNav() {
     l1Icons.forEach(function (button) {
-      button.classList.toggle("active", button.dataset.section === state.section);
+      const engineeringOnly = button.dataset.engineeringOnly === "true";
+      const visible = !engineeringOnly || state.engineeringMode;
+      button.hidden = !visible;
+      button.disabled = !visible;
+      button.classList.toggle("active", visible && button.dataset.section === state.section);
     });
   }
 
@@ -965,6 +1331,28 @@
     });
   }
 
+  function isEngineeringSection(sectionName) {
+    return ENGINEERING_SECTIONS.indexOf(sectionName) !== -1;
+  }
+
+  function setEngineeringMode(enabled) {
+    state.engineeringMode = !!enabled;
+    persistEngineeringMode(state.engineeringMode);
+    if (!state.engineeringMode && isEngineeringSection(state.section)) {
+      state.section = "vehicle";
+      state.tabIndex = 0;
+      closeMetricChart();
+    }
+    if (screenRoot) {
+      screenRoot.classList.toggle("is-engineering-mode", state.engineeringMode);
+    }
+    renderView();
+  }
+
+  function toggleEngineeringMode() {
+    setEngineeringMode(!state.engineeringMode);
+  }
+
   function isCurrentTabTileBoard() {
     const activeTab = currentTab();
     return !!(
@@ -977,13 +1365,77 @@
 
   function findCurrentChartTile(chartKey) {
     const activeTab = currentTab();
+    if (state.section === "styleTest" && chartKey === "battery_power_kw") {
+      return porscheBatteryPowerTile();
+    }
     const boardTiles = activeTab.tileBoard && Array.isArray(activeTab.tileBoard.tiles) ? activeTab.tileBoard.tiles : [];
-    return boardTiles.find(function (tile) {
-      return tile.chartKey === chartKey;
+    const tile = boardTiles.find(function (item) {
+      return item.chartKey === chartKey;
+    });
+    if (tile) {
+      return tile;
+    }
+    const rows = Array.isArray(activeTab.rows) ? activeTab.rows : [];
+    return rows.find(function (item) {
+      return item.chartKey === chartKey;
     }) || null;
   }
 
+  function numericChartValue(tile) {
+    if (!tile) {
+      return null;
+    }
+    if (typeof tile.chartValue === "function") {
+      const value = Number(tile.chartValue(state.live || {}));
+      return Number.isFinite(value) ? value : null;
+    }
+    if (!tile.chartKey) {
+      return null;
+    }
+    const value = state.live ? Number(state.live[tile.chartKey]) : NaN;
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function isCurrentChartStillAvailable() {
+    if (!state.chart.tile || !state.chart.tile.chartKey) {
+      return false;
+    }
+    return !!findCurrentChartTile(state.chart.tile.chartKey);
+  }
+
+  function hasCurrentTabChartableRows() {
+    const activeTab = currentTab();
+    const rows = activeTab && Array.isArray(activeTab.rows) ? activeTab.rows : [];
+    return rows.some(function (row) {
+      return !!row.chartKey;
+    });
+  }
+
+  function isCurrentTabChartable() {
+    return isCurrentTabTileBoard() || hasCurrentTabChartableRows() || state.section === "styleTest";
+  }
+
+  function rowCanOpenChart(row) {
+    return !!(row && row.chartKey);
+  }
+
+  function rowCanOpenControl(row) {
+    return !!(row && row.controlKey && !row.chartKey);
+  }
+
   function numericLiveValue(key) {
+    if (state.chart.tile && state.chart.tile.chartKey === key) {
+      return numericChartValue(state.chart.tile);
+    }
+    const activeTab = currentTab();
+    const boardTiles = activeTab.tileBoard && Array.isArray(activeTab.tileBoard.tiles) ? activeTab.tileBoard.tiles : [];
+    const rows = Array.isArray(activeTab.rows) ? activeTab.rows : [];
+    const tile = boardTiles.concat(rows).find(function (item) {
+      return item.chartKey === key;
+    });
+    if (tile) {
+      return numericChartValue(tile);
+    }
     const value = state.live ? Number(state.live[key]) : NaN;
     return Number.isFinite(value) ? value : null;
   }
@@ -1232,17 +1684,33 @@
   }
 
   function renderRows() {
+    if (state.section === "styleTest") {
+      if (valueTable) {
+        valueTable.hidden = true;
+      }
+      if (metricBoard) {
+        metricBoard.hidden = true;
+        metricBoard.classList.remove("is-chart-view");
+        metricBoard.innerHTML = "";
+      }
+      if (tableScroll) {
+        tableScroll.classList.remove("is-metric-board");
+        tableScroll.classList.remove("is-chart-view");
+      }
+      valueRows.innerHTML = "";
+      return;
+    }
     const activeTab = currentTab();
     const boardConfig = activeTab.tileBoard;
     const boardTiles = boardConfig && Array.isArray(boardConfig.tiles) ? boardConfig.tiles : null;
     const hasMetricBoard = !!(boardTiles && boardTiles.length);
-    const hasChart = hasMetricBoard && !!state.chart.tile;
+    const hasChart = !!(state.chart.tile && isCurrentChartStillAvailable());
 
     if (valueTable) {
-      valueTable.hidden = hasMetricBoard;
+      valueTable.hidden = hasMetricBoard || hasChart;
     }
     if (metricBoard) {
-      metricBoard.hidden = !hasMetricBoard;
+      metricBoard.hidden = !hasMetricBoard && !hasChart;
       metricBoard.classList.toggle("is-chart-view", hasChart);
     }
     if (tableScroll) {
@@ -1250,12 +1718,14 @@
       tableScroll.classList.toggle("is-chart-view", hasChart);
     }
 
+    if (hasChart) {
+      valueRows.innerHTML = "";
+      renderMetricChart();
+      return;
+    }
+
     if (hasMetricBoard) {
       valueRows.innerHTML = "";
-      if (hasChart) {
-        renderMetricChart();
-        return;
-      }
       metricBoard.innerHTML = boardTiles.map(function (tile) {
         const attrs = tile.chartKey
           ? " data-chart-key=\"" + escapeHtml(tile.chartKey) + "\" role=\"button\" tabindex=\"0\""
@@ -1280,7 +1750,13 @@
       if (index === 0) {
         classes.push("selected");
       }
-      if (row.controlKey) {
+      if (rowCanOpenChart(row)) {
+        classes.push("is-actionable");
+        attrs.push("data-chart-key=\"" + escapeHtml(row.chartKey) + "\"");
+        attrs.push("role=\"button\"");
+        attrs.push("tabindex=\"0\"");
+      }
+      if (rowCanOpenControl(row)) {
         classes.push("is-actionable");
         attrs.push("data-control-key=\"" + escapeHtml(row.controlKey) + "\"");
         attrs.push("role=\"button\"");
@@ -1408,6 +1884,786 @@
     }
   }
 
+  function porscheSwitch(on) {
+    return "<span class=\"pt-switch" + (on ? " is-on" : "") + "\"><span></span></span>";
+  }
+
+  function porscheRadio(on) {
+    return "<span class=\"pt-radio" + (on ? " is-on" : "") + "\"></span>";
+  }
+
+  function porscheSeatIcon() {
+    return "<span class=\"pt-seat-icon\"><span></span><span></span></span>";
+  }
+
+  function porscheValue(value, unit) {
+    return "<span class=\"pt-live-value\"><strong>" + escapeHtml(value) + "</strong>" +
+      (unit ? "<small>" + escapeHtml(unit) + "</small>" : "") +
+      "</span>";
+  }
+
+  function porscheBatteryPowerTile() {
+    return {
+      chartKey: "battery_power_kw",
+      chartUnit: "kW",
+      label: "Battery power",
+      source: "styleTest",
+      chartValue: function (live) {
+        const level = resolveBatteryLevel(live || {});
+        return Number(resolveBatteryPowerKw(live || {}, level));
+      },
+      render: function (live) {
+        const level = resolveBatteryLevel(live || {});
+        return formatFixed(resolveBatteryPowerKw(live || {}, level), 1, "kW");
+      }
+    };
+  }
+
+  function porscheCheckbox(key, checked) {
+    return "<button class=\"pt-checkbox" + (checked ? " is-on" : "") + "\" type=\"button\" data-pt-checkbox=\"" +
+      escapeHtml(key) +
+      "\" aria-pressed=\"" + (checked ? "true" : "false") + "\"></button>";
+  }
+
+  function porscheMenuValue(value) {
+    return "<span class=\"pt-menu-value\"><span>" + escapeHtml(value) + "</span><span class=\"pt-chevron\">&gt;</span></span>";
+  }
+
+  function porscheRows(rows) {
+    return rows.filter(function (row) {
+      return !row.engineeringOnly || state.engineeringMode;
+    }).map(function (row) {
+      const detail = row.detail ? "<small>" + escapeHtml(row.detail) + "</small>" : "";
+      const icon = row.icon ? "<span class=\"pt-row-icon\">" + row.icon + "</span>" : "";
+      const value = row.control || row.value || "";
+      const attrs = [];
+      if (row.chartKey) {
+        attrs.push("data-pt-chart-key=\"" + escapeHtml(row.chartKey) + "\"");
+        attrs.push("role=\"button\"");
+        attrs.push("tabindex=\"0\"");
+      }
+      if (row.menuKey) {
+        attrs.push("data-pt-menu-key=\"" + escapeHtml(row.menuKey) + "\"");
+        attrs.push("role=\"button\"");
+        attrs.push("tabindex=\"0\"");
+      }
+      const classes = "pt-row" +
+        (row.active ? " is-active" : "") +
+        (row.chartKey ? " is-chartable" : "") +
+        (row.menuKey ? " is-menu-action" : "") +
+        (row.engineeringOnly ? " is-engineering-only" : "") +
+        (!row.icon ? " is-no-icon" : "") +
+        (!row.detail ? " is-no-detail" : "");
+      return "<article class=\"" + classes + "\"" + (attrs.length ? " " + attrs.join(" ") : "") + ">" +
+        icon +
+        "<div class=\"pt-row-copy\"><strong>" + escapeHtml(row.label) + "</strong>" + detail + "</div>" +
+        "<div class=\"pt-row-value\">" + value + "</div>" +
+      "</article>";
+    }).join("");
+  }
+
+  function porscheVehicleGraphic(mode) {
+    const battery = mode === "trip" || mode === "comfort";
+    const airflow = mode === "climate";
+    const side = mode === "level";
+    return "<div class=\"pt-car-scene pt-car-scene-" + escapeHtml(mode) + "\">" +
+      "<div class=\"pt-dot-grid\"></div>" +
+      "<svg class=\"pt-car\" viewBox=\"0 0 520 240\" role=\"img\" aria-label=\"Vehicle reference illustration\">" +
+        "<defs>" +
+          "<linearGradient id=\"ptCarPaint\" x1=\"0\" x2=\"1\"><stop offset=\"0\" stop-color=\"#15191c\"/><stop offset=\"0.46\" stop-color=\"#dce2e5\"/><stop offset=\"1\" stop-color=\"#6f777b\"/></linearGradient>" +
+          "<linearGradient id=\"ptGreen\" x1=\"0\" x2=\"1\"><stop offset=\"0\" stop-color=\"#17d64d\"/><stop offset=\"1\" stop-color=\"#69ff77\"/></linearGradient>" +
+        "</defs>" +
+        "<g class=\"pt-car-shadow\"><ellipse cx=\"265\" cy=\"198\" rx=\"205\" ry=\"22\"/></g>" +
+        "<path class=\"pt-car-body\" d=\"M60 160 C92 104 151 80 246 82 C332 84 411 111 466 148 C489 164 480 184 444 188 L118 189 C73 188 43 179 60 160 Z\"/>" +
+        "<path class=\"pt-car-cabin\" d=\"M193 92 C241 76 318 82 370 126 L247 128 C217 126 194 115 193 92 Z\"/>" +
+        "<path class=\"pt-car-line\" d=\"M88 160 C168 151 312 151 444 164\"/>" +
+        "<circle class=\"pt-wheel\" cx=\"153\" cy=\"184\" r=\"34\"/><circle class=\"pt-wheel\" cx=\"394\" cy=\"184\" r=\"34\"/>" +
+        "<circle class=\"pt-rim\" cx=\"153\" cy=\"184\" r=\"20\"/><circle class=\"pt-rim\" cx=\"394\" cy=\"184\" r=\"20\"/>" +
+        (battery ? "<path class=\"pt-battery\" d=\"M239 137 h91 l-10 45 h-94 z\"/>" : "") +
+        (side ? "<path class=\"pt-suspension\" d=\"M94 177 h340\"/><path class=\"pt-suspension\" d=\"M206 202 h150\"/><path class=\"pt-arrow\" d=\"M260 160 l18 18 h-36 z M260 221 l-18-18 h36 z\"/>" : "") +
+        (airflow ? "<path class=\"pt-air\" d=\"M155 96 C211 40 319 45 390 96 M113 139 C193 91 323 93 428 135 M182 165 C238 135 314 136 369 163\"/>" : "") +
+      "</svg>" +
+    "</div>";
+  }
+
+  function porscheStyleChartMarkup(tile, modifier) {
+    const latest = tile.render(state.live);
+    return "<section class=\"pt-style-chart" + (modifier ? " " + escapeHtml(modifier) : "") + "\" aria-label=\"" + escapeHtml(tile.label) + " live graph\">" +
+      "<div class=\"metric-chart-panel\">" +
+        "<div class=\"metric-chart-head\">" +
+          "<div class=\"metric-chart-label\">" + escapeHtml(tile.label) + "</div>" +
+          "<div class=\"metric-chart-latest\">" + escapeHtml(latest) + "</div>" +
+        "</div>" +
+        "<canvas class=\"metric-chart-canvas\" id=\"metricChartCanvas\"></canvas>" +
+      "</div>" +
+    "</section>";
+  }
+
+  function porscheChassisPopupMarkup() {
+    const options = ["Lift", "Medium", "Lowered", "Low"];
+    return "<section class=\"pt-popup-layer\" aria-label=\"Chassis level options\">" +
+      "<div class=\"pt-popup-panel\">" +
+        "<div class=\"pt-popup-title\">Chassis level</div>" +
+        options.map(function (option) {
+          const selected = state.styleTestControls.chassisLevel === option;
+          return "<button class=\"pt-popup-option\" type=\"button\" data-pt-option-key=\"chassisLevel\" data-pt-option-value=\"" +
+            escapeHtml(option) +
+            "\" aria-pressed=\"" + (selected ? "true" : "false") + "\">" +
+              "<span>" + escapeHtml(option) + "</span>" +
+              porscheRadio(selected) +
+            "</button>";
+        }).join("") +
+      "</div>" +
+    "</section>";
+  }
+
+  function porschePowerSteeringPopupMarkup() {
+    const value = Math.round(state.styleTestControls.powerSteeringAssist);
+    return "<section class=\"pt-popup-layer\" aria-label=\"Power steering assist\">" +
+      "<div class=\"pt-popup-panel pt-popup-panel-slider\">" +
+        "<div class=\"pt-popup-title\">Power steering</div>" +
+        "<div class=\"pt-slider-content\">" +
+          "<div class=\"pt-slider-readout\">" +
+            "<span>Steering assist</span>" +
+            "<strong id=\"ptPowerSteeringValue\">" + escapeHtml(String(value)) + "</strong>" +
+            "<small>%</small>" +
+          "</div>" +
+          "<input class=\"pt-slider\" type=\"range\" min=\"0\" max=\"100\" step=\"1\" value=\"" +
+            escapeHtml(String(value)) +
+            "\" style=\"--pt-slider-fill: " + escapeHtml(String(value)) + "%\" data-pt-slider-key=\"powerSteeringAssist\" aria-label=\"Power steering assist\">" +
+          "<div class=\"pt-slider-scale\"><span>Light</span><span>Firm</span></div>" +
+        "</div>" +
+      "</div>" +
+    "</section>";
+  }
+
+  function porscheVerticalSliderVars(value, min, max) {
+    const bounded = clampNumber(value, min, max, min);
+    const range = Math.max(1, max - min);
+    const y = ((max - bounded) / range) * 100;
+    return {
+      fill: 100 - y,
+      y: y
+    };
+  }
+
+  function porscheTargetChargePopupMarkup() {
+    const min = 25;
+    const max = 100;
+    const value = Math.round(clampNumber(state.styleTestControls.targetChargePct, min, max, 85));
+    const vars = porscheVerticalSliderVars(value, min, max);
+    return "<section class=\"pt-popup-layer\" aria-label=\"Target charge setting\">" +
+      "<div class=\"pt-popup-panel pt-popup-panel-vertical-slider\">" +
+        "<div class=\"pt-popup-title\">General charging profile</div>" +
+        "<div class=\"pt-vertical-slider-content\">" +
+          "<div class=\"pt-vertical-slider-copy\">" +
+            "<strong>Minimum charge</strong>" +
+            "<p>Set charging target that the vehicle should reach as quickly as possible while charging.</p>" +
+            "<span></span>" +
+            "<em>Optimised charging</em>" +
+            "<small>Charging operation can be automatically optimised using suitable equipment.</small>" +
+          "</div>" +
+          "<div class=\"pt-vertical-slider-wrap\">" +
+            "<div class=\"pt-vertical-slider\" role=\"slider\" tabindex=\"0\" aria-label=\"Target charge\" aria-valuemin=\"" +
+              String(min) +
+              "\" aria-valuemax=\"" +
+              String(max) +
+              "\" aria-valuenow=\"" +
+              escapeHtml(String(value)) +
+              "\" data-pt-vertical-slider-key=\"targetChargePct\" data-min=\"" +
+              String(min) +
+              "\" data-max=\"" +
+              String(max) +
+              "\" style=\"--pt-vertical-slider-y: " +
+              escapeHtml(vars.y.toFixed(2)) +
+              "%; --pt-vertical-slider-fill: " +
+              escapeHtml(vars.fill.toFixed(2)) +
+              "%\">" +
+                "<div class=\"pt-vertical-slider-track\"></div>" +
+                "<div class=\"pt-vertical-slider-line\"></div>" +
+                "<div class=\"pt-vertical-slider-badge\"><strong id=\"ptTargetChargeValue\">" +
+                  escapeHtml(String(value)) +
+                  "</strong><span>%</span></div>" +
+            "</div>" +
+          "</div>" +
+        "</div>" +
+      "</div>" +
+    "</section>";
+  }
+
+  function porscheDriveMarkup() {
+    const batteryTile = porscheBatteryPowerTile();
+    const batteryValue = numericChartValue(batteryTile);
+    const batteryText = batteryValue === null ? "--" : String(Math.round(batteryValue));
+    const isBatteryChartActive = state.chart.tile && state.chart.tile.source === "styleTest" && state.chart.tile.chartKey === batteryTile.chartKey;
+    const isChassisPopupActive = state.styleTestPopup === "chassisLevel";
+    const isPowerSteeringPopupActive = state.styleTestPopup === "powerSteeringAssist";
+    const isTargetChargePopupActive = state.styleTestPopup === "targetChargePct";
+    return "<div class=\"pt-layout pt-layout-drive" + (state.styleTestPopup ? " has-popup" : "") + "\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { active: true, label: "Drive mode", detail: "Driving setup", control: porscheMenuValue("Normal") },
+          { active: isBatteryChartActive, label: "Battery power", detail: "Live value", control: porscheValue(batteryText, "kW"), chartKey: batteryTile.chartKey },
+          { active: isTargetChargePopupActive, label: "Target charge", detail: "Charge target", control: porscheMenuValue(String(Math.round(state.styleTestControls.targetChargePct)) + "%"), menuKey: "targetChargePct" },
+          { active: isChassisPopupActive, label: "Chassis level", detail: "Ride height", control: porscheMenuValue(state.styleTestControls.chassisLevel), menuKey: "chassisLevel" },
+          { label: "Recuperation", detail: "Energy recovery", control: porscheMenuValue("On"), engineeringOnly: true },
+          { label: "Electric Sport Sound", detail: "Sound profile", control: porscheCheckbox("electricSportSound", state.styleTestControls.electricSportSound) },
+          { active: isPowerSteeringPopupActive, label: "Power steering", detail: "Steering assist", control: porscheMenuValue(String(Math.round(state.styleTestControls.powerSteeringAssist)) + "%"), menuKey: "powerSteeringAssist" },
+          { label: "Traction control", detail: "Wheel slip", control: porscheMenuValue("Normal") },
+          { label: "Brake comfort", detail: "Pedal response", control: porscheCheckbox("brakeComfort", state.styleTestControls.brakeComfort) },
+          { label: "Sport response", control: porscheMenuValue("Off") },
+          { label: "Simulate host lost", detail: "Warning test", control: porscheCheckbox("simulateHostLost", state.styleTestControls.simulateHostLost) },
+          { label: "Simulate plug connected", detail: "Plug test", control: porscheCheckbox("simulatePlugConnected", state.styleTestControls.simulatePlugConnected) }
+        ]) +
+      "</section>" +
+      "<section class=\"pt-front-stage\" aria-label=\"Front vehicle image\">" +
+        "<img src=\"/touch/img/half_front.png\" alt=\"Front vehicle reference\">" +
+      "</section>" +
+      (isBatteryChartActive ? porscheStyleChartMarkup(batteryTile, "is-full") : "") +
+      (isChassisPopupActive ? porscheChassisPopupMarkup() : "") +
+      (isPowerSteeringPopupActive ? porschePowerSteeringPopupMarkup() : "") +
+      (isTargetChargePopupActive ? porscheTargetChargePopupMarkup() : "") +
+    "</div>";
+  }
+
+  function porscheAssistanceMarkup() {
+    return "<div class=\"pt-layout pt-layout-assistance\">" +
+      "<section class=\"pt-cardless-panel\">" +
+        "<div class=\"pt-back-title\"><span>&lt;</span><strong>Porsche Active Ride</strong></div>" +
+        porscheRows([
+          { label: "Entry height", control: porscheSwitch(true) },
+          { label: "Cornering comfort", detail: "Only available in chassis Normal", control: porscheSwitch(true) },
+          { label: "Pitch comfort", detail: "Only available in chassis Normal", control: porscheSwitch(true) }
+        ]) +
+      "</section>" +
+      porscheVehicleGraphic("comfort") +
+    "</div>";
+  }
+
+  function porscheTripMarkup() {
+    return "<div class=\"pt-layout pt-layout-trip\">" +
+      "<section class=\"pt-trip-list\">" +
+        "<div class=\"pt-trip-head\">Trip since 13:20</div>" +
+        porscheRows([
+          { label: "5:03 h", detail: "Driving time", value: "" },
+          { label: "459.9 km", detail: "Distance", value: "" },
+          { label: "24.2 kWh/100 km", detail: "Average consumption", value: "" },
+          { label: "92 km/h", detail: "Average speed", value: "" }
+        ]) +
+        "<div class=\"pt-trip-foot\">Trip since charging</div>" +
+      "</section>" +
+      porscheVehicleGraphic("trip") +
+    "</div>";
+  }
+
+  function porscheComfortMarkup() {
+    return "<div class=\"pt-layout pt-layout-comfort\">" +
+      "<section class=\"pt-climate-menu\"><strong>Diffus</strong><strong>Fokuseret</strong><strong class=\"active\">Individual</strong></section>" +
+      porscheVehicleGraphic("climate") +
+      "<section class=\"pt-climate-controls\">" +
+        "<div class=\"pt-temp\"><button>^</button><strong>16.5</strong><button>v</button></div>" +
+        "<div class=\"pt-auto\"><button>^</button><strong>AUTO</strong><span>*</span><button>v</button></div>" +
+        "<div class=\"pt-auto\"><button>^</button><strong>AUTO</strong><span>*</span><button>v</button></div>" +
+        "<div class=\"pt-temp\"><button>^</button><strong>24.0</strong><button>v</button></div>" +
+      "</section>" +
+      "<div class=\"pt-seat-left\">" + porscheSeatIcon() + porscheSeatIcon() + "</div>" +
+      "<div class=\"pt-seat-right\">" + porscheSeatIcon() + porscheSeatIcon() + "</div>" +
+    "</div>";
+  }
+
+  function styleTestScrollKey() {
+    const tab = currentTab();
+    return tab && tab.label ? tab.label : String(state.tabIndex);
+  }
+
+  function findStyleTestScroller() {
+    if (!styleTestStage) {
+      return null;
+    }
+    return styleTestStage.querySelector(".pt-list, .pt-option-panel, .pt-cardless-panel, .pt-trip-list");
+  }
+
+  function rememberStyleTestScroll() {
+    const scroller = findStyleTestScroller();
+    if (!scroller) {
+      return;
+    }
+    state.styleTestScroll[styleTestScrollKey()] = scroller.scrollTop;
+  }
+
+  function restoreStyleTestScroll(key) {
+    const scroller = findStyleTestScroller();
+    if (!scroller) {
+      return;
+    }
+    const top = state.styleTestScroll[key] || 0;
+    scroller.scrollTop = top;
+    window.requestAnimationFrame(function () {
+      scroller.scrollTop = top;
+    });
+  }
+
+  function renderStyleTestStage() {
+    if (!styleTestStage) {
+      return;
+    }
+    const tab = currentTab().label;
+    const scrollKey = styleTestScrollKey();
+    rememberStyleTestScroll();
+    const content = tab === "Assistance"
+      ? porscheAssistanceMarkup()
+      : tab === "Trip"
+        ? porscheTripMarkup()
+        : tab === "Comfort"
+          ? porscheComfortMarkup()
+          : porscheDriveMarkup();
+    styleTestStage.innerHTML =
+      "<div class=\"pt-shell\">" +
+        content +
+      "</div>";
+    const chartCanvas = document.getElementById("metricChartCanvas");
+    if (chartCanvas && state.chart.tile && state.chart.tile.source === "styleTest") {
+      bindMetricChartPointer(chartCanvas);
+      window.requestAnimationFrame(drawMetricChart);
+    }
+    restoreStyleTestScroll(scrollKey);
+  }
+
+  function bindStyleTestDragScroll() {
+    if (!styleTestStage) {
+      return;
+    }
+    let dragState = null;
+    let kineticFrame = null;
+    let snapFrame = null;
+    let wheelSnapTimer = null;
+    let verticalSliderState = null;
+
+    function cancelStyleTestScrollAnimation() {
+      if (kineticFrame !== null) {
+        window.cancelAnimationFrame(kineticFrame);
+        kineticFrame = null;
+      }
+      if (snapFrame !== null) {
+        window.cancelAnimationFrame(snapFrame);
+        snapFrame = null;
+      }
+      if (wheelSnapTimer !== null) {
+        window.clearTimeout(wheelSnapTimer);
+        wheelSnapTimer = null;
+      }
+    }
+
+    function maxScrollTop(scroller) {
+      return Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    }
+
+    function rowSnapStep(scroller) {
+      const row = scroller.querySelector(".pt-row");
+      if (!row) {
+        return 0;
+      }
+      return row.getBoundingClientRect().height || 0;
+    }
+
+    function setStyleTestScroll(scroller, top) {
+      const boundedTop = Math.max(0, Math.min(maxScrollTop(scroller), top));
+      scroller.scrollTop = boundedTop;
+      state.styleTestScroll[styleTestScrollKey()] = boundedTop;
+      return boundedTop;
+    }
+
+    function snapStyleTestScroll(scroller) {
+      let targetScroller = scroller && scroller.isConnected ? scroller : findStyleTestScroller();
+      if (!targetScroller) {
+        return;
+      }
+      const step = rowSnapStep(targetScroller);
+      if (step <= 0) {
+        return;
+      }
+      const maxTop = maxScrollTop(targetScroller);
+      const target = Math.max(0, Math.min(maxTop, Math.round(targetScroller.scrollTop / step) * step));
+      const start = targetScroller.scrollTop;
+      const distance = target - start;
+      if (Math.abs(distance) < 0.5) {
+        setStyleTestScroll(targetScroller, target);
+        return;
+      }
+      const startedAt = performance.now();
+      const duration = 260;
+
+      function frame(now) {
+        targetScroller = targetScroller && targetScroller.isConnected ? targetScroller : findStyleTestScroller();
+        if (!targetScroller) {
+          snapFrame = null;
+          return;
+        }
+        const t = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setStyleTestScroll(targetScroller, start + distance * eased);
+        if (t < 1) {
+          snapFrame = window.requestAnimationFrame(frame);
+        } else {
+          snapFrame = null;
+          setStyleTestScroll(targetScroller, target);
+        }
+      }
+
+      snapFrame = window.requestAnimationFrame(frame);
+    }
+
+    function coastStyleTestScroll(scroller, velocity) {
+      let targetScroller = scroller && scroller.isConnected ? scroller : findStyleTestScroller();
+      if (!targetScroller) {
+        return;
+      }
+      if (Math.abs(velocity) < 0.08) {
+        snapStyleTestScroll(targetScroller);
+        return;
+      }
+      let lastTime = performance.now();
+      let currentVelocity = Math.max(-2.3, Math.min(2.3, velocity));
+
+      function frame(now) {
+        targetScroller = targetScroller && targetScroller.isConnected ? targetScroller : findStyleTestScroller();
+        if (!targetScroller) {
+          kineticFrame = null;
+          return;
+        }
+        const dt = Math.min(32, now - lastTime);
+        lastTime = now;
+        const previousTop = targetScroller.scrollTop;
+        const nextTop = setStyleTestScroll(targetScroller, previousTop + currentVelocity * dt);
+        const hitEdge = nextTop <= 0 || nextTop >= maxScrollTop(targetScroller);
+        currentVelocity *= Math.pow(0.94, dt / 16.67);
+        if (hitEdge || Math.abs(currentVelocity) < 0.045) {
+          kineticFrame = null;
+          snapStyleTestScroll(targetScroller);
+          return;
+        }
+        kineticFrame = window.requestAnimationFrame(frame);
+      }
+
+      kineticFrame = window.requestAnimationFrame(frame);
+    }
+
+    function setVerticalSliderValue(slider, clientY) {
+      const key = slider.getAttribute("data-pt-vertical-slider-key");
+      if (key !== "targetChargePct") {
+        return;
+      }
+      const min = Number(slider.getAttribute("data-min")) || 0;
+      const max = Number(slider.getAttribute("data-max")) || 100;
+      const rect = slider.getBoundingClientRect();
+      const ratio = clampNumber((clientY - rect.top) / Math.max(1, rect.height), 0, 1, 0);
+      const value = Math.round(max - ratio * (max - min));
+      const boundedValue = clampNumber(value, min, max, state.styleTestControls.targetChargePct);
+      const vars = porscheVerticalSliderVars(boundedValue, min, max);
+      state.styleTestControls.targetChargePct = boundedValue;
+      slider.style.setProperty("--pt-vertical-slider-y", vars.y.toFixed(2) + "%");
+      slider.style.setProperty("--pt-vertical-slider-fill", vars.fill.toFixed(2) + "%");
+      slider.setAttribute("aria-valuenow", String(Math.round(boundedValue)));
+      const readout = document.getElementById("ptTargetChargeValue");
+      if (readout) {
+        readout.textContent = String(Math.round(boundedValue));
+      }
+    }
+
+    styleTestStage.addEventListener("pointerdown", function (event) {
+      if (event.target.closest("button, [data-pt-checkbox], .pt-vertical-slider, .pt-row[data-pt-chart-key], .pt-row[data-pt-menu-key]")) {
+        return;
+      }
+      if (state.styleTestPopup) {
+        return;
+      }
+      const scrollTarget = event.target.closest(".pt-list, .pt-option-panel, .pt-cardless-panel, .pt-trip-list");
+      if (!scrollTarget || scrollTarget.scrollHeight <= scrollTarget.clientHeight) {
+        return;
+      }
+      cancelStyleTestScrollAnimation();
+      const now = performance.now();
+      dragState = {
+        target: scrollTarget,
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startScrollTop: scrollTarget.scrollTop,
+        lastTime: now,
+        lastScrollTop: scrollTarget.scrollTop,
+        velocity: 0,
+        moved: false
+      };
+      scrollTarget.classList.add("is-drag-scrolling");
+      scrollTarget.setPointerCapture(event.pointerId);
+    });
+
+    styleTestStage.addEventListener("pointermove", function (event) {
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return;
+      }
+      const deltaY = event.clientY - dragState.startY;
+      if (Math.abs(deltaY) > 3) {
+        dragState.moved = true;
+      }
+      const now = performance.now();
+      const previousTop = dragState.target.scrollTop;
+      const currentTop = setStyleTestScroll(dragState.target, dragState.startScrollTop - deltaY);
+      const dt = Math.max(1, now - dragState.lastTime);
+      dragState.velocity = (currentTop - previousTop) / dt;
+      dragState.lastTime = now;
+      dragState.lastScrollTop = currentTop;
+      event.preventDefault();
+    });
+
+    function finishDragScroll(event) {
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return;
+      }
+      const target = dragState.target;
+      const velocity = dragState.velocity;
+      const moved = dragState.moved;
+      target.classList.remove("is-drag-scrolling");
+      if (target.hasPointerCapture(event.pointerId)) {
+        target.releasePointerCapture(event.pointerId);
+      }
+      dragState = null;
+      if (moved) {
+        coastStyleTestScroll(target, velocity);
+      } else {
+        snapStyleTestScroll(target);
+      }
+    }
+
+    styleTestStage.addEventListener("pointerup", finishDragScroll);
+    styleTestStage.addEventListener("pointercancel", finishDragScroll);
+    styleTestStage.addEventListener("lostpointercapture", finishDragScroll);
+    styleTestStage.addEventListener("pointerdown", function (event) {
+      const slider = event.target.closest(".pt-vertical-slider[data-pt-vertical-slider-key]");
+      if (!slider) {
+        return;
+      }
+      verticalSliderState = {
+        pointerId: event.pointerId,
+        slider: slider
+      };
+      slider.setPointerCapture(event.pointerId);
+      setVerticalSliderValue(slider, event.clientY);
+      event.preventDefault();
+    });
+    styleTestStage.addEventListener("pointermove", function (event) {
+      if (!verticalSliderState || event.pointerId !== verticalSliderState.pointerId) {
+        return;
+      }
+      setVerticalSliderValue(verticalSliderState.slider, event.clientY);
+      event.preventDefault();
+    });
+    function finishVerticalSlider(event) {
+      if (!verticalSliderState || event.pointerId !== verticalSliderState.pointerId) {
+        return;
+      }
+      const slider = verticalSliderState.slider;
+      if (slider.hasPointerCapture(event.pointerId)) {
+        slider.releasePointerCapture(event.pointerId);
+      }
+      verticalSliderState = null;
+      renderStyleTestStage();
+    }
+    styleTestStage.addEventListener("pointerup", finishVerticalSlider);
+    styleTestStage.addEventListener("pointercancel", finishVerticalSlider);
+    styleTestStage.addEventListener("lostpointercapture", finishVerticalSlider);
+    styleTestStage.addEventListener("scroll", function (event) {
+      const scrollTarget = event.target.closest(".pt-list, .pt-option-panel, .pt-cardless-panel, .pt-trip-list");
+      if (!scrollTarget) {
+        return;
+      }
+      if (state.styleTestPopup) {
+        scrollTarget.scrollTop = state.styleTestScroll[styleTestScrollKey()] || 0;
+        return;
+      }
+      state.styleTestScroll[styleTestScrollKey()] = scrollTarget.scrollTop;
+      if (!dragState && kineticFrame === null && snapFrame === null) {
+        if (wheelSnapTimer !== null) {
+          window.clearTimeout(wheelSnapTimer);
+        }
+        wheelSnapTimer = window.setTimeout(function () {
+          wheelSnapTimer = null;
+          snapStyleTestScroll(scrollTarget);
+        }, 180);
+      }
+    }, true);
+    styleTestStage.addEventListener("click", function (event) {
+      const option = event.target.closest(".pt-popup-option[data-pt-option-key]");
+      if (option) {
+        const key = option.getAttribute("data-pt-option-key");
+        const value = option.getAttribute("data-pt-option-value") || "";
+        if (key === "chassisLevel") {
+          state.styleTestControls.chassisLevel = value;
+          state.styleTestPopup = null;
+          renderStyleTestStage();
+        }
+        return;
+      }
+      const menuRow = event.target.closest(".pt-row[data-pt-menu-key]");
+      if (menuRow) {
+        if (state.styleTestPopup) {
+          return;
+        }
+        state.styleTestPopup = menuRow.getAttribute("data-pt-menu-key") || null;
+        closeMetricChart();
+        renderStyleTestStage();
+        return;
+      }
+      const chartRow = event.target.closest(".pt-row[data-pt-chart-key]");
+      if (chartRow) {
+        if (state.styleTestPopup) {
+          return;
+        }
+        state.styleTestPopup = null;
+        openMetricChart(chartRow.getAttribute("data-pt-chart-key") || "");
+        return;
+      }
+      const checkbox = event.target.closest(".pt-checkbox[data-pt-checkbox]");
+      if (!checkbox) {
+        return;
+      }
+      const key = checkbox.getAttribute("data-pt-checkbox");
+      if (!Object.prototype.hasOwnProperty.call(state.styleTestControls, key)) {
+        return;
+      }
+      state.styleTestControls[key] = !state.styleTestControls[key];
+      renderStyleTestStage();
+      updateTopbarTime();
+    });
+    styleTestStage.addEventListener("input", function (event) {
+      const slider = event.target.closest(".pt-slider[data-pt-slider-key]");
+      if (!slider) {
+        return;
+      }
+      const key = slider.getAttribute("data-pt-slider-key");
+      const value = clampNumber(Number(slider.value), 0, 100, state.styleTestControls.powerSteeringAssist);
+      if (key === "powerSteeringAssist") {
+        state.styleTestControls.powerSteeringAssist = value;
+        slider.style.setProperty("--pt-slider-fill", String(Math.round(value)) + "%");
+        const readout = document.getElementById("ptPowerSteeringValue");
+        if (readout) {
+          readout.textContent = String(Math.round(value));
+        }
+      }
+    });
+    styleTestStage.addEventListener("change", function (event) {
+      const slider = event.target.closest(".pt-slider[data-pt-slider-key]");
+      if (!slider) {
+        return;
+      }
+      const key = slider.getAttribute("data-pt-slider-key");
+      if (key === "powerSteeringAssist") {
+        state.styleTestControls.powerSteeringAssist = clampNumber(Number(slider.value), 0, 100, state.styleTestControls.powerSteeringAssist);
+        renderStyleTestStage();
+      }
+    });
+    styleTestStage.addEventListener("keydown", function (event) {
+      const verticalSlider = event.target.closest(".pt-vertical-slider[data-pt-vertical-slider-key]");
+      if (verticalSlider) {
+        const key = verticalSlider.getAttribute("data-pt-vertical-slider-key");
+        if (key !== "targetChargePct") {
+          return;
+        }
+        const min = Number(verticalSlider.getAttribute("data-min")) || 0;
+        const max = Number(verticalSlider.getAttribute("data-max")) || 100;
+        let delta = 0;
+        if (event.key === "ArrowUp" || event.key === "ArrowRight") {
+          delta = 1;
+        } else if (event.key === "ArrowDown" || event.key === "ArrowLeft") {
+          delta = -1;
+        } else if (event.key === "PageUp") {
+          delta = 5;
+        } else if (event.key === "PageDown") {
+          delta = -5;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        state.styleTestControls.targetChargePct = clampNumber(state.styleTestControls.targetChargePct + delta, min, max, state.styleTestControls.targetChargePct);
+        renderStyleTestStage();
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      const chartRow = event.target.closest(".pt-row[data-pt-chart-key]");
+      if (!chartRow) {
+        const menuRow = event.target.closest(".pt-row[data-pt-menu-key]");
+        if (!menuRow) {
+          return;
+        }
+        if (state.styleTestPopup) {
+          return;
+        }
+        event.preventDefault();
+        state.styleTestPopup = menuRow.getAttribute("data-pt-menu-key") || null;
+        closeMetricChart();
+        renderStyleTestStage();
+        return;
+      }
+      event.preventDefault();
+      if (state.styleTestPopup) {
+        return;
+      }
+      state.styleTestPopup = null;
+      openMetricChart(chartRow.getAttribute("data-pt-chart-key") || "");
+    });
+  }
+
+  function updateTopbarTime() {
+    if (!topbarTime) {
+      return;
+    }
+    const timeText = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      hour12: false,
+      minute: "2-digit"
+    });
+    const simulateHostLost = state.section === "styleTest" && state.styleTestControls.simulateHostLost;
+    const simulatePlugConnected = state.section === "styleTest" && state.styleTestControls.simulatePlugConnected;
+    if (state.error || simulateHostLost) {
+      topbarTime.classList.add("is-api-offline");
+      topbarTime.classList.remove("is-plugged");
+      let timeValue = topbarTime.querySelector(".topbar-time-value");
+      if (!timeValue || !topbarTime.querySelector(".topbar-warning")) {
+        topbarTime.innerHTML =
+          "<span class=\"topbar-time-value\"></span>" +
+          "<span class=\"topbar-warning\" aria-label=\"Live API connection interrupted\">" +
+            "<img class=\"topbar-warning-icon\" src=\"/touch/assets/warning.svg\" alt=\"\">" +
+          "</span>";
+        timeValue = topbarTime.querySelector(".topbar-time-value");
+      }
+      if (timeValue) {
+        timeValue.textContent = timeText;
+      }
+      return;
+    }
+    if (simulatePlugConnected || resolveChargeCableConnected(state.live || {})) {
+      topbarTime.classList.remove("is-api-offline");
+      topbarTime.classList.add("is-plugged");
+      let timeValue = topbarTime.querySelector(".topbar-time-value");
+      if (!timeValue || !topbarTime.querySelector(".topbar-plug")) {
+        topbarTime.innerHTML =
+          "<span class=\"topbar-time-value\"></span>" +
+          "<span class=\"topbar-plug\" aria-label=\"Charge cable connected\">" +
+            "<img class=\"topbar-plug-icon\" src=\"/touch/assets/plug.svg\" alt=\"\">" +
+          "</span>";
+        timeValue = topbarTime.querySelector(".topbar-time-value");
+      }
+      if (timeValue) {
+        timeValue.textContent = timeText;
+      }
+      return;
+    }
+    topbarTime.classList.remove("is-api-offline");
+    topbarTime.classList.remove("is-plugged");
+    topbarTime.textContent = timeText;
+  }
+
   function openBatteryControlModal(controlKey) {
     const definition = batteryControlDefs[controlKey];
     if (!definition || !window.TouchBatterySettingsModal) {
@@ -1473,9 +2729,11 @@
   function renderView() {
     const isHome = state.section === "home";
     const isCoolant = state.section === "coolant";
+    const isStyleTest = state.section === "styleTest";
     const activeSection = currentSection();
     const activeTab = currentTab();
     const isTileBoard = isCurrentTabTileBoard();
+    updateTopbarTime();
     pageHeading.textContent = activeTab.title;
     heroTitle.textContent = activeTab.title;
     heroSubtitle.textContent = activeTab.subtitle;
@@ -1483,7 +2741,9 @@
     heroImage.alt = isHome ? "Home hero image" : activeTab.title;
     screenRoot.classList.toggle("is-home", isHome);
     screenRoot.classList.toggle("is-coolant", isCoolant);
+    screenRoot.classList.toggle("is-style-test", isStyleTest);
     screenRoot.classList.toggle("is-tile-board", isTileBoard && !isHome && !isCoolant);
+    screenRoot.classList.toggle("is-engineering-mode", state.engineeringMode);
     if (tableHead) {
       tableHead.hidden = isTileBoard;
     }
@@ -1492,6 +2752,12 @@
     }
     if (coolantStage) {
       coolantStage.hidden = !isCoolant;
+    }
+    if (styleTestStage) {
+      styleTestStage.hidden = !isStyleTest;
+      if (!isStyleTest) {
+        styleTestStage.innerHTML = "";
+      }
     }
     updateNav();
     updateTabs();
@@ -1502,6 +2768,8 @@
       renderHomeStage(activeSection);
     } else if (isCoolant) {
       renderCoolantStage();
+    } else if (isStyleTest) {
+      renderStyleTestStage();
     }
   }
 
@@ -1509,6 +2777,10 @@
     if (!sections[sectionName]) {
       return;
     }
+    if (isEngineeringSection(sectionName) && !state.engineeringMode) {
+      return;
+    }
+    state.styleTestPopup = null;
     closeMetricChart();
     state.section = sectionName;
     if (
@@ -1527,7 +2799,16 @@
     if (index < 0 || index >= currentSection().tabs.length) {
       return;
     }
-    if (state.chart.tile && index === state.tabIndex && isCurrentTabTileBoard()) {
+    if (state.styleTestPopup) {
+      state.styleTestPopup = null;
+      closeMetricChart();
+      if (index !== state.tabIndex) {
+        state.tabIndex = index;
+      }
+      renderView();
+      return;
+    }
+    if (state.chart.tile && index === state.tabIndex && isCurrentTabChartable()) {
       closeMetricChart();
       renderView();
       return;
@@ -1564,6 +2845,39 @@
     });
   }
 
+  function bindEngineeringModeGesture() {
+    if (!topbarTime) {
+      return;
+    }
+    let timer = null;
+    let pointerId = null;
+
+    function clearGesture() {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      pointerId = null;
+    }
+
+    topbarTime.addEventListener("pointerdown", function (event) {
+      clearGesture();
+      pointerId = event.pointerId;
+      timer = window.setTimeout(function () {
+        timer = null;
+        toggleEngineeringMode();
+      }, 1800);
+    });
+
+    topbarTime.addEventListener("pointerup", function (event) {
+      if (pointerId === event.pointerId) {
+        clearGesture();
+      }
+    });
+    topbarTime.addEventListener("pointercancel", clearGesture);
+    topbarTime.addEventListener("pointerleave", clearGesture);
+  }
+
   l1Icons.forEach(function (button) {
     button.addEventListener("click", function () {
       setSection(button.dataset.section || "vehicle");
@@ -1571,6 +2885,11 @@
   });
 
   valueRows.addEventListener("click", function (event) {
+    const chartRow = event.target.closest("tr[data-chart-key]");
+    if (chartRow) {
+      openMetricChart(chartRow.dataset.chartKey || "");
+      return;
+    }
     const row = event.target.closest("tr[data-control-key]");
     if (!row) {
       return;
@@ -1580,6 +2899,12 @@
 
   valueRows.addEventListener("keydown", function (event) {
     if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const chartRow = event.target.closest("tr[data-chart-key]");
+    if (chartRow) {
+      event.preventDefault();
+      openMetricChart(chartRow.dataset.chartKey || "");
       return;
     }
     const row = event.target.closest("tr[data-control-key]");
@@ -1618,7 +2943,10 @@
     });
   });
 
+  bindStyleTestDragScroll();
+  bindEngineeringModeGesture();
   renderView();
+  window.setInterval(updateTopbarTime, 30000);
   window.setTimeout(function () {
     if (introSplashVideo) {
       introSplashVideo.pause();

@@ -339,7 +339,7 @@ def run_layout_capture(base_url: str, screenshot_path: Path, phase: str, capture
                         first_row_tile_columns: firstRowColumns,
                         fixed_tile_heights: fixedTileHeights,
                         first_tile_height: tileRects.length ? tileRects[0].height : 0,
-                        l1_count: document.querySelectorAll(".l1-icon").length,
+                        l1_count: Array.from(document.querySelectorAll(".l1-icon")).filter((button) => !button.hidden).length,
                         l2_count: document.querySelectorAll(".tab").length,
                         intro_removed_or_hidden: !intro || intro.classList.contains("is-hidden"),
                     };
@@ -491,7 +491,7 @@ def run_layout_capture(base_url: str, screenshot_path: Path, phase: str, capture
             and metrics.get("chart_closed_back_to_tiles")
             and metrics.get("table_scroll_height", 0) > metrics.get("table_scroll_client_height", 0)
             and metrics.get("table_scroll_can_move")
-            and metrics.get("l1_count") == 5
+            and metrics.get("l1_count") == 6
             and metrics.get("l2_count") == 4
             and metrics.get("intro_removed_or_hidden")
         )

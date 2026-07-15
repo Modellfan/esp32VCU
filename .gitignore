@@ -5,6 +5,7 @@
 .vscode/ipch
 
 # Potentially copyrighted icon packs - keep out of git
+img/icons/
 data/assets/*
 !data/assets/.gitkeep
 data_spiffs/assets/*

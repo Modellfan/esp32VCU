@@ -292,7 +292,7 @@
   }
 
   function formatClientTime(date) {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat("de-DE", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false
@@ -300,15 +300,13 @@
   }
 
   function formatClientDate(date) {
-    return new Intl.DateTimeFormat(undefined, {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric"
-    }).format(date);
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return day + "." + month + "." + String(date.getFullYear());
   }
 
   function formatClientWeekday(date) {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat("de-DE", {
       weekday: "long"
     }).format(date);
   }

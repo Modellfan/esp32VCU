@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="600" viewBox="0 0 1024 600" role="img" aria-labelledby="title desc">
+  <title id="title">Touch UI General Space Wireframe</title>
+  <desc id="desc">General 1024 by 600 layout distribution for the Porsche-style touch UI reference.</desc>
+  <defs>
+    <style>
+      .bg { fill: #050505; }
+      .zone { fill: #151515; stroke: #d7d7d7; stroke-width: 2; }
+      .zone-soft { fill: #101010; stroke: #7c7c7c; stroke-width: 2; stroke-dasharray: 8 8; }
+      .accent { fill: #042a36; stroke: #22c8ff; stroke-width: 3; }
+      .label { fill: #ffffff; font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: 700; }
+      .note { fill: #b8c0c6; font-family: Arial, Helvetica, sans-serif; font-size: 15px; }
+      .small { fill: #cfd5d8; font-family: Arial, Helvetica, sans-serif; font-size: 13px; }
+      .dim { stroke: #22c8ff; stroke-width: 2; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .dim-text { fill: #72ddff; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#22c8ff"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1024" height="600"/>
+
+  <!-- Primary frame -->
+  <rect class="zone" x="0" y="0" width="1024" height="600"/>
+
+  <!-- Persistent left app rail -->
+  <rect class="accent" x="0" y="0" width="76" height="600"/>
+  <text class="label" x="16" y="44">A</text>
+  <text class="note" x="14" y="72">app</text>
+  <text class="note" x="12" y="91">rail</text>
+  <g fill="none" stroke="#ffffff" stroke-width="2" opacity="0.75">
+    <rect x="18" y="115" width="40" height="40" rx="6"/>
+    <rect x="18" y="180" width="40" height="40" rx="6"/>
+    <rect x="18" y="245" width="40" height="40" rx="6"/>
+    <rect x="18" y="310" width="40" height="40" rx="6"/>
+    <rect x="18" y="375" width="40" height="40" rx="6"/>
+  </g>
+
+  <!-- Top tabs -->
+  <rect class="zone" x="76" y="0" width="856" height="72"/>
+  <rect class="accent" x="76" y="0" width="214" height="72"/>
+  <line x1="290" y1="0" x2="290" y2="72" stroke="#5c5c5c" stroke-width="1"/>
+  <line x1="504" y1="0" x2="504" y2="72" stroke="#5c5c5c" stroke-width="1"/>
+  <line x1="718" y1="0" x2="718" y2="72" stroke="#5c5c5c" stroke-width="1"/>
+  <text class="label" x="110" y="44">Tab 1</text>
+  <text class="label" x="324" y="44">Tab 2</text>
+  <text class="label" x="538" y="44">Tab 3</text>
+  <text class="label" x="752" y="44">Tab 4</text>
+  <line x1="76" y1="72" x2="932" y2="72" stroke="#22c8ff" stroke-width="2"/>
+
+  <!-- Time square -->
+  <rect class="zone" x="932" y="0" width="92" height="72"/>
+  <text class="label" x="950" y="44">10:50</text>
+
+  <!-- Main content zones -->
+  <rect class="zone" x="76" y="72" width="390" height="528"/>
+  <text class="label" x="108" y="116">B. Primary List</text>
+  <text class="note" x="108" y="144">rows, labels, values,</text>
+  <text class="note" x="108" y="164">selected state</text>
+  <g stroke="#7c7c7c" stroke-width="1">
+    <line x1="76" y1="178" x2="466" y2="178"/>
+    <line x1="76" y1="258" x2="466" y2="258"/>
+    <line x1="76" y1="338" x2="466" y2="338"/>
+    <line x1="76" y1="418" x2="466" y2="418"/>
+    <line x1="76" y1="498" x2="466" y2="498"/>
+  </g>
+
+  <rect class="zone" x="466" y="72" width="558" height="528"/>
+  <text class="label" x="506" y="116">C. Visual Area</text>
+  <text class="note" x="506" y="144">car, trip graphic,</text>
+  <text class="note" x="506" y="164">climate diagram</text>
+  <ellipse cx="748" cy="324" rx="132" ry="58" fill="none" stroke="#d7d7d7" stroke-width="3"/>
+  <circle cx="672" cy="366" r="24" fill="none" stroke="#d7d7d7" stroke-width="4"/>
+  <circle cx="826" cy="366" r="24" fill="none" stroke="#d7d7d7" stroke-width="4"/>
+
+  <!-- Optional overlay menu -->
+  <rect class="zone-soft" x="390" y="96" width="286" height="396"/>
+  <text class="label" x="418" y="140">D. Overlay Menu</text>
+  <text class="note" x="418" y="168">temporary menu rendered</text>
+  <text class="note" x="418" y="188">above B and C when needed</text>
+  <g stroke="#666666" stroke-width="1">
+    <line x1="390" y1="230" x2="676" y2="230"/>
+    <line x1="390" y1="316" x2="676" y2="316"/>
+    <line x1="390" y1="402" x2="676" y2="402"/>
+  </g>
+
+  <!-- Dimensions -->
+  <line class="dim" x1="0" y1="586" x2="76" y2="586"/>
+  <text class="dim-text" x="18" y="574">76</text>
+  <line class="dim" x1="76" y1="586" x2="1024" y2="586"/>
+  <text class="dim-text" x="500" y="574">948 content</text>
+
+  <text class="small" x="20" y="586">1024 x 600 base frame</text>
+</svg>

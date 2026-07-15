@@ -91,11 +91,20 @@ body.is-booting #screenRoot[hidden] {
       <button class="l1-icon" type="button" data-section="coolant" aria-label="Coolant system">
         <img src="/touch/assets/i_ecu.svg" alt="Coolant system">
       </button>
-      <button class="l1-icon" type="button" data-section="sdu" aria-label="SDU">
+      <button class="l1-icon" type="button" data-section="styleTest" aria-label="Porsche reference UI test">
         <img src="/touch/assets/i_sdu.svg" alt="SDU">
       </button>
-      <button class="l1-icon" type="button" data-section="cluster" aria-label="Cluster">
+      <button class="l1-icon" type="button" data-section="ventilation" aria-label="Active cabin ventilation">
+        <img src="/touch/assets/active-cabin-ventilation.svg" alt="Active ventilation">
+      </button>
+      <button class="l1-icon" type="button" data-section="stopwatch" aria-label="Stopwatch">
+        <img src="/touch/assets/stopwatch.svg" alt="Stopwatch">
+      </button>
+      <button class="l1-icon" type="button" data-section="cluster" data-engineering-only="true" aria-label="Cluster">
         <img src="/touch/assets/i_cluster.svg" alt="Cluster">
+      </button>
+      <button class="l1-icon" type="button" data-section="adjust" data-engineering-only="true" aria-label="Adjust">
+        <img src="/touch/assets/adjust.svg" alt="Adjust">
       </button>
     </aside>
 
@@ -105,6 +114,7 @@ body.is-booting #screenRoot[hidden] {
         <button class="tab" type="button" data-tab-index="1">Brake</button>
         <button class="tab" type="button" data-tab-index="2">Stability</button>
         <button class="tab" type="button" data-tab-index="3">Steering</button>
+        <div class="topbar-time" id="topbarTime" aria-label="Current time">--:--</div>
       </header>
 
       <section class="content">
@@ -117,6 +127,7 @@ body.is-booting #screenRoot[hidden] {
         <section class="coolant-stage" id="coolantStage" hidden aria-label="Coolant system overview">
           <div class="coolant-stage-mount" id="coolantStageMount"></div>
         </section>
+        <section class="style-test-stage" id="styleTestStage" hidden aria-label="Porsche reference UI test page"></section>
         <section class="table-panel" aria-label="Live values table">
           <div class="table-head">
             <h1 id="pageHeading">Vehicle Drive</h1>
