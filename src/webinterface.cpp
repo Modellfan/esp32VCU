@@ -24,44 +24,79 @@ static String ipToString(const IPAddress &ip) {
 
 static String getLiveJson() {
     const IPAddress staIp = WiFi.localIP();
+    const String fieldsArg = server.hasArg("fields") ? server.arg("fields") : "";
+    const bool filterFields = fieldsArg.length() > 0;
     String payload;
     payload.reserve(4200);
     payload += "{";
 
+    auto wantsKey = [&fieldsArg, filterFields](const char *key) {
+        if (!filterFields) {
+            return true;
+        }
+        int start = 0;
+        while (start <= fieldsArg.length()) {
+            int end = fieldsArg.indexOf(',', start);
+            if (end < 0) {
+                end = fieldsArg.length();
+            }
+            const String token = fieldsArg.substring(start, end);
+            if (token.equals(key)) {
+                return true;
+            }
+            start = end + 1;
+        }
+        return false;
+    };
     auto addSep = [&payload]() {
         if (payload.length() > 1) {
             payload += ",";
         }
     };
-    auto addNum = [&payload, &addSep](const char *key, float value, uint8_t decimals) {
+    auto addNum = [&payload, &addSep, &wantsKey](const char *key, float value, uint8_t decimals) {
+        if (!wantsKey(key)) {
+            return;
+        }
         addSep();
         payload += "\"";
         payload += key;
         payload += "\":";
         payload += String((double)value, (unsigned int)decimals);
     };
-    auto addUInt = [&payload, &addSep](const char *key, unsigned value) {
+    auto addUInt = [&payload, &addSep, &wantsKey](const char *key, unsigned value) {
+        if (!wantsKey(key)) {
+            return;
+        }
         addSep();
         payload += "\"";
         payload += key;
         payload += "\":";
         payload += String(value);
     };
-    auto addInt = [&payload, &addSep](const char *key, int value) {
+    auto addInt = [&payload, &addSep, &wantsKey](const char *key, int value) {
+        if (!wantsKey(key)) {
+            return;
+        }
         addSep();
         payload += "\"";
         payload += key;
         payload += "\":";
         payload += String(value);
     };
-    auto addBool = [&payload, &addSep](const char *key, bool value) {
+    auto addBool = [&payload, &addSep, &wantsKey](const char *key, bool value) {
+        if (!wantsKey(key)) {
+            return;
+        }
         addSep();
         payload += "\"";
         payload += key;
         payload += "\":";
         payload += value ? "true" : "false";
     };
-    auto addStr = [&payload, &addSep](const char *key, const String &value) {
+    auto addStr = [&payload, &addSep, &wantsKey](const char *key, const String &value) {
+        if (!wantsKey(key)) {
+            return;
+        }
         addSep();
         payload += "\"";
         payload += key;
@@ -212,6 +247,7 @@ static String getLiveJson() {
     addInt("sdu_din_emcystop", params::tesla_sdu.din_emcystop);
     addInt("sdu_din_desat", params::tesla_sdu.din_desat);
     addUInt("sdu_uptime", params::tesla_sdu.uptime);
+    addNum("sdu_uptime_s", params::tesla_sdu.uptime_s, 2);
     addNum("sdu_cpuload", params::tesla_sdu.cpuload, 1);
     addNum("sdu_ilmax", params::tesla_sdu.ilmax, 2);
     addNum("sdu_uac", params::tesla_sdu.uac, 2);
@@ -288,6 +324,11 @@ static String getLiveJson() {
     addStr("sta_ssid", String(kStaSsid));
     addBool("sta_connected", WiFi.status() == WL_CONNECTED);
     addStr("sta_ip", ipToString(staIp));
+    addBool("lte_connected", false);
+    addStr("lte_operator", "");
+    addInt("lte_signal", 0);
+    addStr("network_mode", WiFi.status() == WL_CONNECTED ? "wifi" : "offline");
+    addStr("network_label", WiFi.status() == WL_CONNECTED ? "WiFi" : "Offline");
 
     payload += "}";
     return payload;

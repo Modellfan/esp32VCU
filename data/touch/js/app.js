@@ -23,6 +23,12 @@
   const topbarTime = document.getElementById("topbarTime");
   const l1Icons = Array.from(document.querySelectorAll(".l1-icon"));
   const tabs = Array.from(document.querySelectorAll(".tab"));
+  const urlParams = new URLSearchParams(window.location.search);
+  const energyFlowEditorEnabled = urlParams.get("energyEditor") === "1";
+  const networkTestEnabled = urlParams.get("networkTest") === "1";
+  const initialNetworkOverride = ["wifi", "lte", "offline"].indexOf(urlParams.get("network") || "") !== -1
+    ? urlParams.get("network")
+    : "";
   let homeBattery = null;
   let coolantStageView = null;
   let batterySettingsModal = null;
@@ -400,12 +406,14 @@
   }
 
   function textField(key, fallback) {
-    return function (live) {
+    const render = function (live) {
       if (!live || live[key] == null || live[key] === "") {
         return fallback || "--";
       }
       return String(live[key]);
     };
+    render.liveKeys = [key];
+    return render;
   }
 
   function fixedField(key, digits, unit) {
@@ -442,9 +450,11 @@
   }
 
   function boolField(key, onLabel, offLabel) {
-    return function (live) {
+    const render = function (live) {
       return formatBoolValue(live, key, onLabel || "ON", offLabel || "OFF");
     };
+    render.liveKeys = [key];
+    return render;
   }
 
   function coolantFanField() {
@@ -812,15 +822,19 @@
   }
 
   function enumField(key, enumDef) {
-    return function (live) {
+    const render = function (live) {
       return enumText(enumDef, live ? live[key] : null);
     };
+    render.liveKeys = [key];
+    return render;
   }
 
   function bitfieldField(key, bitfieldDef) {
-    return function (live) {
+    const render = function (live) {
       return bitfieldText(bitfieldDef, live ? live[key] : null);
     };
+    render.liveKeys = [key];
+    return render;
   }
 
   const sduDriveTileFields = [
@@ -885,8 +899,8 @@
       image: "/touch/assets/car.svg",
       tabs: [
         {
-          label: "Drive",
-          title: "Vehicle Drive",
+          label: "Engine",
+          title: "Engine",
           subtitle: "Primary vehicle speed summary with the full SDU dashboard rendered as live tiles.",
           rows: [
             field("Vehicle Speed 510", fixedField("vehicle_speed_510", 1, "km/h")),
@@ -934,8 +948,8 @@
           ]
         },
         {
-          label: "Stability",
-          title: "Vehicle Stability",
+          label: "Charger",
+          title: "Charger",
           subtitle: "ABS, TCS, FDR, and yaw-related intervention data.",
           rows: [
             field("TCS Intervention", boolField("tcs", "ACTIVE", "OFF")),
@@ -957,8 +971,8 @@
           ]
         },
         {
-          label: "Steering",
-          title: "Vehicle Steering",
+          label: "Vehicle",
+          title: "Vehicle",
           subtitle: "Steering wheel inputs, angle validity, and driver commands.",
           rows: [
             field("Steering Angle", fixedField("lenkwinkel_rb", 2, "deg")),
@@ -1216,8 +1230,50 @@
   };
 
   sections.adjust = SDU_ENUMS.adjust;
-  sections.ventilation = SDU_ENUMS.ventilation;
+  sections.ventilation = {
+    image: "/touch/assets/active-cabin-ventilation.svg",
+    tabs: [
+      {
+        label: "Energy Flow",
+        title: "Energy Flow",
+        subtitle: "Energy flow visualization.",
+        rows: [],
+        hero: []
+      }
+    ]
+  };
   sections.stopwatch = SDU_ENUMS.stopwatch;
+  sections.stopwatch.tabs = [
+    {
+      label: "Trip",
+      title: "Stopwatch Trip",
+      subtitle: "Trip timer and distance timing in Porsche-style layout.",
+      rows: [],
+      hero: []
+    },
+    {
+      label: "Acceleration",
+      title: "Stopwatch Acceleration",
+      subtitle: "Acceleration timing in Porsche-style layout.",
+      rows: [],
+      hero: []
+    },
+    {
+      label: "Lap",
+      title: "Stopwatch Lap",
+      subtitle: "Lap timing in Porsche-style layout.",
+      rows: [],
+      hero: []
+    },
+    {
+      label: "",
+      title: "Stopwatch",
+      subtitle: "",
+      rows: [],
+      hero: [],
+      placeholder: true
+    }
+  ];
 
   const state = {
     section: "home",
@@ -1237,6 +1293,14 @@
       simulatePlugConnected: false,
       targetChargePct: 85
     },
+    energyFlowLayout: null,
+    energyFlowEditorActiveId: "",
+    energyFlowEditorDrag: null,
+    energyFlowEditorDirty: false,
+    energyFlowEditorSaving: false,
+    energyFlowEditorMessage: "",
+    networkPopupOpen: false,
+    networkOverride: initialNetworkOverride,
     styleTestPopup: null,
     styleTestScroll: {},
     live: null,
@@ -1321,13 +1385,27 @@
 
   function updateTabs() {
     const activeSection = currentSection();
+    const keepEmptySlots = state.section === "ventilation";
     tabs.forEach(function (button, index) {
       const tab = activeSection.tabs[index];
       const hasTab = !!tab;
-      button.hidden = !hasTab;
-      button.disabled = !hasTab;
-      button.textContent = hasTab ? tab.label : "";
-      button.classList.toggle("active", hasTab && index === state.tabIndex);
+      if (keepEmptySlots) {
+        const isCaptionSlot = index === 0 && hasTab;
+        button.hidden = false;
+        button.disabled = true;
+        button.textContent = isCaptionSlot ? tab.label : "";
+        button.setAttribute("aria-hidden", isCaptionSlot ? "false" : "true");
+        button.classList.toggle("is-placeholder", !isCaptionSlot);
+        button.classList.toggle("active", isCaptionSlot);
+        return;
+      }
+      const isPlaceholder = !!(tab && tab.placeholder) || (keepEmptySlots && !hasTab);
+      button.hidden = !hasTab && !keepEmptySlots;
+      button.disabled = !hasTab || isPlaceholder || keepEmptySlots;
+      button.textContent = keepEmptySlots ? "" : hasTab && !isPlaceholder ? tab.label : "";
+      button.setAttribute("aria-hidden", isPlaceholder || keepEmptySlots ? "true" : "false");
+      button.classList.toggle("is-placeholder", isPlaceholder);
+      button.classList.toggle("active", !keepEmptySlots && hasTab && !isPlaceholder && index === state.tabIndex);
     });
   }
 
@@ -1684,7 +1762,7 @@
   }
 
   function renderRows() {
-    if (state.section === "styleTest") {
+    if (state.section === "styleTest" || state.section === "stopwatch" || state.section === "vehicle") {
       if (valueTable) {
         valueTable.hidden = true;
       }
@@ -1925,8 +2003,22 @@
       "\" aria-pressed=\"" + (checked ? "true" : "false") + "\"></button>";
   }
 
-  function porscheMenuValue(value) {
-    return "<span class=\"pt-menu-value\"><span>" + escapeHtml(value) + "</span><span class=\"pt-chevron\">&gt;</span></span>";
+  function porscheMenuValue(value, hasSubmenu) {
+    return "<span class=\"pt-menu-value\"><span>" + escapeHtml(value) + "</span>" +
+      (hasSubmenu ? "<span class=\"pt-chevron\">&gt;</span>" : "") +
+      "</span>";
+  }
+
+  function porscheStatusValue(value) {
+    return "<span class=\"pt-menu-value\"><span>" + escapeHtml(value) + "</span></span>";
+  }
+
+  function porscheEnumValue(key, enumDef) {
+    return porscheStatusValue(enumText(enumDef, state.live ? state.live[key] : null));
+  }
+
+  function porscheBitfieldValue(key, bitfieldDef) {
+    return porscheStatusValue(bitfieldText(bitfieldDef, state.live ? state.live[key] : null));
   }
 
   function porscheRows(rows) {
@@ -2059,9 +2151,6 @@
           "<div class=\"pt-vertical-slider-copy\">" +
             "<strong>Minimum charge</strong>" +
             "<p>Set charging target that the vehicle should reach as quickly as possible while charging.</p>" +
-            "<span></span>" +
-            "<em>Optimised charging</em>" +
-            "<small>Charging operation can be automatically optimised using suitable equipment.</small>" +
           "</div>" +
           "<div class=\"pt-vertical-slider-wrap\">" +
             "<div class=\"pt-vertical-slider\" role=\"slider\" tabindex=\"0\" aria-label=\"Target charge\" aria-valuemin=\"" +
@@ -2104,11 +2193,11 @@
         porscheRows([
           { active: true, label: "Drive mode", detail: "Driving setup", control: porscheMenuValue("Normal") },
           { active: isBatteryChartActive, label: "Battery power", detail: "Live value", control: porscheValue(batteryText, "kW"), chartKey: batteryTile.chartKey },
-          { active: isTargetChargePopupActive, label: "Target charge", detail: "Charge target", control: porscheMenuValue(String(Math.round(state.styleTestControls.targetChargePct)) + "%"), menuKey: "targetChargePct" },
-          { active: isChassisPopupActive, label: "Chassis level", detail: "Ride height", control: porscheMenuValue(state.styleTestControls.chassisLevel), menuKey: "chassisLevel" },
+          { active: isTargetChargePopupActive, label: "Target charge", detail: "Charge target", control: porscheMenuValue(String(Math.round(state.styleTestControls.targetChargePct)) + "%", true), menuKey: "targetChargePct" },
+          { active: isChassisPopupActive, label: "Chassis level", detail: "Ride height", control: porscheMenuValue(state.styleTestControls.chassisLevel, true), menuKey: "chassisLevel" },
           { label: "Recuperation", detail: "Energy recovery", control: porscheMenuValue("On"), engineeringOnly: true },
           { label: "Electric Sport Sound", detail: "Sound profile", control: porscheCheckbox("electricSportSound", state.styleTestControls.electricSportSound) },
-          { active: isPowerSteeringPopupActive, label: "Power steering", detail: "Steering assist", control: porscheMenuValue(String(Math.round(state.styleTestControls.powerSteeringAssist)) + "%"), menuKey: "powerSteeringAssist" },
+          { active: isPowerSteeringPopupActive, label: "Power steering", detail: "Steering assist", control: porscheMenuValue(String(Math.round(state.styleTestControls.powerSteeringAssist)) + "%", true), menuKey: "powerSteeringAssist" },
           { label: "Traction control", detail: "Wheel slip", control: porscheMenuValue("Normal") },
           { label: "Brake comfort", detail: "Pedal response", control: porscheCheckbox("brakeComfort", state.styleTestControls.brakeComfort) },
           { label: "Sport response", control: porscheMenuValue("Off") },
@@ -2124,6 +2213,177 @@
       (isPowerSteeringPopupActive ? porschePowerSteeringPopupMarkup() : "") +
       (isTargetChargePopupActive ? porscheTargetChargePopupMarkup() : "") +
     "</div>";
+  }
+
+  function porscheLiveNumber(keys, digits, unit, fallback) {
+    const value = firstNumericField(state.live || {}, keys);
+    const text = value === null ? (fallback || "--") : value.toFixed(digits).replace(/\.?0+$/, "");
+    return porscheValue(text, unit || "");
+  }
+
+  function porscheLiveInteger(keys, unit, fallback) {
+    const value = firstNumericField(state.live || {}, keys);
+    const text = value === null ? (fallback || "--") : String(Math.round(value));
+    return porscheValue(text, unit || "");
+  }
+
+  function porscheSduUptimeValue() {
+    const live = state.live || {};
+    const seconds = firstNumericField(live, ["sdu_uptime_s"]);
+    if (seconds !== null) {
+      return porscheValue(seconds.toFixed(2).replace(/\.?0+$/, ""), "s");
+    }
+    const raw10ms = firstNumericField(live, ["sdu_uptime"]);
+    if (raw10ms !== null) {
+      return porscheValue((raw10ms / 100).toFixed(2).replace(/\.?0+$/, ""), "s");
+    }
+    return porscheValue("--", "");
+  }
+
+  function porscheLiveBool(keys, onLabel, offLabel, fallback) {
+    const live = state.live || {};
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index];
+      if (Object.prototype.hasOwnProperty.call(live, key)) {
+        return porscheStatusValue(live[key] ? onLabel : offLabel);
+      }
+    }
+    return porscheMenuValue(fallback || "--");
+  }
+
+  function porscheTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) {
+      return "--";
+    }
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
+  }
+
+  function porscheReferencePhoto(src, alt) {
+    return "<section class=\"pt-front-stage pt-reference-stage\" aria-label=\"" + escapeHtml(alt) + "\">" +
+      "<img src=\"" + escapeHtml(src) + "\" alt=\"" + escapeHtml(alt) + "\">" +
+    "</section>";
+  }
+
+  function porscheVehicleEngineMarkup() {
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "DC voltage", detail: "Bus voltage", control: porscheLiveNumber(["sdu_udc"], 1, "V") },
+          { label: "DC current", detail: "Bus current", control: porscheLiveNumber(["sdu_idc"], 1, "A") },
+          { label: "Motor speed", detail: "Rotor speed", control: porscheLiveInteger(["sdu_speed"], "rpm") },
+          { label: "Regen preset", detail: "Recovery level", control: porscheLiveNumber(["sdu_regenpreset"], 0, "%") },
+          { label: "Pedal nominal", detail: "Pedal demand", control: porscheLiveNumber(["sdu_potnom"], 0, "%") },
+          { label: "Selected direction", detail: "Drive direction", control: porscheEnumValue("sdu_seldir", SDU_ENUMS.DIRS) },
+          { label: "Heatsink temp", detail: "Thermal state", control: porscheLiveNumber(["sdu_tmphs"], 0, "\u00B0C") },
+          { label: "Motor temp", detail: "Thermal state", control: porscheLiveNumber(["sdu_tmpm"], 0, "\u00B0C") },
+          { label: "Aux voltage", detail: "Low voltage", control: porscheLiveNumber(["sdu_uaux"], 1, "V") },
+          { label: "Operating mode", detail: "Drive state", control: porscheEnumValue("sdu_opmode", SDU_ENUMS.OPMODES) },
+          { label: "Phase current 1", detail: "Phase current", control: porscheLiveNumber(["sdu_il1"], 1, "A"), engineeringOnly: true },
+          { label: "Phase current 2", detail: "Phase current", control: porscheLiveNumber(["sdu_il2"], 1, "A"), engineeringOnly: true },
+          { label: "Frequency", detail: "Output freq", control: porscheLiveNumber(["sdu_fstat"], 1, "Hz"), engineeringOnly: true },
+          { label: "AC voltage", detail: "Motor output", control: porscheLiveNumber(["sdu_uac"], 1, "V"), engineeringOnly: true },
+          { label: "Current limit", detail: "Phase limit", control: porscheLiveNumber(["sdu_ilmax"], 1, "A"), engineeringOnly: true },
+          { label: "RMS current 1", detail: "RMS current", control: porscheLiveNumber(["sdu_il1rms"], 1, "A"), engineeringOnly: true },
+          { label: "RMS current 2", detail: "RMS current", control: porscheLiveNumber(["sdu_il2rms"], 1, "A"), engineeringOnly: true },
+          { label: "Boost calc", detail: "Boost value", control: porscheLiveInteger(["sdu_boostcalc"], "dig"), engineeringOnly: true },
+          { label: "Field weak calc", detail: "Weakening calc", control: porscheLiveNumber(["sdu_fweakcalc"], 1, "Hz"), engineeringOnly: true },
+          { label: "Potentiometer 1", detail: "Pedal raw", control: porscheLiveInteger(["sdu_pot"], "dig"), engineeringOnly: true },
+          { label: "Potentiometer 2", detail: "Pedal raw", control: porscheLiveInteger(["sdu_pot2"], "dig"), engineeringOnly: true },
+          { label: "Amp request", detail: "Request value", control: porscheLiveInteger(["sdu_amp"], "dig"), engineeringOnly: true },
+          { label: "Angle", detail: "Rotor angle", control: porscheLiveNumber(["sdu_angle"], 1, "deg"), engineeringOnly: true },
+          { label: "Rotor direction", detail: "Rotor direction", control: porscheEnumValue("sdu_rotordir", SDU_ENUMS.DIRS), engineeringOnly: true },
+          { label: "Last error", detail: "Fault memory", control: porscheEnumValue("sdu_lasterr", SDU_ENUMS.ERRORS), engineeringOnly: true },
+          { label: "PWM I/O", detail: "PWM state", control: porscheLiveInteger(["sdu_pwmio"], ""), engineeringOnly: true },
+          { label: "CAN I/O", detail: "Input flags", control: porscheBitfieldValue("sdu_canio", SDU_BITFIELDS.CANIOS), engineeringOnly: true },
+          { label: "Status", detail: "Status flags", control: porscheBitfieldValue("sdu_status", SDU_BITFIELDS.STATUS), engineeringOnly: true },
+          { label: "CPU load", detail: "Processor load", control: porscheLiveNumber(["sdu_cpuload"], 0, "%"), engineeringOnly: true },
+          { label: "DIN cruise", detail: "Digital input", control: porscheEnumValue("sdu_din_cruise", SDU_ENUMS.ONOFF), engineeringOnly: true },
+          { label: "DIN start", detail: "Digital input", control: porscheEnumValue("sdu_din_start", SDU_ENUMS.ONOFF), engineeringOnly: true },
+          { label: "DIN brake", detail: "Digital input", control: porscheEnumValue("sdu_din_brake", SDU_ENUMS.ONOFF), engineeringOnly: true },
+          { label: "DIN motor protect", detail: "Digital input", control: porscheEnumValue("sdu_din_mprot", SDU_ENUMS.OKERR), engineeringOnly: true },
+          { label: "DIN forward", detail: "Digital input", control: porscheEnumValue("sdu_din_forward", SDU_ENUMS.ONOFF), engineeringOnly: true },
+          { label: "DIN reverse", detail: "Digital input", control: porscheEnumValue("sdu_din_reverse", SDU_ENUMS.ONOFF), engineeringOnly: true },
+          { label: "DIN emergency stop", detail: "Digital input", control: porscheEnumValue("sdu_din_emcystop", SDU_ENUMS.OKERR), engineeringOnly: true },
+          { label: "DIN overcurrent", detail: "Digital input", control: porscheEnumValue("sdu_din_ocur", SDU_ENUMS.OKERR), engineeringOnly: true },
+          { label: "DIN desat", detail: "Digital input", control: porscheEnumValue("sdu_din_desat", SDU_ENUMS.OKERR), engineeringOnly: true },
+          { label: "DIN BMS", detail: "Digital input", control: porscheEnumValue("sdu_din_bms", SDU_ENUMS.ONOFF), engineeringOnly: true },
+          { label: "Cruise speed", detail: "Speed target", control: porscheLiveInteger(["sdu_cruisespeed"], "rpm"), engineeringOnly: true },
+          { label: "Turns", detail: "Motor turns", control: porscheLiveInteger(["sdu_turns"], "turns"), engineeringOnly: true },
+          { label: "Uptime", detail: "Run time", control: porscheSduUptimeValue(), engineeringOnly: true }
+        ]) +
+      "</section>" +
+      porscheReferencePhoto("/touch/img/drive-unit-reference.png", "Drive unit reference") +
+    "</div>";
+  }
+
+  function porscheVehicleBatteryMarkup() {
+    const level = resolveBatteryLevel(state.live || {});
+    const power = resolveBatteryPowerKw(state.live || {}, level);
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "Battery power", detail: "Live value", control: porscheValue(power === null ? "--" : power.toFixed(1), "kW") },
+          { label: "DC voltage", detail: "Bus voltage", control: porscheLiveNumber(["sdu_udc"], 1, "V") },
+          { label: "DC current", detail: "Bus current", control: porscheLiveNumber(["sdu_idc"], 1, "A") },
+          { label: "Aux voltage", detail: "Low voltage", control: porscheLiveNumber(["sdu_uaux"], 1, "V") },
+          { label: "Battery charge", detail: "State level", control: porscheValue(level === null ? "--" : String(Math.round(level)), level === null ? "" : "%") },
+          { label: "Range", detail: "Estimated range", control: porscheLiveInteger(["battery_range_km"], "km", String(Math.round(resolveBatteryRangeKm(state.live || {}, level) || 0))) }
+        ]) +
+      "</section>" +
+      porscheReferencePhoto("/touch/img/battery-reference.png", "High-voltage battery reference") +
+    "</div>";
+  }
+
+  function porscheVehicleChargerMarkup() {
+    const finish = estimateChargeFinishTimestamp(state.live || {}, resolveBatteryLevel(state.live || {}));
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "Plug", detail: "Cable status", control: porscheLiveBool(["plug_connected", "charger_connected", "charge_port_connected"], "Connected", "Open", "Open") },
+          { label: "Charge power", detail: "Input power", control: porscheLiveNumber(["charge_power_kw", "ac_charge_power_kw", "charger_power_kw"], 1, "kW") },
+          { label: "Target charge", detail: "Charge target", control: porscheStatusValue(String(Math.round(state.batteryControls.targetChargePct)) + "%") },
+          { label: "AC current", detail: "Current limit", control: porscheStatusValue(String(Math.round(state.batteryControls.acCurrentLimitA)) + " A") },
+          { label: "Digital pot", detail: "Pilot output", control: porscheStatusValue(String(Math.round(state.batteryControls.digitalPotPct)) + "%") },
+          { label: "Finish time", detail: "Charge estimate", control: porscheStatusValue(finish ? porscheTime(finish) : "--") }
+        ]) +
+      "</section>" +
+      porscheReferencePhoto("/touch/img/charger-reference.png", "Charger reference") +
+    "</div>";
+  }
+
+  function porscheVehicleVehicleMarkup() {
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "Vehicle speed", detail: "Wheel speed", control: porscheLiveNumber(["vehicle_speed_510", "vref_kmh"], 1, "km/h") },
+          { label: "Acceleration", detail: "Body sensor", control: porscheLiveNumber(["acceleration"], 3, "g") },
+          { label: "Gear position", detail: "Drive state", control: porscheStatusValue(formatPrndValue((state.live || {}).prnd_pos)) },
+          { label: "Steering angle", detail: "Wheel angle", control: porscheLiveNumber(["lenkwinkel_rb"], 1, "deg") },
+          { label: "Indicator left", detail: "Lamp state", control: porscheLiveBool(["indicator_left"], "On", "Off", "Off") },
+          { label: "Indicator right", detail: "Lamp state", control: porscheLiveBool(["indicator_right"], "On", "Off", "Off") }
+        ]) +
+      "</section>" +
+      porscheReferencePhoto("/touch/img/half_front.png", "Vehicle reference") +
+    "</div>";
+  }
+
+  function porscheVehicleSectionMarkup() {
+    const tab = currentTab().label;
+    if (tab === "Battery") {
+      return porscheVehicleBatteryMarkup();
+    }
+    if (tab === "Charger") {
+      return porscheVehicleChargerMarkup();
+    }
+    if (tab === "Vehicle") {
+      return porscheVehicleVehicleMarkup();
+    }
+    return porscheVehicleEngineMarkup();
   }
 
   function porscheAssistanceMarkup() {
@@ -2171,6 +2431,424 @@
     "</div>";
   }
 
+  function porscheStopwatchValue(value, unit) {
+    if (value === null || value === undefined || value === "--") {
+      return porscheValue("--", unit || "");
+    }
+    return porscheValue(String(value), unit || "");
+  }
+
+  function porscheSeconds(value, digits) {
+    const numeric = toNumber(value);
+    if (numeric === null) {
+      return "--";
+    }
+    return numeric.toFixed(digits);
+  }
+
+  function stopwatchUptimeSeconds() {
+    const uptime = firstNumericField(state.live || {}, ["sdu_uptime"]);
+    if (uptime === null) {
+      return 303.2;
+    }
+    return uptime / 100;
+  }
+
+  function stopwatchTripDistanceKm() {
+    const distance = firstNumericField(state.live || {}, ["trip_distance_km", "distance_km", "cluster_trip_distance_km"]);
+    if (distance !== null) {
+      return distance;
+    }
+    const speed = firstNumericField(state.live || {}, ["vehicle_speed_510", "vref_kmh"]);
+    return ((speed === null ? 92 : speed) * stopwatchUptimeSeconds()) / 3600;
+  }
+
+  function stopwatchFormattedAccelerationTime(key, validKey, fallback) {
+    const live = state.live || {};
+    if (validKey && Object.prototype.hasOwnProperty.call(live, validKey) && !live[validKey]) {
+      return "--";
+    }
+    const value = firstNumericField(live, [key]);
+    return value === null ? fallback : value.toFixed(2);
+  }
+
+  function porscheStopwatchGraphic(mode) {
+    const acceleration = mode === "acceleration";
+    const lap = mode === "lap";
+    const trip = mode === "trip";
+    return "<section class=\"pt-stopwatch-visual\" aria-label=\"Stopwatch " + escapeHtml(mode) + " visual\">" +
+      "<div class=\"pt-dot-grid\"></div>" +
+      "<svg class=\"pt-stopwatch-svg\" viewBox=\"0 0 420 360\" role=\"img\" aria-label=\"Stopwatch illustration\">" +
+        "<defs>" +
+          "<linearGradient id=\"ptStopBlue\" x1=\"0\" x2=\"1\"><stop offset=\"0\" stop-color=\"#0b95c9\"/><stop offset=\"1\" stop-color=\"#21d3ff\"/></linearGradient>" +
+          "<linearGradient id=\"ptStopWhite\" x1=\"0\" x2=\"1\"><stop offset=\"0\" stop-color=\"#22282d\"/><stop offset=\"0.55\" stop-color=\"#f1f4f4\"/><stop offset=\"1\" stop-color=\"#798086\"/></linearGradient>" +
+        "</defs>" +
+        "<ellipse class=\"pt-stopwatch-shadow\" cx=\"210\" cy=\"303\" rx=\"154\" ry=\"18\"/>" +
+        (lap
+          ? "<path class=\"pt-stopwatch-track\" d=\"M88 267 C28 218 34 119 113 83 C186 50 318 55 361 129 C401 198 333 279 217 286 C166 289 122 282 88 267 Z\"/>" +
+            "<path class=\"pt-stopwatch-track is-inner\" d=\"M129 237 C89 205 93 143 141 119 C195 91 289 95 319 139 C349 183 304 239 220 246 C181 249 151 244 129 237 Z\"/>" +
+            "<circle class=\"pt-stopwatch-marker\" cx=\"301\" cy=\"122\" r=\"11\"/>"
+          : "<path class=\"pt-stopwatch-car\" d=\"M70 226 C92 174 145 151 221 153 C295 154 348 179 376 212 C387 225 377 240 350 242 L105 242 C76 242 61 237 70 226 Z\"/>" +
+            "<path class=\"pt-stopwatch-cabin\" d=\"M180 160 C216 144 273 151 308 189 L214 190 C193 189 178 178 180 160 Z\"/>" +
+            "<circle class=\"pt-stopwatch-wheel\" cx=\"137\" cy=\"242\" r=\"28\"/><circle class=\"pt-stopwatch-wheel\" cx=\"323\" cy=\"242\" r=\"28\"/>") +
+        "<circle class=\"pt-stopwatch-dial\" cx=\"210\" cy=\"126\" r=\"69\"/>" +
+        "<path class=\"pt-stopwatch-ticks\" d=\"M210 68 V86 M210 166 V184 M152 126 H170 M250 126 H268 M169 85 L181 97 M239 155 L251 167 M169 167 L181 155 M239 97 L251 85\"/>" +
+        "<path class=\"pt-stopwatch-hand\" d=\"" + (acceleration ? "M210 126 L254 88" : trip ? "M210 126 L210 78" : "M210 126 L174 96") + "\"/>" +
+        "<circle class=\"pt-stopwatch-center\" cx=\"210\" cy=\"126\" r=\"7\"/>" +
+        (acceleration ? "<path class=\"pt-stopwatch-pulse\" d=\"M70 292 H127 L143 262 L164 318 L184 278 L200 292 H351\"/>" : "") +
+        (trip ? "<path class=\"pt-stopwatch-route\" d=\"M70 292 C139 264 202 330 269 294 C302 276 330 275 361 286\"/>" : "") +
+      "</svg>" +
+    "</section>";
+  }
+
+  function porscheStopwatchTripMarkup() {
+    const live = state.live || {};
+    const tripSeconds = stopwatchUptimeSeconds();
+    const distanceKm = stopwatchTripDistanceKm();
+    const speed = firstNumericField(live, ["vehicle_speed_510", "vref_kmh"]);
+    const batteryPower = resolveBatteryPowerKw(live, resolveBatteryLevel(live));
+    const consumption = firstNumericField(live, ["average_consumption_kwh_100km", "consumption_kwh_100km"]);
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-stopwatch\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "Trip time", detail: "Driving time", control: porscheStopwatchValue(porscheSeconds(tripSeconds, 1), "s") },
+          { label: "Trip distance", detail: "Distance", control: porscheStopwatchValue(distanceKm.toFixed(1), "km") },
+          { label: "Average speed", detail: "Speed average", control: porscheStopwatchValue(speed === null ? "--" : speed.toFixed(1), "km/h") },
+          { label: "Battery power", detail: "Live value", control: porscheStopwatchValue(batteryPower === null ? "--" : batteryPower.toFixed(1), "kW") },
+          { label: "Consumption", detail: "Energy use", control: porscheStopwatchValue(consumption === null ? "24.2" : consumption.toFixed(1), "kWh/100") }
+        ]) +
+      "</section>" +
+      porscheStopwatchGraphic("trip") +
+    "</div>";
+  }
+
+  function porscheStopwatchAccelerationMarkup() {
+    const live = state.live || {};
+    const currentRun = firstNumericField(live, ["cluster_acceleration_run_time_s"]);
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-stopwatch\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "Current run", detail: "Live timer", control: porscheStopwatchValue(currentRun === null ? "--" : currentRun.toFixed(2), "s") },
+          { label: "Last 0-50", detail: "Previous run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_50_last_s", "cluster_acceleration_0_50_valid", "3.84"), "s") },
+          { label: "Best 0-50", detail: "Fastest run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_50_best_s", "cluster_acceleration_0_50_valid", "3.62"), "s") },
+          { label: "Last 0-100", detail: "Previous run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_100_last_s", "cluster_acceleration_0_100_valid", "9.24"), "s") },
+          { label: "Best 0-100", detail: "Fastest run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_100_best_s", "cluster_acceleration_0_100_valid", "8.91"), "s") }
+        ]) +
+      "</section>" +
+      porscheStopwatchGraphic("acceleration") +
+    "</div>";
+  }
+
+  function porscheStopwatchLapMarkup() {
+    const live = state.live || {};
+    const current = stopwatchUptimeSeconds() % 120;
+    const count = firstNumericField(live, ["lap_count", "cluster_counter"]);
+    const delta = firstNumericField(live, ["lap_delta_s", "acceleration"]);
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-stopwatch\">" +
+      "<section class=\"pt-list\">" +
+        porscheRows([
+          { label: "Current lap", detail: "Live timer", control: porscheStopwatchValue(current.toFixed(2), "s") },
+          { label: "Last lap", detail: "Previous lap", control: porscheStopwatchValue(firstNumericField(live, ["last_lap_s"]) === null ? "72.48" : firstNumericField(live, ["last_lap_s"]).toFixed(2), "s") },
+          { label: "Best lap", detail: "Fastest lap", control: porscheStopwatchValue(firstNumericField(live, ["best_lap_s"]) === null ? "70.31" : firstNumericField(live, ["best_lap_s"]).toFixed(2), "s") },
+          { label: "Lap count", detail: "Session laps", control: porscheStopwatchValue(count === null ? "--" : String(Math.round(count)), "") },
+          { label: "Delta", detail: "Lap delta", control: porscheStopwatchValue(delta === null ? "+0.00" : (delta >= 0 ? "+" : "") + delta.toFixed(2), "s") }
+        ]) +
+      "</section>" +
+      porscheStopwatchGraphic("lap") +
+    "</div>";
+  }
+
+  function porscheStopwatchMarkup() {
+    const tab = currentTab().label;
+    if (tab === "Acceleration") {
+      return porscheStopwatchAccelerationMarkup();
+    }
+    if (tab === "Lap") {
+      return porscheStopwatchLapMarkup();
+    }
+    return porscheStopwatchTripMarkup();
+  }
+
+  function energyFlowState() {
+    const live = state.live || {};
+    const charging = resolveChargeActive(live) || resolveChargeCableConnected(live);
+    const idc = firstNumericField(live, ["sdu_idc"]);
+    if (charging) {
+      return "charge";
+    }
+    if (idc !== null && idc < -1) {
+      return "regen";
+    }
+    return "drive";
+  }
+
+  function energyFlowImageMarkup(layout, image) {
+    const basePath = layout.assetsBasePath || "/touch/energy-flow/img/";
+    if (image.type === "coolantPipePath") {
+      return energyFlowPipePathMarkup(layout, image);
+    }
+    const style = [
+      "left:" + Number(image.x || 0) + "px",
+      "top:" + Number(image.y || 0) + "px",
+      "width:" + Number(image.width || 0) + "px",
+      "height:" + Number(image.height || 0) + "px",
+      "opacity:" + (image.opacity == null ? 1 : Number(image.opacity)),
+      "z-index:" + Number(image.zIndex || 1),
+      "transform:rotate(" + Number(image.rotation || 0) + "deg)"
+    ].join(";");
+    if (image.type === "coolantPipe") {
+      const pipeTag = "<div class=\"coolant-pipe " +
+        escapeHtml(image.color || "blue") +
+        " energy-flow-connector-pipe\" style=\"--speed:" +
+        escapeHtml(String(image.speed || "3.8s")) +
+        "\">" +
+          "<div class=\"flow a\"></div>" +
+          "<div class=\"flow b\"></div>" +
+          "<div class=\"shine\"></div>" +
+        "</div>";
+      if (!energyFlowEditorEnabled) {
+        return "<div class=\"energy-flow-item\" style=\"" +
+          escapeHtml(style) +
+          "\" data-energy-image=\"" +
+          escapeHtml(image.id || "") +
+          "\">" +
+            pipeTag +
+          "</div>";
+      }
+      return "<div class=\"energy-flow-item energy-flow-editor-item" +
+        (state.energyFlowEditorActiveId === image.id ? " is-selected" : "") +
+        "\" style=\"" +
+        escapeHtml(style) +
+        "\" data-energy-image=\"" +
+        escapeHtml(image.id || "") +
+        "\" data-energy-file=\"html:coolant-pipe\"" +
+        "\" title=\"" +
+        escapeHtml((image.id || "") + " | R rotate") +
+        "\">" +
+          pipeTag +
+          "<span class=\"energy-flow-editor-handle is-nw\" data-handle=\"nw\"></span>" +
+          "<span class=\"energy-flow-editor-handle is-ne\" data-handle=\"ne\"></span>" +
+          "<span class=\"energy-flow-editor-handle is-sw\" data-handle=\"sw\"></span>" +
+          "<span class=\"energy-flow-editor-handle is-se\" data-handle=\"se\"></span>" +
+        "</div>";
+    }
+    const imageTag = "<img class=\"energy-flow-image\" src=\"" +
+      escapeHtml(basePath + image.file) +
+      "\" alt=\"" +
+      escapeHtml(image.label || image.id || "") +
+      "\" onerror=\"this.hidden=true" +
+      "\" data-energy-image=\"" +
+      escapeHtml(image.id || "") +
+      "\">";
+    if (!energyFlowEditorEnabled) {
+      return "<div class=\"energy-flow-item\" style=\"" +
+        escapeHtml(style) +
+        "\" data-energy-image=\"" +
+        escapeHtml(image.id || "") +
+        "\">" +
+          imageTag +
+        "</div>";
+    }
+    return "<div class=\"energy-flow-item energy-flow-editor-item" +
+      (state.energyFlowEditorActiveId === image.id ? " is-selected" : "") +
+      "\" style=\"" +
+      escapeHtml(style) +
+      "\" data-energy-image=\"" +
+      escapeHtml(image.id || "") +
+      "\" data-energy-file=\"" +
+      escapeHtml(image.file || "") +
+      "\" title=\"" +
+      escapeHtml((image.id || "") + " | R rotate") +
+      "\">" +
+        imageTag +
+        "<span class=\"energy-flow-editor-handle is-nw\" data-handle=\"nw\"></span>" +
+        "<span class=\"energy-flow-editor-handle is-ne\" data-handle=\"ne\"></span>" +
+        "<span class=\"energy-flow-editor-handle is-sw\" data-handle=\"sw\"></span>" +
+        "<span class=\"energy-flow-editor-handle is-se\" data-handle=\"se\"></span>" +
+      "</div>";
+  }
+
+  function energyFlowPipeSegmentStyle(pointA, pointB, thickness) {
+    const x1 = Number(pointA.x || 0);
+    const y1 = Number(pointA.y || 0);
+    const x2 = Number(pointB.x || 0);
+    const y2 = Number(pointB.y || 0);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    return [
+      "left:" + x1 + "px",
+      "top:" + (y1 - thickness / 2) + "px",
+      "width:" + length + "px",
+      "height:" + thickness + "px",
+      "transform:rotate(" + angle + "deg)",
+      "transform-origin:0 50%"
+    ].join(";");
+  }
+
+  function energyFlowPipeSegmentLength(pointA, pointB) {
+    const x1 = Number(pointA.x || 0);
+    const y1 = Number(pointA.y || 0);
+    const x2 = Number(pointB.x || 0);
+    const y2 = Number(pointB.y || 0);
+    return Math.max(1, Math.hypot(x2 - x1, y2 - y1));
+  }
+
+  function energyFlowPipeSpeedSeconds(value, fallback) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    }
+    const parsed = Number(String(value || "").replace("s", ""));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  function energyFlowPipePathMarkup(layout, image) {
+    const points = Array.isArray(image.points) ? image.points : [];
+    if (points.length < 2) {
+      return "";
+    }
+    const width = Number((layout.coordinateSystem && layout.coordinateSystem.width) || 1024);
+    const height = Number((layout.coordinateSystem && layout.coordinateSystem.height) || 600);
+    const thickness = Number(image.thickness || image.height || 8);
+    const itemStyle = [
+      "left:0px",
+      "top:0px",
+      "width:" + width + "px",
+      "height:" + height + "px",
+      "opacity:" + (image.opacity == null ? 1 : Number(image.opacity)),
+      "z-index:" + Number(image.zIndex || 1),
+      "transform:rotate(0deg)"
+    ].join(";");
+    const segmentLengths = points.slice(0, -1).map(function (point, index) {
+      return energyFlowPipeSegmentLength(point, points[index + 1]);
+    });
+    const totalLength = segmentLengths.reduce(function (sum, length) {
+      return sum + length;
+    }, 0);
+    const baseSpeedSeconds = energyFlowPipeSpeedSeconds(image.speed, 3.8);
+    const pixelsPerSecond = totalLength > 0 ? totalLength / baseSpeedSeconds : 70;
+    const flowSpanPx = Math.max(216, Number(image.flowSpan || 1512));
+    const flowDurationSeconds = Math.max(0.35, flowSpanPx / Math.max(1, pixelsPerSecond));
+    let cumulativeLength = 0;
+    const segments = points.slice(0, -1).map(function (point, index) {
+      const segmentDelay = -(cumulativeLength / Math.max(1, pixelsPerSecond));
+      cumulativeLength += segmentLengths[index] || 1;
+      return "<div class=\"coolant-pipe " +
+        escapeHtml(image.color || "blue") +
+        "\" data-pipe-segment=\"" +
+        index +
+        "\" style=\"" +
+        escapeHtml(
+          energyFlowPipeSegmentStyle(point, points[index + 1], thickness) +
+          ";--speed:" +
+          flowDurationSeconds.toFixed(3) +
+          "s;--delay:" +
+          segmentDelay.toFixed(3) +
+          "s;--flow-span:" +
+          flowSpanPx.toFixed(0) +
+          "px"
+        ) +
+        "\">" +
+          "<div class=\"flow a\"></div>" +
+          "<div class=\"flow b\"></div>" +
+          "<div class=\"shine\"></div>" +
+        "</div>";
+    }).join("");
+    const pointHandles = points.map(function (point, index) {
+      return "<span class=\"energy-flow-editor-line-point\" data-pipe-point=\"" +
+        index +
+        "\" style=\"left:" +
+        Number(point.x || 0) +
+        "px;top:" +
+        Number(point.y || 0) +
+        "px\"></span>";
+    }).join("");
+    return "<div class=\"energy-flow-item energy-flow-pipe-path" +
+      (energyFlowEditorEnabled ? " energy-flow-editor-item" : "") +
+      (state.energyFlowEditorActiveId === image.id ? " is-selected" : "") +
+      "\" style=\"" +
+      escapeHtml(itemStyle) +
+      "\" data-energy-image=\"" +
+      escapeHtml(image.id || "") +
+      "\" data-energy-file=\"html:coolant-pipe-path\"" +
+      "\" title=\"" +
+      escapeHtml((image.id || "") + " | drag points") +
+      "\">" +
+        segments +
+        (energyFlowEditorEnabled ? pointHandles : "") +
+      "</div>";
+  }
+
+  function energyFlowVectorMarkup(vector, active) {
+    if (!vector || !Array.isArray(vector.points) || vector.points.length < 2) {
+      return "";
+    }
+    const d = vector.points.map(function (point, index) {
+      return (index === 0 ? "M" : "L") + Number(point.x || 0) + " " + Number(point.y || 0);
+    }).join(" ");
+    return "<path class=\"energy-flow-vector" + (active ? " is-active" : "") + (vector.static ? " is-static" : "") + "\" d=\"" +
+      escapeHtml(d) +
+      "\" stroke=\"" +
+      escapeHtml(vector.stroke || "#19c7ff") +
+      "\" stroke-width=\"" +
+      escapeHtml(String(vector.strokeWidth || 4)) +
+      "\" opacity=\"" +
+      escapeHtml(String(vector.opacity == null ? 1 : vector.opacity)) +
+      "\" marker-end=\"" +
+      (vector.arrow === "end" ? "url(#energyFlowArrow)" : "") +
+      "\" data-energy-vector=\"" +
+      escapeHtml(vector.id || "") +
+      "\"></path>";
+  }
+
+  function energyFlowMarkup() {
+    const layout = state.energyFlowLayout;
+    if (!layout) {
+      return "<div class=\"energy-flow-shell\"><div class=\"energy-flow-loading\">Energy flow</div></div>";
+    }
+    const mode = energyFlowState();
+    const modeConfig = layout.states && layout.states[mode] ? layout.states[mode] : {};
+    const visibleVectors = new Set(modeConfig.visibleVectors || []);
+    const width = Number((layout.coordinateSystem && layout.coordinateSystem.width) || 1024);
+    const height = Number((layout.coordinateSystem && layout.coordinateSystem.height) || 600);
+    const images = Array.isArray(layout.images) ? layout.images.slice().sort(function (a, b) {
+      return Number(a.zIndex || 0) - Number(b.zIndex || 0);
+    }) : [];
+    const vectors = Array.isArray(layout.vectors) ? layout.vectors.slice().sort(function (a, b) {
+      return Number(a.zIndex || 0) - Number(b.zIndex || 0);
+    }) : [];
+    return "<div class=\"energy-flow-shell" + (energyFlowEditorEnabled ? " is-editor" : "") + "\" style=\"--energy-flow-accent:" +
+      escapeHtml(modeConfig.accentColor || "#19c7ff") +
+      "\">" +
+        (energyFlowEditorEnabled ? energyFlowEditorToolbarMarkup() : "") +
+        "<div class=\"energy-flow-canvas\" style=\"width:" + width + "px;height:" + height + "px\">" +
+          images.map(function (image) {
+            return energyFlowImageMarkup(layout, image);
+          }).join("") +
+          "<svg class=\"energy-flow-svg\" viewBox=\"0 0 " + width + " " + height + "\" aria-hidden=\"true\">" +
+            "<defs><marker id=\"energyFlowArrow\" markerWidth=\"10\" markerHeight=\"10\" refX=\"8\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\"><path d=\"M0,0 L0,6 L9,3 z\" fill=\"var(--energy-flow-accent)\"></path></marker></defs>" +
+            vectors.map(function (vector) {
+              return energyFlowVectorMarkup(vector, visibleVectors.has(vector.id));
+            }).join("") +
+          "</svg>" +
+        "</div>" +
+      "</div>";
+  }
+
+  function energyFlowEditorToolbarMarkup() {
+    return "<div class=\"energy-flow-editor-toolbar\">" +
+      "<span>Energy Flow Editor</span>" +
+      "<span class=\"energy-flow-editor-hint\">Drag item to move · drag corners to resize · hover/select + R to rotate</span>" +
+      "<button type=\"button\" class=\"energy-flow-editor-save\" data-energy-editor-save=\"1\"" +
+      (state.energyFlowEditorSaving ? " disabled" : "") +
+      ">" +
+      (state.energyFlowEditorSaving ? "Saving" : state.energyFlowEditorDirty ? "Save JSON" : "Saved") +
+      "</button>" +
+      (state.energyFlowEditorMessage ? "<small>" + escapeHtml(state.energyFlowEditorMessage) + "</small>" : "") +
+    "</div>";
+  }
+
   function styleTestScrollKey() {
     const tab = currentTab();
     return tab && tab.label ? tab.label : String(state.tabIndex);
@@ -2203,6 +2881,276 @@
     });
   }
 
+  function findEnergyFlowImage(imageId) {
+    const layout = state.energyFlowLayout;
+    const images = layout && Array.isArray(layout.images) ? layout.images : [];
+    return images.find(function (image) {
+      return image.id === imageId;
+    }) || null;
+  }
+
+  function energyFlowPointerCoords(event) {
+    const layout = state.energyFlowLayout;
+    const canvas = styleTestStage ? styleTestStage.querySelector(".energy-flow-canvas") : null;
+    if (!layout || !canvas) {
+      return null;
+    }
+    const width = Number((layout.coordinateSystem && layout.coordinateSystem.width) || 1024);
+    const height = Number((layout.coordinateSystem && layout.coordinateSystem.height) || 600);
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * (width / rect.width),
+      y: (event.clientY - rect.top) * (height / rect.height)
+    };
+  }
+
+  function updateEnergyFlowItemElement(imageId) {
+    const image = findEnergyFlowImage(imageId);
+    const element = styleTestStage ? styleTestStage.querySelector(".energy-flow-item[data-energy-image=\"" + CSS.escape(imageId) + "\"]") : null;
+    if (!image || !element) {
+      return;
+    }
+    if (image.type === "coolantPipePath") {
+      updateEnergyFlowPipePathElement(image, element);
+      return;
+    }
+    element.style.left = Number(image.x || 0) + "px";
+    element.style.top = Number(image.y || 0) + "px";
+    element.style.width = Number(image.width || 0) + "px";
+    element.style.height = Number(image.height || 0) + "px";
+    element.style.opacity = image.opacity == null ? "1" : String(Number(image.opacity));
+    element.style.zIndex = String(Number(image.zIndex || 1));
+    element.style.transform = "rotate(" + Number(image.rotation || 0) + "deg)";
+  }
+
+  function updateEnergyFlowPipePathElement(image, element) {
+    const points = Array.isArray(image.points) ? image.points : [];
+    const thickness = Number(image.thickness || image.height || 8);
+    element.querySelectorAll("[data-pipe-segment]").forEach(function (segment) {
+      const index = Number(segment.getAttribute("data-pipe-segment") || "0");
+      if (!points[index] || !points[index + 1]) {
+        return;
+      }
+      energyFlowPipeSegmentStyle(points[index], points[index + 1], thickness).split(";").forEach(function (declaration) {
+        const parts = declaration.split(":");
+        if (parts.length !== 2) {
+          return;
+        }
+        segment.style.setProperty(parts[0], parts[1]);
+      });
+    });
+    element.querySelectorAll("[data-pipe-point]").forEach(function (handle) {
+      const index = Number(handle.getAttribute("data-pipe-point") || "0");
+      const point = points[index];
+      if (!point) {
+        return;
+      }
+      handle.style.left = Number(point.x || 0) + "px";
+      handle.style.top = Number(point.y || 0) + "px";
+    });
+  }
+
+  function setEnergyFlowEditorDirty(message) {
+    state.energyFlowEditorDirty = true;
+    state.energyFlowEditorMessage = message || "Unsaved";
+    const save = styleTestStage ? styleTestStage.querySelector(".energy-flow-editor-save") : null;
+    const status = styleTestStage ? styleTestStage.querySelector(".energy-flow-editor-toolbar small") : null;
+    if (save) {
+      save.textContent = "Save JSON";
+      save.disabled = false;
+    }
+    if (status) {
+      status.textContent = state.energyFlowEditorMessage;
+    }
+  }
+
+  function selectEnergyFlowEditorItem(imageId) {
+    state.energyFlowEditorActiveId = imageId || "";
+    if (!styleTestStage) {
+      return;
+    }
+    styleTestStage.querySelectorAll(".energy-flow-editor-item").forEach(function (element) {
+      element.classList.toggle("is-selected", element.getAttribute("data-energy-image") === state.energyFlowEditorActiveId);
+    });
+  }
+
+  function rotateEnergyFlowEditorItem(imageId, deltaDeg) {
+    const image = findEnergyFlowImage(imageId);
+    if (!image) {
+      return;
+    }
+    const current = Number(image.rotation || 0);
+    image.rotation = Math.round((current + deltaDeg) * 10) / 10;
+    updateEnergyFlowItemElement(imageId);
+    setEnergyFlowEditorDirty("Rotation " + image.rotation + " deg");
+  }
+
+  async function saveEnergyFlowEditorLayout() {
+    if (!energyFlowEditorEnabled || !state.energyFlowLayout || state.energyFlowEditorSaving) {
+      return;
+    }
+    state.energyFlowEditorSaving = true;
+    state.energyFlowEditorMessage = "Saving...";
+    renderStyleTestStage();
+    try {
+      const response = await fetch("/api/energy-flow-layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(state.energyFlowLayout, null, 2)
+      });
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+      }
+      state.energyFlowEditorDirty = false;
+      state.energyFlowEditorMessage = "Saved to JSON";
+    } catch (error) {
+      state.energyFlowEditorMessage = error && error.message ? error.message : "Save failed";
+    }
+    state.energyFlowEditorSaving = false;
+    renderStyleTestStage();
+  }
+
+  function bindEnergyFlowEditor() {
+    if (!energyFlowEditorEnabled || !styleTestStage) {
+      return;
+    }
+    styleTestStage.addEventListener("pointerover", function (event) {
+      const item = event.target.closest(".energy-flow-editor-item[data-energy-image]");
+      if (!item) {
+        return;
+      }
+      selectEnergyFlowEditorItem(item.getAttribute("data-energy-image") || "");
+    });
+
+    styleTestStage.addEventListener("pointerdown", function (event) {
+      const save = event.target.closest("[data-energy-editor-save]");
+      if (save) {
+        event.preventDefault();
+        saveEnergyFlowEditorLayout();
+        return;
+      }
+      const item = event.target.closest(".energy-flow-editor-item[data-energy-image]");
+      if (!item) {
+        return;
+      }
+      const coords = energyFlowPointerCoords(event);
+      const imageId = item.getAttribute("data-energy-image") || "";
+      const image = findEnergyFlowImage(imageId);
+      if (!coords || !image) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      selectEnergyFlowEditorItem(imageId);
+      item.setPointerCapture(event.pointerId);
+      const pipePointHandle = event.target.closest("[data-pipe-point]");
+      state.energyFlowEditorDrag = {
+        pointerId: event.pointerId,
+        imageId: imageId,
+        handle: (event.target.closest(".energy-flow-editor-handle") || {}).dataset ? event.target.closest(".energy-flow-editor-handle").dataset.handle : "",
+        pipePoint: pipePointHandle ? pipePointHandle.getAttribute("data-pipe-point") : "",
+        startX: coords.x,
+        startY: coords.y,
+        imageX: Number(image.x || 0),
+        imageY: Number(image.y || 0),
+        imageWidth: Number(image.width || 0),
+        imageHeight: Number(image.height || 0),
+        points: Array.isArray(image.points) ? image.points.map(function (point) {
+          return { x: Number(point.x || 0), y: Number(point.y || 0) };
+        }) : []
+      };
+    });
+
+    styleTestStage.addEventListener("pointermove", function (event) {
+      const drag = state.energyFlowEditorDrag;
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      const coords = energyFlowPointerCoords(event);
+      const image = findEnergyFlowImage(drag.imageId);
+      if (!coords || !image) {
+        return;
+      }
+      event.preventDefault();
+      const dx = coords.x - drag.startX;
+      const dy = coords.y - drag.startY;
+      const minSize = 20;
+      if (drag.pipePoint !== "" && Array.isArray(image.points) && image.points.length >= 2) {
+        const pointIndex = Number(drag.pipePoint);
+        if (!Number.isInteger(pointIndex) || !drag.points[pointIndex] || !image.points[pointIndex]) {
+          return;
+        }
+        image.points[pointIndex].x = Math.round(drag.points[pointIndex].x + dx);
+        image.points[pointIndex].y = Math.round(drag.points[pointIndex].y + dy);
+      } else if (image.type === "coolantPipePath") {
+        return;
+      } else if (!drag.handle) {
+        image.x = Math.round(drag.imageX + dx);
+        image.y = Math.round(drag.imageY + dy);
+      } else {
+        let nextX = drag.imageX;
+        let nextY = drag.imageY;
+        let nextWidth = drag.imageWidth;
+        let nextHeight = drag.imageHeight;
+        if (drag.handle.indexOf("w") !== -1) {
+          nextX = drag.imageX + dx;
+          nextWidth = drag.imageWidth - dx;
+        }
+        if (drag.handle.indexOf("e") !== -1) {
+          nextWidth = drag.imageWidth + dx;
+        }
+        if (drag.handle.indexOf("n") !== -1) {
+          nextY = drag.imageY + dy;
+          nextHeight = drag.imageHeight - dy;
+        }
+        if (drag.handle.indexOf("s") !== -1) {
+          nextHeight = drag.imageHeight + dy;
+        }
+        if (nextWidth < minSize) {
+          nextWidth = minSize;
+          nextX = drag.handle.indexOf("w") !== -1 ? drag.imageX + drag.imageWidth - minSize : nextX;
+        }
+        if (nextHeight < minSize) {
+          nextHeight = minSize;
+          nextY = drag.handle.indexOf("n") !== -1 ? drag.imageY + drag.imageHeight - minSize : nextY;
+        }
+        image.x = Math.round(nextX);
+        image.y = Math.round(nextY);
+        image.width = Math.round(nextWidth);
+        image.height = Math.round(nextHeight);
+      }
+      updateEnergyFlowItemElement(drag.imageId);
+      setEnergyFlowEditorDirty("Unsaved");
+    });
+
+    styleTestStage.addEventListener("pointerup", function (event) {
+      const drag = state.energyFlowEditorDrag;
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      state.energyFlowEditorDrag = null;
+      renderStyleTestStage();
+    });
+
+    styleTestStage.addEventListener("pointercancel", function () {
+      state.energyFlowEditorDrag = null;
+      renderStyleTestStage();
+    });
+
+    window.addEventListener("keydown", function (event) {
+      if (state.section !== "ventilation" || !state.energyFlowEditorActiveId) {
+        return;
+      }
+      if (event.key !== "r" && event.key !== "R") {
+        return;
+      }
+      event.preventDefault();
+      rotateEnergyFlowEditorItem(state.energyFlowEditorActiveId, event.shiftKey ? -5 : 5);
+    });
+  }
+
   function renderStyleTestStage() {
     if (!styleTestStage) {
       return;
@@ -2210,13 +3158,19 @@
     const tab = currentTab().label;
     const scrollKey = styleTestScrollKey();
     rememberStyleTestScroll();
-    const content = tab === "Assistance"
-      ? porscheAssistanceMarkup()
-      : tab === "Trip"
-        ? porscheTripMarkup()
-        : tab === "Comfort"
-          ? porscheComfortMarkup()
-          : porscheDriveMarkup();
+    const content = state.section === "ventilation"
+      ? energyFlowMarkup()
+      : state.section === "vehicle"
+      ? porscheVehicleSectionMarkup()
+      : state.section === "stopwatch"
+      ? porscheStopwatchMarkup()
+      : tab === "Assistance"
+        ? porscheAssistanceMarkup()
+        : tab === "Trip"
+          ? porscheTripMarkup()
+          : tab === "Comfort"
+            ? porscheComfortMarkup()
+            : porscheDriveMarkup();
     styleTestStage.innerHTML =
       "<div class=\"pt-shell\">" +
         content +
@@ -2492,6 +3446,11 @@
       }
     }, true);
     styleTestStage.addEventListener("click", function (event) {
+      if (state.styleTestPopup && !event.target.closest(".pt-popup-panel")) {
+        state.styleTestPopup = null;
+        renderStyleTestStage();
+        return;
+      }
       const option = event.target.closest(".pt-popup-option[data-pt-option-key]");
       if (option) {
         const key = option.getAttribute("data-pt-option-key");
@@ -2501,6 +3460,15 @@
           state.styleTestPopup = null;
           renderStyleTestStage();
         }
+        return;
+      }
+      if (
+        state.styleTestPopup &&
+        event.target.closest(".pt-popup-panel") &&
+        !event.target.closest(".pt-slider, .pt-vertical-slider")
+      ) {
+        state.styleTestPopup = null;
+        renderStyleTestStage();
         return;
       }
       const menuRow = event.target.closest(".pt-row[data-pt-menu-key]");
@@ -2522,7 +3490,9 @@
         openMetricChart(chartRow.getAttribute("data-pt-chart-key") || "");
         return;
       }
-      const checkbox = event.target.closest(".pt-checkbox[data-pt-checkbox]");
+      const checkboxRow = event.target.closest(".pt-row");
+      const checkbox = event.target.closest(".pt-checkbox[data-pt-checkbox]") ||
+        (checkboxRow ? checkboxRow.querySelector(".pt-checkbox[data-pt-checkbox]") : null);
       if (!checkbox) {
         return;
       }
@@ -2614,6 +3584,122 @@
     });
   }
 
+  function resolveNetworkStatus(live) {
+    const data = live || {};
+    if (state.networkOverride) {
+      if (state.networkOverride === "wifi") {
+        return {
+          badge: "WiFi",
+          connected: true,
+          ip: data.sta_ip || data.ap_ip || "--",
+          label: "WiFi verbunden",
+          mode: "wifi",
+          signal: data.wifi_signal || data.rssi || null,
+          ssid: data.sta_ssid || data.ap_ssid || "WiFi"
+        };
+      }
+      if (state.networkOverride === "lte") {
+        return {
+          badge: "LTE",
+          connected: true,
+          ip: data.lte_ip || "--",
+          label: "LTE verbunden",
+          mode: "lte",
+          operator: data.lte_operator || "LTE",
+          signal: data.lte_signal == null ? 4 : data.lte_signal
+        };
+      }
+      return {
+        badge: "OFF",
+        connected: false,
+        ip: "--",
+        label: "Offline",
+        mode: "offline",
+        signal: 0
+      };
+    }
+    if (state.error) {
+      return {
+        badge: "OFF",
+        connected: false,
+        ip: "--",
+        label: "API offline",
+        mode: "offline",
+        signal: 0
+      };
+    }
+    if (data.lte_connected) {
+      return {
+        badge: "LTE",
+        connected: true,
+        ip: data.lte_ip || "--",
+        label: "LTE verbunden",
+        mode: "lte",
+        operator: data.lte_operator || "LTE",
+        signal: data.lte_signal == null ? null : data.lte_signal
+      };
+    }
+    if (data.sta_connected) {
+      return {
+        badge: "WiFi",
+        connected: true,
+        ip: data.sta_ip || data.ap_ip || "--",
+        label: "WiFi verbunden",
+        mode: "wifi",
+        signal: data.wifi_signal || data.rssi || null,
+        ssid: data.sta_ssid || data.ap_ssid || "WiFi"
+      };
+    }
+    return {
+      badge: "OFF",
+      connected: false,
+      ip: data.sta_ip || data.ap_ip || "--",
+      label: "Offline",
+      mode: "offline",
+      signal: 0
+    };
+  }
+
+  function networkSignalText(network) {
+    if (!network || network.signal === null || network.signal === undefined || network.signal === "") {
+      return "--";
+    }
+    return String(network.signal);
+  }
+
+  function networkPopoverMarkup(network) {
+    if (!state.networkPopupOpen || !network) {
+      return "";
+    }
+    const testControls = networkTestEnabled
+      ? "<div class=\"network-test-controls\" aria-label=\"Network test mode\">" +
+          ["wifi", "lte", "offline"].map(function (mode) {
+            const label = mode === "wifi" ? "WiFi" : mode === "lte" ? "LTE" : "Off";
+            return "<button type=\"button\" class=\"network-test-button" +
+              (state.networkOverride === mode ? " is-active" : "") +
+              "\" data-network-test=\"" +
+              mode +
+              "\">" +
+              label +
+              "</button>";
+          }).join("") +
+        "</div>"
+      : "";
+    return "<div class=\"network-popover\" role=\"dialog\" aria-label=\"Network status\">" +
+      "<div class=\"network-popover-title\">" +
+        "<strong>" + escapeHtml(network.label) + "</strong>" +
+        "<span class=\"network-mode-pill is-" + escapeHtml(network.mode) + "\">" + escapeHtml(network.badge) + "</span>" +
+      "</div>" +
+      "<dl>" +
+        "<div><dt>IP</dt><dd>" + escapeHtml(network.ip || "--") + "</dd></div>" +
+        "<div><dt>SSID/Netz</dt><dd>" + escapeHtml(network.ssid || network.operator || "--") + "</dd></div>" +
+        "<div><dt>Signal</dt><dd>" + escapeHtml(networkSignalText(network)) + "</dd></div>" +
+      "</dl>" +
+      (networkTestEnabled ? "<small>Testmodus: Status wird lokal simuliert.</small>" : "<small>Tippen schliesst. Langer Druck: Engineering.</small>") +
+      testControls +
+    "</div>";
+  }
+
   function updateTopbarTime() {
     if (!topbarTime) {
       return;
@@ -2623,6 +3709,13 @@
       hour12: false,
       minute: "2-digit"
     });
+    const network = resolveNetworkStatus(state.live || {});
+    const networkBadge = "<span class=\"topbar-network-badge is-" +
+      escapeHtml(network.mode) +
+      "\">" +
+      escapeHtml(network.badge) +
+      "</span>" +
+      networkPopoverMarkup(network);
     const simulateHostLost = state.section === "styleTest" && state.styleTestControls.simulateHostLost;
     const simulatePlugConnected = state.section === "styleTest" && state.styleTestControls.simulatePlugConnected;
     if (state.error || simulateHostLost) {
@@ -2632,6 +3725,7 @@
       if (!timeValue || !topbarTime.querySelector(".topbar-warning")) {
         topbarTime.innerHTML =
           "<span class=\"topbar-time-value\"></span>" +
+          networkBadge +
           "<span class=\"topbar-warning\" aria-label=\"Live API connection interrupted\">" +
             "<img class=\"topbar-warning-icon\" src=\"/touch/assets/warning.svg\" alt=\"\">" +
           "</span>";
@@ -2649,6 +3743,7 @@
       if (!timeValue || !topbarTime.querySelector(".topbar-plug")) {
         topbarTime.innerHTML =
           "<span class=\"topbar-time-value\"></span>" +
+          networkBadge +
           "<span class=\"topbar-plug\" aria-label=\"Charge cable connected\">" +
             "<img class=\"topbar-plug-icon\" src=\"/touch/assets/plug.svg\" alt=\"\">" +
           "</span>";
@@ -2661,7 +3756,11 @@
     }
     topbarTime.classList.remove("is-api-offline");
     topbarTime.classList.remove("is-plugged");
-    topbarTime.textContent = timeText;
+    topbarTime.innerHTML =
+      "<span class=\"topbar-time-plain\">" +
+      escapeHtml(timeText) +
+      "</span>" +
+      networkBadge;
   }
 
   function openBatteryControlModal(controlKey) {
@@ -2730,6 +3829,7 @@
     const isHome = state.section === "home";
     const isCoolant = state.section === "coolant";
     const isStyleTest = state.section === "styleTest";
+    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation";
     const activeSection = currentSection();
     const activeTab = currentTab();
     const isTileBoard = isCurrentTabTileBoard();
@@ -2741,7 +3841,8 @@
     heroImage.alt = isHome ? "Home hero image" : activeTab.title;
     screenRoot.classList.toggle("is-home", isHome);
     screenRoot.classList.toggle("is-coolant", isCoolant);
-    screenRoot.classList.toggle("is-style-test", isStyleTest);
+    screenRoot.classList.toggle("is-style-test", isPorscheStage);
+    screenRoot.classList.toggle("is-energy-flow", state.section === "ventilation");
     screenRoot.classList.toggle("is-tile-board", isTileBoard && !isHome && !isCoolant);
     screenRoot.classList.toggle("is-engineering-mode", state.engineeringMode);
     if (tableHead) {
@@ -2754,8 +3855,8 @@
       coolantStage.hidden = !isCoolant;
     }
     if (styleTestStage) {
-      styleTestStage.hidden = !isStyleTest;
-      if (!isStyleTest) {
+      styleTestStage.hidden = !isPorscheStage;
+      if (!isPorscheStage) {
         styleTestStage.innerHTML = "";
       }
     }
@@ -2768,7 +3869,7 @@
       renderHomeStage(activeSection);
     } else if (isCoolant) {
       renderCoolantStage();
-    } else if (isStyleTest) {
+    } else if (isPorscheStage) {
       renderStyleTestStage();
     }
   }
@@ -2799,6 +3900,9 @@
     if (index < 0 || index >= currentSection().tabs.length) {
       return;
     }
+    if (currentSection().tabs[index] && currentSection().tabs[index].placeholder) {
+      return;
+    }
     if (state.styleTestPopup) {
       state.styleTestPopup = null;
       closeMetricChart();
@@ -2818,13 +3922,281 @@
     renderView();
   }
 
-  async function fetchLiveData() {
+  function uniqueKeys(keys) {
+    const seen = new Set();
+    const result = [];
+    keys.forEach(function (key) {
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      result.push(key);
+    });
+    return result;
+  }
+
+  function addRenderLiveKeys(keys, render) {
+    if (!render) {
+      return;
+    }
+    if (render.chartKey) {
+      keys.push(render.chartKey);
+    }
+    if (Array.isArray(render.liveKeys)) {
+      render.liveKeys.forEach(function (key) {
+        keys.push(key);
+      });
+    }
+  }
+
+  function addTabLiveKeys(keys, tab) {
+    if (!tab) {
+      return;
+    }
+    (tab.rows || []).forEach(function (row) {
+      addRenderLiveKeys(keys, row.render);
+      if (row.chartKey) {
+        keys.push(row.chartKey);
+      }
+      if (row.controlKey) {
+        keys.push(row.controlKey);
+      }
+    });
+    (tab.hero || []).forEach(function (item) {
+      addRenderLiveKeys(keys, item.render);
+    });
+    const tiles = tab.tileBoard && Array.isArray(tab.tileBoard.tiles) ? tab.tileBoard.tiles : [];
+    tiles.forEach(function (tile) {
+      addRenderLiveKeys(keys, tile.render || tile);
+      if (tile.chartKey) {
+        keys.push(tile.chartKey);
+      }
+    });
+  }
+
+  function porscheVehicleEnginePollKeys() {
+    const keys = [
+      "sdu_udc",
+      "sdu_idc",
+      "sdu_speed",
+      "sdu_regenpreset",
+      "sdu_potnom",
+      "sdu_seldir",
+      "sdu_tmphs",
+      "sdu_tmpm",
+      "sdu_uaux",
+      "sdu_opmode"
+    ];
+    if (state.engineeringMode) {
+      keys.push(
+        "sdu_il1",
+        "sdu_il2",
+        "sdu_fstat",
+        "sdu_uac",
+        "sdu_ilmax",
+        "sdu_il1rms",
+        "sdu_il2rms",
+        "sdu_boostcalc",
+        "sdu_fweakcalc",
+        "sdu_pot",
+        "sdu_pot2",
+        "sdu_amp",
+        "sdu_angle",
+        "sdu_rotordir",
+        "sdu_lasterr",
+        "sdu_pwmio",
+        "sdu_canio",
+        "sdu_status",
+        "sdu_cpuload",
+        "sdu_din_cruise",
+        "sdu_din_start",
+        "sdu_din_brake",
+        "sdu_din_mprot",
+        "sdu_din_forward",
+        "sdu_din_reverse",
+        "sdu_din_emcystop",
+        "sdu_din_ocur",
+        "sdu_din_desat",
+        "sdu_din_bms",
+        "sdu_cruisespeed",
+        "sdu_turns",
+        "sdu_uptime",
+        "sdu_uptime_s"
+      );
+    }
+    return keys;
+  }
+
+  function porscheStagePollKeys() {
+    const tab = currentTab().label;
+    if (state.section === "vehicle") {
+      if (tab === "Engine") {
+        return porscheVehicleEnginePollKeys();
+      }
+      if (tab === "Battery") {
+        return [
+          "charge_power_kw",
+          "battery_power_kw",
+          "hv_power_kw",
+          "sdu_udc",
+          "sdu_idc",
+          "sdu_uaux",
+          "battery_level",
+          "battery_percent",
+          "battery_soc",
+          "battery_range_km"
+        ];
+      }
+      if (tab === "Charger") {
+        return [
+          "plug_connected",
+          "charger_connected",
+          "charge_port_connected",
+          "charging_active",
+          "is_charging",
+          "charge_power_kw",
+          "ac_charge_power_kw",
+          "charger_power_kw",
+          "target_charge_pct",
+          "ac_current_limit_a",
+          "digital_pot_pct",
+          "battery_level",
+          "battery_percent",
+          "battery_soc",
+          "battery_capacity_kwh",
+          "hv_battery_capacity_kwh"
+        ];
+      }
+      return [
+        "vehicle_speed_510",
+        "vref_kmh",
+        "acceleration",
+        "prnd_pos",
+        "lenkwinkel_rb",
+        "indicator_left",
+        "indicator_right"
+      ];
+    }
+    if (state.section === "stopwatch") {
+      return [
+        "sdu_uptime",
+        "vehicle_speed_510",
+        "vref_kmh",
+        "battery_power_kw",
+        "hv_power_kw",
+        "sdu_udc",
+        "sdu_idc",
+        "cluster_acceleration_run_time_s",
+        "cluster_acceleration_run_active",
+        "cluster_acceleration_0_50_last_s",
+        "cluster_acceleration_0_50_best_s",
+        "cluster_acceleration_0_100_last_s",
+        "cluster_acceleration_0_100_best_s",
+        "cluster_acceleration_0_50_valid",
+        "cluster_acceleration_0_100_valid"
+      ];
+    }
+    if (state.section === "styleTest") {
+      return [
+        "battery_power_kw",
+        "hv_power_kw",
+        "sdu_udc",
+        "sdu_idc",
+        "battery_level",
+        "battery_percent",
+        "battery_soc"
+      ];
+    }
+    return [];
+  }
+
+  function visibleLiveFields() {
+    const keys = [
+      "sta_connected",
+      "sta_ssid",
+      "sta_ip",
+      "ap_ssid",
+      "ap_ip",
+      "wifi_signal",
+      "rssi",
+      "lte_connected",
+      "lte_operator",
+      "lte_signal",
+      "lte_ip",
+      "network_mode",
+      "network_label"
+    ];
+    if (state.section === "home") {
+      keys.push(
+        "battery_level",
+        "battery_percent",
+        "battery_soc",
+        "battery_range_km",
+        "battery_range_mi",
+        "charge_power_kw",
+        "battery_power_kw",
+        "hv_power_kw",
+        "sdu_udc",
+        "sdu_idc",
+        "charging_active",
+        "is_charging",
+        "charger_power_kw",
+        "target_charge_pct",
+        "ac_current_limit_a",
+        "digital_pot_pct"
+      );
+    } else if (state.section === "coolant") {
+      keys.push("coolant_fan_level", "coolant_fan_low_output", "coolant_fan_high_output");
+    } else if (state.section === "ventilation") {
+      keys.push(
+        "sdu_idc",
+        "charging_active",
+        "is_charging",
+        "plug_connected",
+        "charger_connected",
+        "charge_port_connected"
+      );
+    } else if (state.section === "vehicle" || state.section === "stopwatch" || state.section === "styleTest") {
+      porscheStagePollKeys().forEach(function (key) {
+        keys.push(key);
+      });
+    } else {
+      addTabLiveKeys(keys, currentTab());
+    }
+    return uniqueKeys(keys);
+  }
+
+  async function loadEnergyFlowLayout() {
     try {
-      const response = await fetch("/api/live", { cache: "no-store" });
+      const response = await fetch("/touch/energy-flow/energy-flow-layout.json", { cache: "no-store" });
       if (!response.ok) {
         throw new Error("HTTP " + response.status);
       }
-      state.live = await response.json();
+      state.energyFlowLayout = await response.json();
+      if (state.section === "ventilation") {
+        renderView();
+      }
+    } catch (_) {
+      state.energyFlowLayout = null;
+    }
+  }
+
+  async function fetchLiveData() {
+    try {
+      const fields = visibleLiveFields();
+      const query = [];
+      if (fields.length) {
+        query.push("fields=" + encodeURIComponent(fields.join(",")));
+      }
+      if (networkTestEnabled && state.networkOverride) {
+        query.push("network=" + encodeURIComponent(state.networkOverride));
+      }
+      const url = "/api/live" + (query.length ? "?" + query.join("&") : "");
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+      }
+      state.live = Object.assign({}, state.live || {}, await response.json());
       syncBatteryControlsFromLive(state.live);
       state.lastUpdated = new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -2836,7 +4208,9 @@
     } catch (error) {
       state.error = error && error.message ? error.message : "request failed";
     }
-    renderView();
+    if (!(energyFlowEditorEnabled && state.section === "ventilation") && !state.energyFlowEditorDrag) {
+      renderView();
+    }
   }
 
   function schedulePolling() {
@@ -2851,6 +4225,7 @@
     }
     let timer = null;
     let pointerId = null;
+    let longPressFired = false;
 
     function clearGesture() {
       if (timer !== null) {
@@ -2862,9 +4237,11 @@
 
     topbarTime.addEventListener("pointerdown", function (event) {
       clearGesture();
+      longPressFired = false;
       pointerId = event.pointerId;
       timer = window.setTimeout(function () {
         timer = null;
+        longPressFired = true;
         toggleEngineeringMode();
       }, 1800);
     });
@@ -2874,8 +4251,34 @@
         clearGesture();
       }
     });
-    topbarTime.addEventListener("pointercancel", clearGesture);
-    topbarTime.addEventListener("pointerleave", clearGesture);
+    topbarTime.addEventListener("click", function (event) {
+      const testButton = event.target.closest("[data-network-test]");
+      if (testButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.networkOverride = testButton.getAttribute("data-network-test") || "";
+        state.networkPopupOpen = true;
+        updateTopbarTime();
+        return;
+      }
+      if (longPressFired) {
+        longPressFired = false;
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      state.networkPopupOpen = !state.networkPopupOpen;
+      updateTopbarTime();
+    });
+  topbarTime.addEventListener("pointercancel", clearGesture);
+  topbarTime.addEventListener("pointerleave", clearGesture);
+    document.addEventListener("click", function (event) {
+      if (!state.networkPopupOpen || event.target.closest("#topbarTime")) {
+        return;
+      }
+      state.networkPopupOpen = false;
+      updateTopbarTime();
+    });
   }
 
   l1Icons.forEach(function (button) {
@@ -2944,7 +4347,9 @@
   });
 
   bindStyleTestDragScroll();
+  bindEnergyFlowEditor();
   bindEngineeringModeGesture();
+  loadEnergyFlowLayout();
   renderView();
   window.setInterval(updateTopbarTime, 30000);
   window.setTimeout(function () {

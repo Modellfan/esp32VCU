@@ -21,6 +21,16 @@ DEFAULT_SCREENSHOT = REPO_ROOT / "archives" / "touch_ui_1024x600" / "layout_1024
 MOCK_LIVE = {
     "ap_ssid": "eboxster",
     "ap_ip": "192.168.4.1",
+    "sta_connected": True,
+    "sta_ssid": "Blacknet@Ueberlingen",
+    "sta_ip": "192.168.178.64",
+    "wifi_signal": -54,
+    "lte_connected": False,
+    "lte_operator": "",
+    "lte_signal": 0,
+    "lte_ip": "",
+    "network_mode": "wifi",
+    "network_label": "WiFi",
     "vehicle_speed_510": 87.4,
     "vref_kmh": 86.9,
     "acceleration": 0.164,
@@ -388,6 +398,54 @@ def update_dynamic_mock_state() -> None:
     )
 
 
+def apply_network_mock(response: dict[str, object], mode: str) -> None:
+    if mode == "wifi":
+        response.update(
+            {
+                "sta_connected": True,
+                "sta_ssid": "Blacknet@Ueberlingen",
+                "sta_ip": "192.168.178.64",
+                "wifi_signal": -54,
+                "lte_connected": False,
+                "lte_operator": "",
+                "lte_signal": 0,
+                "lte_ip": "",
+                "network_mode": "wifi",
+                "network_label": "WiFi",
+            }
+        )
+    elif mode == "lte":
+        response.update(
+            {
+                "sta_connected": False,
+                "sta_ssid": "",
+                "sta_ip": "",
+                "wifi_signal": 0,
+                "lte_connected": True,
+                "lte_operator": "Telekom",
+                "lte_signal": 4,
+                "lte_ip": "10.98.42.17",
+                "network_mode": "lte",
+                "network_label": "LTE",
+            }
+        )
+    elif mode == "offline":
+        response.update(
+            {
+                "sta_connected": False,
+                "sta_ssid": "",
+                "sta_ip": "",
+                "wifi_signal": 0,
+                "lte_connected": False,
+                "lte_operator": "",
+                "lte_signal": 0,
+                "lte_ip": "",
+                "network_mode": "offline",
+                "network_label": "Offline",
+            }
+        )
+
+
 class TouchUiHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_ROOT), **kwargs)
@@ -422,9 +480,19 @@ class TouchUiHandler(SimpleHTTPRequestHandler):
             self.wfile.write(payload)
             return
         if parsed.path == "/api/live":
+            params = parse_qs(parsed.query)
             with MOCK_LOCK:
                 update_dynamic_mock_state()
-                payload = json.dumps(MOCK_STATE).encode("utf-8")
+                network_mode = params.get("network", [""])[0]
+                snapshot = dict(MOCK_STATE)
+                if network_mode:
+                    apply_network_mock(snapshot, network_mode)
+                if "fields" in params and params["fields"]:
+                    requested = [field for field in params["fields"][0].split(",") if field]
+                    response = {field: snapshot[field] for field in requested if field in snapshot}
+                else:
+                    response = snapshot
+                payload = json.dumps(response).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -433,6 +501,45 @@ class TouchUiHandler(SimpleHTTPRequestHandler):
             self.wfile.write(payload)
             return
         super().do_GET()
+
+    def do_POST(self) -> None:
+        parsed = urlsplit(self.path)
+        if parsed.path == "/api/energy-flow-layout":
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                content_length = 0
+            if content_length <= 0 or content_length > 256_000:
+                payload = json.dumps({"ok": False, "error": "invalid content length"}).encode("utf-8")
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            try:
+                raw_body = self.rfile.read(content_length)
+                layout = json.loads(raw_body.decode("utf-8"))
+                if not isinstance(layout, dict):
+                    raise ValueError("layout must be an object")
+                if not isinstance(layout.get("images"), list):
+                    raise ValueError("layout.images must be a list")
+                if not isinstance(layout.get("vectors"), list):
+                    raise ValueError("layout.vectors must be a list")
+                target = WEB_ROOT / "touch" / "energy-flow" / "energy-flow-layout.json"
+                target.write_text(json.dumps(layout, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                payload = json.dumps({"ok": True, "path": str(target)}).encode("utf-8")
+                self.send_response(200)
+            except Exception as error:
+                payload = json.dumps({"ok": False, "error": str(error)}).encode("utf-8")
+                self.send_response(400)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        self.send_error(404, "Not found")
 
 
 def find_free_port(host: str) -> int:

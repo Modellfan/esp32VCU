@@ -1,0 +1,137 @@
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 55531)
+Traceback (most recent call last):
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\Documents\Github\esp32VCU\tools\touch_ui_test_support.py", line 393, in __init__
+    "cluster_counter": 120 + ((tick * 3) % 80),
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 732, in __init__
+    super().__init__(*args, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 496, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 464, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socket.py", line 725, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] Eine vorhandene Verbindung wurde vom Remotehost geschlossen
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 58168)
+Traceback (most recent call last):
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\Documents\Github\esp32VCU\tools\touch_ui_test_support.py", line 393, in __init__
+    "cluster_counter": 120 + ((tick * 3) % 80),
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 732, in __init__
+    super().__init__(*args, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 496, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 464, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socket.py", line 725, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] Eine vorhandene Verbindung wurde vom Remotehost geschlossen
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 53137)
+Traceback (most recent call last):
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\Documents\Github\esp32VCU\tools\touch_ui_test_support.py", line 393, in __init__
+    "cluster_counter": 120 + ((tick * 3) % 80),
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 732, in __init__
+    super().__init__(*args, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 496, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 464, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socket.py", line 725, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+ConnectionResetError: [WinError 10054] Eine vorhandene Verbindung wurde vom Remotehost geschlossen
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 55325)
+Traceback (most recent call last):
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\Documents\Github\esp32VCU\tools\touch_ui_test_support.py", line 393, in __init__
+    "cluster_counter": 120 + ((tick * 3) % 80),
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 732, in __init__
+    super().__init__(*args, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 496, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 484, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\Users\Win11 Pro\Documents\Github\esp32VCU\tools\touch_ui_test_support.py", line 441, in do_GET
+    "lte_signal": 0,
+    ^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 739, in do_GET
+    self.copyfile(f, self.wfile)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\http\server.py", line 942, in copyfile
+    shutil.copyfileobj(source, outputfile)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\shutil.py", line 257, in copyfileobj
+    fdst_write(buf)
+    ~~~~~~~~~~^^^^^
+  File "C:\Users\Win11 Pro\AppData\Local\Programs\Python\Python314\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] Eine bestehende Verbindung wurde softwaregesteuert
+durch den Hostcomputer abgebrochen
+----------------------------------------

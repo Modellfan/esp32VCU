@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "name": "touch-energy-flow",
+  "targetPage": {
+    "mainNavIndex": 5,
+    "section": "ventilation",
+    "tab": null
+  },
+  "coordinateSystem": {
+    "width": 1024,
+    "height": 600,
+    "origin": "top-left",
+    "units": "px",
+    "rotationUnit": "deg"
+  },
+  "assetsBasePath": "/touch/energy-flow/img/",
+  "images": [
+    {
+      "id": "vehicle_top",
+      "file": "background car 2.png",
+      "label": "Vehicle top x-ray",
+      "x": -137,
+      "y": -70,
+      "width": 1379,
+      "height": 750,
+      "rotation": 0,
+      "opacity": 0.34,
+      "zIndex": 80,
+      "fit": "contain"
+    },
+    {
+      "id": "hv_battery",
+      "file": "battery.png",
+      "label": "HV battery pack",
+      "x": 612,
+      "y": 139,
+      "width": 278,
+      "height": 325,
+      "rotation": 90,
+      "opacity": 0.74,
+      "zIndex": 50,
+      "fit": "contain"
+    },
+    {
+      "id": "drive_unit",
+      "file": "tesla.png",
+      "label": "Rear drive unit",
+      "x": 813,
+      "y": 205,
+      "width": 161,
+      "height": 207,
+      "rotation": 360,
+      "opacity": 0.96,
+      "zIndex": 32,
+      "fit": "contain"
+    },
+    {
+      "id": "charger_unit",
+      "file": "charger.png",
+      "label": "On-board charger",
+      "x": 212,
+      "y": 201,
+      "width": 116,
+      "height": 116,
+      "rotation": 90,
+      "opacity": 0.9,
+      "zIndex": 34,
+      "fit": "contain"
+    },
+    {
+      "id": "charger",
+      "file": "dcdc.png",
+      "label": "Charger / DC-DC module",
+      "x": 186,
+      "y": 233,
+      "width": 124,
+      "height": 124,
+      "rotation": 90,
+      "opacity": 0.9,
+      "zIndex": 33,
+      "fit": "contain"
+    },
+    {
+      "id": "charge_port",
+      "file": "charge port.png",
+      "label": "Charge port",
+      "x": 237,
+      "y": 72,
+      "width": 79,
+      "height": 75,
+      "rotation": 180,
+      "opacity": 0.82,
+      "zIndex": 40,
+      "fit": "contain"
+    },
+    {
+      "id": "service_disconnect",
+      "file": "msd.png",
+      "label": "Service disconnect",
+      "x": 733,
+      "y": 274,
+      "width": 42,
+      "height": 42,
+      "rotation": 0,
+      "opacity": 0.98,
+      "zIndex": 70,
+      "fit": "contain"
+    },
+    {
+      "id": "connection_battery_to_sdu",
+      "type": "coolantPipePath",
+      "label": "Battery to SDU animated connection",
+      "points": [
+        {
+          "x": 764,
+          "y": 194
+        },
+        {
+          "x": 763,
+          "y": 161
+        },
+        {
+          "x": 886,
+          "y": 161
+        },
+        {
+          "x": 885,
+          "y": 226
+        }
+      ],
+      "thickness": 8,
+      "opacity": 0.95,
+      "zIndex": 120,
+      "color": "blue",
+      "speed": "3.4s"
+    },
+    {
+      "id": "connection_charge_port_to_charger",
+      "type": "coolantPipePath",
+      "label": "Charge port to charger animated connection",
+      "points": [
+        {
+          "x": 276,
+          "y": 136
+        },
+        {
+          "x": 276,
+          "y": 221
+        }
+      ],
+      "thickness": 8,
+      "opacity": 0.95,
+      "zIndex": 121,
+      "color": "green",
+      "speed": "3.4s"
+    },
+    {
+      "id": "connection_charger_to_battery",
+      "type": "coolantPipePath",
+      "label": "Charger to battery animated connection",
+      "points": [
+        {
+          "x": 306,
+          "y": 247
+        },
+        {
+          "x": 669,
+          "y": 249
+        }
+      ],
+      "thickness": 8,
+      "opacity": 0.95,
+      "zIndex": 121,
+      "color": "green",
+      "speed": "3.4s"
+    }
+  ],
+  "vectors": [],
+  "states": {
+    "drive": {
+      "visibleVectors": [],
+      "accentColor": "#ff9b18"
+    },
+    "charge": {
+      "visibleVectors": [],
+      "accentColor": "#19c7ff"
+    },
+    "regen": {
+      "visibleVectors": [],
+      "accentColor": "#b6ff00"
+    }
+  }
+}
