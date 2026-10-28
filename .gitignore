@@ -23,3 +23,6 @@ pwa/dist/
 pwa/test-results/
 pwa/build-report.json
 __pycache__/
+
+# Local credentials (VCU-REQ-015)
+src/secrets.h

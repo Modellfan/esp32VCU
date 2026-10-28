@@ -9,7 +9,7 @@ Dies ist der **Soll-Zustand** der VCU. Nur Anforderungen dokumentieren, keine Im
 - Mindestens ein überprüfbares Akzeptanzkriterium pro Requirement.
 - Offene Annahmen und Einschränkungen explizit ausweisen.
 - Bei `verified`: Test/Prüfung mit Pfad oder genauer Fundstelle benennen.
-- **Umsetzung:** Stand des Codes nach Commit `8222d88`. „Umgesetzt“ heißt nicht „verifiziert“.
+- **Umsetzung:** Stand des Codes nach dem Architektur-Umbau vom 2026-10-28 (VCU-DEC-002 bis -012). „Umgesetzt“ heißt nicht „verifiziert“; auf Hardware ist nichts davon geprüft.
 
 Quellen: aus Code, `documentation/IMPLEMENTATION_LOG.md` und `documentation/can_signals.md` rückwirkend abgeleitet am 2026-10-28, ergänzt um Nutzerentscheidungen vom 2026-10-28. Alle Einträge stehen auf `draft`, bis der Nutzer sie bestätigt.
 
@@ -27,7 +27,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 30 ms gesendet; die Sendezeitpunkte sind gleichmäßig verteilt. Nicht genutzte Bits tragen die in `can_signals.md` dokumentierten Standardwerte.
 - **Akzeptanz:** Gegeben eine laufende VCU am Fahrzeug-CAN; wenn 10 s mitgeschnitten werden; dann erscheint jede der fünf IDs mit 30 ms ± 3 ms Abstand, die Inhalte entsprechen der DBC, und das Kombiinstrument zeigt keine Motorsteuergeräte-Störung.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (`src/main.cpp` `emulateECUCAN`, 6-ms-Zeitschlitze; `src/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
+- **Umsetzung:** vorhanden (Echtzeit-Task `src/vcu_rt.cpp`, 6-ms-Zeitschlitze; `src/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
 - **Offen:** zulässige Zykluszeittoleranz; ob 0x4F8 (definiert, aber nicht gesendet) benötigt wird.
 
 ### VCU-REQ-002 – Schneller Start der Emulation
@@ -37,7 +37,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Nach dem Einschalten muss die VCU die Botschaften aus VCU-REQ-001 spätestens nach 1 s senden, unabhängig vom Zustand von WLAN, Dateisystem oder Weboberfläche.
 - **Akzeptanz:** Gegeben eine VCU ohne erreichbares Heim-WLAN; wenn sie eingeschaltet wird; dann erscheint die erste 0x280-Botschaft spätestens 1 s nach Anlegen der Versorgung.
 - **Abhängigkeiten:** VCU-REQ-001, VCU-REQ-014
-- **Umsetzung:** **nicht erfüllt.** `webinterfaceBegin()` wartet in `setup()` bis zu 15 s auf das Heim-WLAN; die Emulation startet erst danach (`src/webinterface.cpp`, `src/main.cpp`).
+- **Umsetzung:** umgesetzt 2026-10-28: Echtzeit-Task startet vor dem WLAN, WLAN-Aufbau blockiert nicht (`src/main.cpp`, `src/vcu_rt.cpp`, VCU-DEC-003). Startzeit nicht gemessen. Vorher: bis 15 s Blockade.
 - **Nutzerentscheidung 2026-10-28:** Grenzwert 1 s bestätigt.
 
 ### VCU-REQ-003 – Dekodierung des Fahrzeug-CAN
@@ -102,7 +102,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss den Kühlmittellüfter in den Stufen Aus, Stufe 1 und Stufe 2 ansteuern. Die Stufe wird automatisch aus Motor- und Kühlkörpertemperatur bestimmt (mit Hysterese). Über die Oberfläche lässt sich die Stufe manuell übersteuern und die Automatik wieder einschalten.
 - **Akzeptanz:** Gegeben eine VCU am Prüfstand; wenn Stufe 0, 1 und 2 manuell gesetzt werden; dann führen die Ausgänge Stufe 1/Stufe 2 die Pegel 0/0, 1/0, 1/1, und der CAN-Bus 2 arbeitet dabei ungestört weiter. Wenn im Automatikbetrieb die Temperatur die Schwelle für Stufe 1 überschreitet; dann schaltet Stufe 1 ein und erst unterhalb der Schwelle minus Hysterese wieder aus.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** nur manuell vorhanden (`src/coolant_fan_control.cpp`), **Pinkonflikt:** Lüfter Stufe 1 (`COOLANT_FAN_LOW_PIN=7`, `platformio.ini`) und Chip-Select von CAN 2 (`MCP2515_CS_CAN2 = 7`, `src/canmanager.cpp`) nutzen beide GPIO7.
+- **Umsetzung:** Hand- und Automatikbetrieb in `src/vcu_app.cpp` (Schwellen als Entwurf, Start im Handbetrieb), Ausgänge über `params::outputs` (VCU-DEC-004). Der frühere Konflikt (Stufe 1 auf GPIO7 = CAN2-CS) ist beseitigt: Stufe 1 ist in `src/board.h` nicht zugewiesen, die Lüfterausgänge bleiben bis zur Klärung abgeschaltet.
 - **Nutzerentscheidung 2026-10-28:** automatisch und manuell übersteuerbar. GPIO7 ist der Chip-Select von CAN 2; der Lüfter-Pin ist falsch.
 - **Offen:** tatsächlicher Pin für Stufe 1 (vor dem nächsten Flashen an der Platine prüfen); Schalt- und Hysteresewerte.
 
@@ -113,7 +113,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über ein digitales Potentiometer (X9C103S, 10 kΩ) den Tankgeber des Kombiinstruments nachbilden und in 1-%-Schritten von 0 bis 100 % einstellen. Vorerst wird der Wert manuell über die Oberfläche gesetzt.
 - **Akzeptanz:** Gegeben das Potentiometer am Prüfstand; wenn 0 %, 50 % und 100 % gesetzt werden; dann misst man am Schleifer ca. 0 Ω, 5 kΩ und 10 kΩ gegen das Fußende (± 20 % Bauteiltoleranz).
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (`src/digipot_control.cpp`, `lib/X9C103S`).
+- **Umsetzung:** vorhanden (`src/digipot_control.cpp`, `lib/X9C103S`); Sollwert über `params::outputs`, Ausgabe im Echtzeit-Task nur bei Änderung.
 - **Nutzerentscheidung 2026-10-28:** Tankanzeige, vorerst manuell; Wert wird nicht gespeichert.
 - **Offen:** spätere Kopplung an SoC (VCU-REQ-018); Zuordnung Prozent → Zeigerstellung der Tankanzeige.
 
@@ -126,8 +126,8 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss alle dekodierten, berechneten und gesetzten Werte als JSON unter `GET /api/live` bereitstellen; mit `fields=` lässt sich die Antwort auf einzelne Felder beschränken. Sollwerte werden über `/api/set`, `/api/set-ecu` und `/api/set-cluster` gesetzt; die Antwort enthält den neuen Live-Stand.
 - **Akzeptanz:** Gegeben eine laufende VCU; wenn `/api/live?fields=sdu_udc,rpm` abgerufen wird; dann enthält die Antwort genau diese Felder als gültiges JSON. Wenn `/api/set?coolant_fan_level=1` aufgerufen wird; dann meldet die Antwort `coolant_fan_level` 1.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
-- **Umsetzung:** vorhanden (`src/webinterface.cpp`). Die Feldliste ist nur im Code definiert.
-- **Lücke:** Die Touch-UI fordert Felder an, die die Firmware nicht liefert (`soc`, `range_km`, Ladestecker-/Ladezustand, `cluster_trip_distance_km`) und ruft `POST /api/energy-flow-layout` auf, das es nur im Python-Testserver gibt.
+- **Umsetzung:** aus der zentralen Signaltabelle `src/signal_table.cpp` erzeugt (VCU-DEC-007); zusätzlich `/api/signals`, `rejected` für ungültige Setzwerte, `null` statt `nan`.
+- **Lücke:** Die Touch-UI fordert Felder an, die die Firmware nicht liefert (`soc`, `range_km`, Ladestecker-/Ladezustand, `cluster_trip_distance_km`) und ruft im Editor-Modus `POST /api/energy-flow-layout` auf, das es nur im Python-Testserver gibt.
 
 ### VCU-REQ-011 – Touch-Oberfläche für das Navi-Display
 - **Typ:** funktional / Bedienung
@@ -136,7 +136,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss eine Oberfläche für das Navi-Display mit 1024×600 Pixeln ausliefern; sie ist die einzige Oberfläche der VCU und unter `/` erreichbar. Inhalte: Startseite mit Akku- und Fahrzeugdarstellung, Energiefluss, Fahrzeug (Antrieb, Akku, Lader), Einstellungen (Ziel-Ladestand, AC-Ladestrom, Potentiometer), Belüftung, Kühlung, Kombiinstrument und Stoppuhr. Beim Start läuft ein Intro-Video von etwa 1 s. Elemente ohne Datenquelle sind als Muster gekennzeichnet und schreiben keine Werte.
 - **Akzeptanz:** Gegeben ein Browser mit 1024×600; wenn `/` und jede Hauptseite geöffnet wird; dann passt der Inhalt ohne Scrollbalken, Live-Werte aktualisieren sich, und die Screenshot-Prüfung (`tools/touch_ui_screenshot_validate.py`) läuft ohne Fehler.
 - **Abhängigkeiten:** VCU-REQ-010
-- **Umsetzung:** PWA in `pwa/` (Stand 2026-10-28): Build `pwa/dist` 0,49 MB statt 18 MB, Manifest, Icons, Service Worker (nur HTTPS/localhost), gehärtete Netzwerkschicht; 28 automatische Tests grün (`pwa/tests`). Noch nicht auf der VCU: `data_dir` und Firmware-Routen fehlen (siehe `pwa/README.md`). Bisher unter `/touch.html` (`data/touch.html`, `data/touch/`; bleibt als Vorlage erhalten). Die Daten in `data/` (18 MB) passen nicht ins SPIFFS (1,5 MB). `/` liefert noch die frühere Handy-Oberfläche (`data/index.html`); sie war Designvorlage für ein anderes Projekt und wird entfernt (Nutzerentscheidung 2026-10-28). Die Seite `styleTest` enthält Musterbedienelemente ohne Funktion (Fahrwerkshöhe, Lenkunterstützung, Sound, Simulationsschalter).
+- **Umsetzung:** PWA in `pwa/` (Stand 2026-10-28): Build `pwa/dist` 0,49 MB statt 18 MB, Manifest, Icons, Service Worker (nur HTTPS/localhost), gehärtete Netzwerkschicht; 28 automatische Tests grün (`pwa/tests`). Seit 2026-10-28 ist `pwa/dist` das SPIFFS-Image und die Firmware liefert die PWA unter `/` aus (VCU-DEC-012); auf Hardware nicht geprüft. Handy-UI entfernt. Bisher unter `/touch.html` (`data/touch.html`, `data/touch/`; bleibt als Vorlage erhalten). Die Daten in `data/` (18 MB) passen nicht ins SPIFFS (1,5 MB). `/` liefert noch die frühere Handy-Oberfläche (`data/index.html`); sie war Designvorlage für ein anderes Projekt und wird entfernt (Nutzerentscheidung 2026-10-28). Die Seite `styleTest` enthält Musterbedienelemente ohne Funktion (Fahrwerkshöhe, Lenkunterstützung, Sound, Simulationsschalter).
 - **Offen:** Welche Musterelemente echte Funktionen werden sollen.
 
 ### VCU-REQ-012 – CAN-Diagnose über USB
@@ -146,7 +146,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über die USB-Schnittstelle das GVRET-Protokoll sprechen, sodass SavvyCAN beide CAN-Busse mitlesen kann; gesendete Frames werden von empfangenen unterscheidbar markiert.
 - **Akzeptanz:** Gegeben SavvyCAN über USB verbunden; wenn die VCU läuft; dann zeigt SavvyCAN die Frames beider Busse und die emulierten Motorsteuergeräte-Frames.
 - **Abhängigkeiten:** VCU-REQ-001
-- **Umsetzung:** teilweise. `gvret_loop()` läuft, die Weiterleitung `sendFrameToUSB` ist in `src/main.cpp` auskommentiert. Statusausgaben über `Serial` mischen sich in den GVRET-Datenstrom.
+- **Umsetzung:** umgesetzt 2026-10-28 (`src/gvret_bridge.cpp`, VCU-DEC-010): alle empfangenen und gesendeten Frames über eine Warteschlange, sobald SavvyCAN den Binärmodus aktiviert; Textlog auf dem nativen USB-Port. Nicht mit SavvyCAN geprüft.
 
 ### VCU-REQ-013 – Gültigkeit und Alter der Werte
 - **Typ:** funktional / Datenqualität
@@ -155,7 +155,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Für jedes CAN-Signal muss die VCU erkennen, ob es innerhalb einer festgelegten Zeit empfangen wurde. Fehlende oder veraltete Werte werden als ungültig gekennzeichnet und weder als 0 noch als letzter Wert ausgegeben.
 - **Akzeptanz:** Gegeben der Umrichter-CAN ist getrennt; wenn 1 s vergeht; dann kennzeichnet `/api/live` alle `sdu_*`-Werte als ungültig, und die Oberfläche zeigt „–“ statt 0.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
-- **Umsetzung:** fehlt. Werte starten mit Ersatzwerten (meist 0) und bleiben nach Busausfall stehen.
+- **Umsetzung:** Firmware umgesetzt 2026-10-28 (VCU-DEC-006): Empfangszeit je Botschaft, `stale`-Liste in `/api/live`, Zeitgrenze 500 ms (Entwurf). Die PWA wertet `stale` noch nicht aus.
 - **Offen:** Zeitgrenze je Botschaft (Vorschlag: 3 × Zykluszeit, mindestens 300 ms) und Darstellung im JSON.
 
 ### Netzwerk und Sicherheit
@@ -167,8 +167,8 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss immer einen eigenen WLAN-Zugangspunkt bereitstellen, über den die Oberfläche erreichbar ist. Ist das Heim-WLAN erreichbar, verbindet sie sich zusätzlich damit. Der Verbindungsaufbau blockiert weder die CAN-Verarbeitung noch die Emulation.
 - **Akzeptanz:** Gegeben kein Heim-WLAN in Reichweite; wenn die VCU startet; dann ist der eigene Zugangspunkt nach spätestens 5 s sichtbar und `/` erreichbar. Gegeben Heim-WLAN erreichbar; dann ist die VCU zusätzlich unter ihrer Heimnetz-Adresse erreichbar.
 - **Abhängigkeiten:** VCU-REQ-002, VCU-REQ-015
-- **Umsetzung:** fehlt. Aktuell nur Heim-WLAN als Client, Start blockiert bis 15 s (`src/webinterface.cpp`). Früher gab es einen offenen Zugangspunkt `eboxster` (Log 2026-02-23).
-- **Offen:** Name und Passwort des Zugangspunkts (VCU-DEC-005).
+- **Umsetzung:** umgesetzt 2026-10-28 (`WIFI_AP_STA`, `src/webinterface.cpp`, VCU-DEC-011): Zugangspunkt `eboxster` mit WPA2, Heim-WLAN nicht blockierend. Nicht auf Hardware geprüft.
+- **Hinweis:** Passwort des Zugangspunkts steht in der lokalen `src/secrets.h` (zufällig erzeugt 2026-10-28).
 
 ### VCU-REQ-015 – Keine Zugangsdaten im Repository
 - **Typ:** Sicherheit
@@ -177,7 +177,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** WLAN-Passwörter und andere Zugangsdaten dürfen nicht in versionierten Dateien stehen.
 - **Akzeptanz:** `git grep` nach dem Heim-WLAN-Passwort im aktuellen Stand findet nichts; ein frischer Klon baut mit einer Vorlagedatei für die Zugangsdaten.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** fehlt (Klartext in `src/webinterface.cpp`, seit Commit `48a13b7` auf `origin/esp32vcu_986`). Das Repo ist laut Nutzer privat; die Git-History enthält das Passwort weiterhin.
+- **Umsetzung:** umgesetzt 2026-10-28: `src/secrets.h` (git-ignoriert), Vorlage `src/secrets.example.h`; `git grep` findet das Passwort im aktuellen Stand nicht mehr. Die Git-Historie (seit `48a13b7`) enthält es weiterhin; das Repo ist laut Nutzer privat.
 
 ### VCU-REQ-016 – Schutz der Schreibzugriffe
 - **Typ:** Sicherheit
@@ -186,7 +186,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Werte, die das Fahrzeugverhalten beeinflussen (emulierte Motorsteuergeräte-Signale, Warnlampen, Lüfter, Potentiometer, Ladeparameter), dürfen nur von berechtigten Geräten gesetzt werden.
 - **Akzeptanz:** Gegeben ein Gerät ohne WLAN-Passwort; dann kann es sich nicht mit dem Zugangspunkt verbinden und keinen Setz-Endpunkt erreichen.
 - **Abhängigkeiten:** VCU-REQ-014
-- **Umsetzung:** fehlt. Alle Setz-Endpunkte sind ungeschützte GET-Aufrufe.
+- **Umsetzung:** über das WPA2-Passwort des Zugangspunkts (VCU-REQ-014). Im Heimnetz sind die Setz-Endpunkte für alle Geräte dieses Netzes erreichbar.
 - **Nutzerentscheidung 2026-10-28:** Ein WPA2-Passwort am Zugangspunkt genügt; wer im WLAN ist, darf setzen. Gilt mit VCU-REQ-014 als erfüllt.
 
 ### Laden und Batterie
@@ -208,7 +208,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über einen eigenen, dritten CAN-Bus Ladestand (SoC), Batteriespannung, Batteriestrom, Ladestecker verbunden, Ladeart und Ladeleistung von BMS und Ladegerät empfangen und in der Oberfläche anzeigen.
 - **Akzeptanz:** Gegeben BMS und Ladegerät am Bus; wenn geladen wird; dann liefert `/api/live` SoC, Batteriestrom und Steckerstatus mit gültigem Alter, und die Startseite zeigt sie an.
 - **Abhängigkeiten:** VCU-REQ-013
-- **Umsetzung:** fehlt. Weder BMS- noch Ladegerätebotschaften werden dekodiert; die Touch-UI erwartet die Werte bereits (inkl. Reichweite).
+- **Umsetzung:** Gerüst 2026-10-28 (VCU-DEC-008): TWAI-Treiber `src/can3_twai.cpp`, Codec `src/battery_messages.cpp`, Felder `battery_*` in `/api/live` (immer `stale`). Inaktiv, bis Pins und Botschaften feststehen. Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
 - **Nutzerentscheidung 2026-10-28:** eigener dritter CAN-Bus (zusätzlicher Controller nötig).
 - **Offen:** Botschaften von BMS und Ladegerät, Controller und Pins des dritten Busses; ob die Reichweite in der VCU berechnet wird.
 
@@ -221,4 +221,4 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die eingebaute RGB-LED blinkt im Betrieb grün mit 1 Hz und geringer Helligkeit, solange die Hauptschleife läuft.
 - **Akzeptanz:** Sichtprüfung nach dem Start.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (`src/main.cpp` `blinkLED`, 10 % Helligkeit).
+- **Umsetzung:** vorhanden (Dienst-Task in `src/webinterface.cpp`, 10 % Helligkeit).

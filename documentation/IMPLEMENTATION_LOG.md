@@ -4045,3 +4045,48 @@ ew_4e0_bit_booleans_added_to_ui: true
 - Not deployed to the VCU: platformio.ini still uses data_dir = data (does not fit SPIFFS); firmware needs a root static route, .webp MIME type and cache headers (pwa/README.md).
 - Service worker only registers on HTTPS/localhost; on the VCU access point (plain HTTP) the PWA runs without offline cache.
 - Only Chromium tested; the navi display browser is unknown. Firmware build not run (toolchain broken, see next task).
+
+## 2026-10-29 00:30:00 +01:00 - Layered architecture refactor (proposals 1-8), AP+STA WiFi, secrets, PWA served from SPIFFS
+
+### Planned Steps
+- Repair the PlatformIO toolchain, then implement proposals 1-8 (not 9: vw_pq_messages stays).
+- Move credentials to src/secrets.h, start AP + home WiFi without blocking, serve the PWA from SPIFFS, remove the phone UI.
+- Document decisions (DECISIONS.md), test plan, README; update requirements and architecture diagram.
+
+### Changes Made
+- Toolchain (outside repo): `%USERPROFILE%\.platformio\packages\toolchain-xtensa-esp-elf` recreated flat from `tools\toolchain-xtensa-esp-elf\xtensa-esp-elf` (pioarduino installs it one folder too deep); old folders kept as `.broken-20261028` / `.stub-20261028` where present.
+- `src/board.h` (new): all GPIOs, static_assert against duplicates; fan stage 1 unassigned (was GPIO7 = CAN2 CS), CAN3 pins unassigned.
+- `src/vcu_rt.*` (new): 6 ms FreeRTOS task on core 1 (CAN rx, app step, ECU frame, outputs, stats).
+- `src/vcu_params.*` (new): outputs, charging, ECU overrides, battery placeholder, rx timestamps, params mutex.
+- `src/signal_table.*` (new): central table (196 signals, names unchanged), snapshot, typed parse/write.
+- `src/vcu_app.*` (new): cluster, overrides, automatic fan level (draft thresholds, manual by default, fail-safe level 2 without inverter data).
+- `src/webinterface.*`: service task on core 0, AP+STA non-blocking, /api/live from table with `stale` and `null` for non-finite, /api/signals, `rejected`, static PWA handler (.gz, webp), LED blink.
+- `src/gvret_bridge.*` (new): frame queue, forwarding in binary mode; `src/vcu_log.*` (new): text log on native USB.
+- `src/can3_twai.*`, `src/battery_messages.*` (new): CAN 3 skeleton, inactive.
+- `src/canmanager.*`, `coolant_fan_control.*`, `digipot_control.cpp`, `utils.h`, `main.cpp`: pins from board.h, driver-only roles, startup order (RT before WiFi).
+- `src/secrets.example.h` (new), `src/secrets.h` (local, gitignored, random AP password).
+- `platformio.ini`: data_dir = pwa/dist, explicit default_8MB partitions, pin build flags and TaskScheduler removed.
+- `data/`: phone UI removed (index.html, manifest, icons); touch UI sources kept.
+- `DECISIONS.md`, `TESTPLAN.md`, `README.md` (new); `REQUIREMENTS.md`, `pwa/README.md`, `CLAUDE.md`, `documentation/architecture.svg/.png` updated.
+
+### Automated Tests Run
+- `pio run -e esp32s3` (before refactor, after toolchain repair): PASS
+- `pio run -e esp32s3` (after refactor): PASS (RAM 14.9 %, flash 32.9 %)
+- `pio run -e esp32s3 -t buildfs` with pwa/dist: PASS (spiffs.bin 1 572 864 B image)
+- `xtensa-esp32s3-elf-g++ -fsyntax-only` on board.h with fan stage 1 = GPIO7: FAIL as intended (static assertion); as-is: PASS
+- `git grep Ueberlingen2019`: no match in tracked files
+- Hardware tests: not run (VCU not connected)
+
+### Result
+- `firmware_flash_bytes: 1099613`
+- `firmware_ram_bytes: 48972`
+- `signals_in_table: 196`
+
+### Artifacts
+- [architecture diagram](documentation/architecture.png)
+- [decisions](DECISIONS.md)
+- [test plan](TESTPLAN.md)
+
+### Notes
+- Nothing flashed. Real-time timing, WiFi AP, GVRET and outputs are unverified on hardware.
+- Open: fan stage 1 pin, fan thresholds, stale timeout, CAN3 pins/messages, COM port mapping (COM16/COM24).

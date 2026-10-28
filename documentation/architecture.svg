@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="580" viewBox="0 0 680 580" role="img">
 <title>Architektur esp32VCU – Ebenenmodell</title>
-<desc>Ebenen nach AUTOSAR-Prinzip: Anwendung (Kombi-Rechnung), Daten (params), Kommunikation (Codecs), Treiber (CAN, Aktoren), Hardware; Dienste (Scheduler, Webserver, SPIFFS, GVRET) als eigene Spalte. Stand 2026-10-28.</desc>
+<desc>Ebenen nach AUTOSAR-Prinzip: Anwendung (Kombi-Rechnung), Daten (params), Kommunikation (Codecs), Treiber (CAN, Aktoren), Hardware; Dienste (Scheduler, Webserver, SPIFFS, GVRET) als eigene Spalte. Stand nach Umbau 2026-10-28.</desc>
 <style>
 text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;dominant-baseline:central;text-anchor:middle}
 .h{font-size:14px;font-weight:600}.s{font-size:12px}
@@ -25,32 +25,32 @@ rect{stroke-width:0.8}
 <rect class="band" x="20" y="380" width="640" height="80" rx="10"/><text class="bl" x="32" y="391">Hardware</text>
 <rect class="band" x="490" y="20" width="170" height="350" rx="10"/><text class="bl" x="502" y="31">Dienste</text>
 
-<g class="plan"><rect x="35" y="42" width="130" height="50" rx="8"/><text class="h" x="100" y="59">Lüfterregelung</text><text class="s" x="100" y="77">geplant</text></g>
+<g class="mod"><rect x="35" y="42" width="130" height="50" rx="8"/><text class="h" x="100" y="59">Lüfterlogik</text><text class="s" x="100" y="77">Hand + Automatik</text></g>
 <g class="mod"><rect x="180" y="42" width="130" height="50" rx="8"/><text class="h" x="245" y="59">Kombi-Rechnung</text><text class="s" x="245" y="77">Leistung, 0–100</text></g>
 
 <g class="mem"><rect x="35" y="132" width="130" height="50" rx="8"/><text class="h" x="100" y="149">Aktor-Params</text><text class="s" x="100" y="167">Lüfter, Poti</text></g>
 <g class="mem"><rect x="180" y="132" width="130" height="50" rx="8"/><text class="h" x="245" y="149">Kombi-Params</text><text class="s" x="245" y="167">ecu, cluster</text></g>
-<g class="mem"><rect x="325" y="132" width="130" height="50" rx="8"/><text class="h" x="390" y="149">Mess-Params</text><text class="s" x="390" y="167">vehicle, tesla_sdu</text></g>
+<g class="mem"><rect x="325" y="132" width="130" height="50" rx="8"/><text class="h" x="390" y="149">Mess-Params</text><text class="s" x="390" y="167">+ Empfangszeit</text></g>
 
-<g class="mod"><rect x="180" y="222" width="275" height="50" rx="8"/><text class="h" x="317" y="239">Codecs (COM)</text><text class="s" x="317" y="257">Signal ↔ CAN-Frame, nach DBC</text></g>
+<g class="mod"><rect x="180" y="222" width="275" height="50" rx="8"/><text class="h" x="317" y="239">Codecs (COM)</text><text class="s" x="317" y="257">986, SDU, Batterie (geplant)</text></g>
 
 <g class="mod"><rect x="35" y="312" width="130" height="50" rx="8"/><text class="h" x="100" y="329">Aktor-Treiber</text><text class="s" x="100" y="347">Lüfter, Poti, LED</text></g>
 <g class="mod"><rect x="325" y="312" width="130" height="50" rx="8"/><text class="h" x="390" y="329">CAN-Treiber</text><text class="s" x="390" y="347">ACAN2515, SPI</text></g>
 
 <g class="hw"><rect x="35" y="402" width="130" height="50" rx="8"/><text class="h" x="100" y="419">GPIO, X9C103S</text><text class="s" x="100" y="437">Relais, Poti, LED</text></g>
-<g class="hw"><rect x="325" y="402" width="130" height="50" rx="8"/><text class="h" x="390" y="419">2× MCP2515</text><text class="s" x="390" y="437">CAN 3 geplant</text></g>
+<g class="hw"><rect x="325" y="402" width="130" height="50" rx="8"/><text class="h" x="390" y="419">2× MCP2515</text><text class="s" x="390" y="437">CAN 3: TWAI geplant</text></g>
 <g class="hw"><rect x="505" y="402" width="140" height="50" rx="8"/><text class="h" x="575" y="419">WLAN, USB</text><text class="s" x="575" y="437">Funk, UART</text></g>
 
-<g class="mod"><rect x="505" y="42" width="140" height="50" rx="8"/><text class="h" x="575" y="59">Scheduler</text><text class="s" x="575" y="77">6-ms-Takt</text></g>
-<g class="mod"><rect x="505" y="132" width="140" height="50" rx="8"/><text class="h" x="575" y="149">Webserver</text><text class="s" x="575" y="167">API, Touch-UI</text></g>
-<g class="mod"><rect x="505" y="222" width="140" height="50" rx="8"/><text class="h" x="575" y="239">SPIFFS</text><text class="s" x="575" y="257">Touch-UI-Dateien</text></g>
-<g class="mod"><rect x="505" y="312" width="140" height="50" rx="8"/><text class="h" x="575" y="329">GVRET</text><text class="s" x="575" y="347">CAN ↔ USB</text></g>
+<g class="mod"><rect x="505" y="42" width="140" height="50" rx="8"/><text class="h" x="575" y="59">Echtzeit-Task</text><text class="s" x="575" y="77">6 ms, Kern 1</text></g>
+<g class="mod"><rect x="505" y="132" width="140" height="50" rx="8"/><text class="h" x="575" y="149">Webserver</text><text class="s" x="575" y="167">API, PWA, Kern 0</text></g>
+<g class="mod"><rect x="505" y="222" width="140" height="50" rx="8"/><text class="h" x="575" y="239">SPIFFS</text><text class="s" x="575" y="257">PWA (pwa/dist)</text></g>
+<g class="mod"><rect x="505" y="312" width="140" height="50" rx="8"/><text class="h" x="575" y="329">GVRET</text><text class="s" x="575" y="347">Queue → UART0</text></g>
 
 <g class="ext"><rect x="35" y="482" width="130" height="50" rx="8"/><text class="h" x="100" y="499">Aktoren</text><text class="s" x="100" y="517">Lüfter, Tank</text></g>
 <g class="ext"><rect x="325" y="482" width="130" height="50" rx="8"/><text class="h" x="390" y="499">CAN-Busse</text><text class="s" x="390" y="517">Fzg., SDU, BMS</text></g>
 <g class="ext"><rect x="505" y="482" width="140" height="50" rx="8"/><text class="h" x="575" y="499">Navi, PC</text><text class="s" x="575" y="517">Display, SavvyCAN</text></g>
 
-<line x1="150" y1="94" x2="150" y2="130" class="a d" marker-end="url(#m)"/>
+<line x1="150" y1="94" x2="150" y2="130" class="a" marker-end="url(#m)"/>
 <line x1="245" y1="94" x2="245" y2="130" class="a" marker-end="url(#m)"/>
 <path d="M390 130 L390 80 L312 80" class="a" marker-end="url(#m)"/>
 <line x1="503" y1="56" x2="312" y2="56" class="a" marker-end="url(#m)"/>
@@ -62,7 +62,7 @@ rect{stroke-width:0.8}
 <line x1="575" y1="220" x2="575" y2="184" class="a" marker-end="url(#m)"/>
 
 <line x1="390" y1="274" x2="390" y2="310" class="a" marker-start="url(#m)" marker-end="url(#m)"/>
-<line x1="457" y1="337" x2="503" y2="337" class="a d" marker-start="url(#m)" marker-end="url(#m)"/>
+<line x1="457" y1="337" x2="503" y2="337" class="a" marker-end="url(#m)"/>
 
 <line x1="100" y1="364" x2="100" y2="400" class="a" marker-end="url(#m)"/>
 <line x1="390" y1="364" x2="390" y2="400" class="a" marker-start="url(#m)" marker-end="url(#m)"/>

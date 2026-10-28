@@ -13,8 +13,10 @@
 #define RGB_BRIGHTNESS 32
 #endif
 
+#include "board.h"
+
 #ifndef FASTLED_DATA_PIN
-#define FASTLED_DATA_PIN 48
+#define FASTLED_DATA_PIN board::GPIO_RGB_LED
 #endif
 
 enum LedColor : uint8_t {

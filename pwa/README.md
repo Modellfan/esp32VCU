@@ -41,8 +41,13 @@ python -m pytest pwa/tests -q        # baut selbst, ca. 5 min
 - **Energiefluss-Editor** (`?energyEditor=1`) speichert über `POST /api/energy-flow-layout`, das nur der Python-Testserver kennt, nicht die Firmware.
 - Getestet nur mit Chromium. Welchen Browser das Navi-Display nutzt, ist offen.
 
-## Auf die VCU bringen (noch offen, Firmware-Aufgabe)
+## Auf die VCU bringen
 
-1. `platformio.ini`: `data_dir = pwa/dist` (heute `data`; deren 18 MB passen nicht ins 1,5-MB-SPIFFS).
-2. Firmware: `server.serveStatic("/", SPIFFS, "/")` mit Standarddatei `index.html`, MIME-Typ für `.webp` und `.json`, `Cache-Control` für statische Dateien; die alten Einzelrouten (`/touch.html`, Favicons, `index.html` der Handy-UI) entfallen.
-3. `python pwa/tools/build.py`, dann `pio run -t uploadfs`.
+`platformio.ini` nutzt `data_dir = pwa/dist`; die Firmware liefert die Dateien unter `/` aus (eigener Handler mit `.gz`-Varianten und WebP-MIME-Typ, VCU-DEC-012).
+
+```bash
+python pwa/tools/build.py
+pio run -e esp32s3 -t uploadfs
+```
+
+Auf echter Hardware noch nicht geprüft.

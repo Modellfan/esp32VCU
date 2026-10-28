@@ -3,10 +3,12 @@
 
 #include <Arduino.h>
 
+// Driver layer: relay outputs only. The fan level is chosen in the application layer
+// (fan_logic) and stored in params::outputs.
 void coolantFanBegin();
-void coolantFanSetLevel(uint8_t level);
-uint8_t coolantFanLevel();
-bool coolantFanLowOutput();
-bool coolantFanHighOutput();
+bool coolantFanOutputsEnabled();
+void coolantFanWrite(bool stage1, bool stage2);
+bool coolantFanStage1();
+bool coolantFanStage2();
 
 #endif

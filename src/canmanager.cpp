@@ -1,47 +1,37 @@
+// Driver layer: two MCP2515 CAN controllers on one SPI bus. Pins from board.h.
 #include "canmanager.h"
 
 #include <Arduino.h>
 
+#include "board.h"
+
 namespace {
-constexpr byte MCP2515_SCK = 12;
-constexpr byte MCP2515_MOSI = 11;
-constexpr byte MCP2515_MISO = 13;
-constexpr byte MCP2515_CS = 10;
-constexpr byte MCP2515_INT = 9;
-
-constexpr byte MCP2515_CS_CAN2 = 7;
-constexpr byte MCP2515_INT_CAN2 = 8;
-
 constexpr uint32_t SPI_CLOCK = 10UL * 1000UL * 1000UL;
 constexpr uint32_t QUARTZ_FREQUENCY = 8UL * 1000UL * 1000UL;
-} // namespace
+constexpr uint32_t BITRATE = 500UL * 1000UL;
 
-ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
-ACAN2515 can2(MCP2515_CS_CAN2, SPI, MCP2515_INT_CAN2);
+uint16_t gCan1Error = 0xFFFF;
+uint16_t gCan2Error = 0xFFFF;
+}  // namespace
+
+ACAN2515 can(board::GPIO_CAN1_CS, SPI, board::GPIO_CAN1_INT);
+ACAN2515 can2(board::GPIO_CAN2_CS, SPI, board::GPIO_CAN2_INT);
 
 void canManager_setup() {
     SPI.setFrequency(SPI_CLOCK);
-    SPI.begin(MCP2515_SCK, MCP2515_MISO, MCP2515_MOSI);
+    SPI.begin(board::GPIO_SPI_SCK, board::GPIO_SPI_MISO, board::GPIO_SPI_MOSI);
 
-    Serial.println("Configuring ACAN2515 CAN 1...");
-    ACAN2515Settings settings(QUARTZ_FREQUENCY, 500UL * 1000UL);
+    ACAN2515Settings settings(QUARTZ_FREQUENCY, BITRATE);
     settings.mRequestedMode = ACAN2515Settings::NormalMode;
-    const uint16_t errorCode = can.begin(settings, [] { can.isr(); });
-    if (errorCode == 0) {
-        Serial.println("CAN Initialized Successfully!");
-    } else {
-        Serial.print("Configuration error: 0x");
-        Serial.println(errorCode, HEX);
-    }
+    gCan1Error = can.begin(settings, [] { can.isr(); });
+    VCU_LOG("[CAN] CAN1 (vehicle) init %s (0x%X)\n", gCan1Error == 0 ? "ok" : "FAILED", gCan1Error);
 
-    Serial.println("Configuring ACAN2515 CAN2...");
-    ACAN2515Settings settings2(QUARTZ_FREQUENCY, 500UL * 1000UL);
+    ACAN2515Settings settings2(QUARTZ_FREQUENCY, BITRATE);
     settings2.mRequestedMode = ACAN2515Settings::NormalMode;
-    const uint16_t errorCode2 = can2.begin(settings2, [] { can2.isr(); });
-    if (errorCode2 == 0) {
-        Serial.println("CAN Initialized Successfully!");
-    } else {
-        Serial.print("Configuration error: 0x");
-        Serial.println(errorCode2, HEX);
-    }
+    gCan2Error = can2.begin(settings2, [] { can2.isr(); });
+    VCU_LOG("[CAN] CAN2 (drive) init %s (0x%X)\n", gCan2Error == 0 ? "ok" : "FAILED", gCan2Error);
+}
+
+uint16_t canManager_error(uint8_t bus) {
+    return bus == 1 ? gCan1Error : gCan2Error;
 }
