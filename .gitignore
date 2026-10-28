@@ -17,3 +17,9 @@ data_spiffs/assets/*
 archives/**
 !archives/.gitkeep
 !archives/stages/.gitkeep
+
+# PWA build output and test artefacts
+pwa/dist/
+pwa/test-results/
+pwa/build-report.json
+__pycache__/

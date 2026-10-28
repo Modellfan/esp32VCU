@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "eBoxster VCU",
+  "short_name": "eBoxster",
+  "description": "Touch display for the eBoxster vehicle control unit (1024x600).",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#020407",
+  "icons": [
+    { "src": "a/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "a/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "a/icon-mask.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

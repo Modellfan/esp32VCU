@@ -4010,3 +4010,38 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - The local server on port `8080` was restarted after the change so browser testing can pick up the MP4-based splash instead of the previous image-based version.
+
+## 2026-10-28 23:05:00 +01:00 - Touch UI as hardened PWA in pwa/
+
+### Planned Steps
+- Import data/touch into pwa/src without touching data/ (short SPIFFS-safe paths, WebP images).
+- Add PWA shell (manifest, icons, service worker, registration) and a network layer with timeouts, backoff, response validation and a serialised set queue.
+- Build script with SPIFFS budget/name/reference checks; VCU-like test server with fault injection; pytest + Playwright hardening suite.
+
+### Changes Made
+- `pwa/tools/import_touch_ui.py`: one-way import from data/touch (images to WebP at display size, path rewrite, icons from data/app.png).
+- `pwa/src/`: PWA sources; `index.html` (manifest, icons, still-image intro instead of 735 KB MP4), `js/net.js` (new), `js/pwa.js` (new), `sw.js` (new), `manifest.json` (new).
+- `pwa/src/js/app.js`: polling via net.js poller (timeout 2.5 s, backoff to 5 s, pause when hidden), error shown after 2 failures, set queue with 1.5 s guard against stale poll values, intro max 6 s, global error handlers; control rows now open the setting dialog instead of the chart (legacy bug: dialog unreachable).
+- `pwa/tools/build.py`, `pwa/tools/serve.py`, `pwa/tests/`: build, test server, 28 tests.
+- `.gitignore`: pwa/dist, pwa/test-results, pwa/build-report.json, __pycache__.
+- `REQUIREMENTS.md`: VCU-REQ-011 implementation status.
+
+### Automated Tests Run
+- `python pwa/tools/build.py`: PASS (39 files, 492 225 B of 1 100 000 B budget, SPIFFS partition 1 572 864 B)
+- `python -m pytest pwa/tests -q` run 1: PASS (28 passed, 293 s)
+- `python -m pytest pwa/tests -q` run 2: PASS (28 passed)
+
+### Result
+- `dist_total_bytes: 492225` (legacy data/: 18 111 318 B)
+- `tests_passed: 28/28`
+- `boot_to_visible_s: ~1.9 (local)`
+
+### Artifacts
+- [PWA README](pwa/README.md)
+- [build script](pwa/tools/build.py)
+- [test suite](pwa/tests/test_pwa.py)
+
+### Notes
+- Not deployed to the VCU: platformio.ini still uses data_dir = data (does not fit SPIFFS); firmware needs a root static route, .webp MIME type and cache headers (pwa/README.md).
+- Service worker only registers on HTTPS/localhost; on the VCU access point (plain HTTP) the PWA runs without offline cache.
+- Only Chromium tested; the navi display browser is unknown. Firmware build not run (toolchain broken, see next task).

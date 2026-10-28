@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#020407">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="eBoxster">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="a/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="a/apple-touch.png">
+<link rel="preload" as="image" href="i/intro.webp">
+<style>
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #000000;
+}
+
+body.is-booting #screenRoot[hidden] {
+  display: none !important;
+}
+
+#introSplash {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000000;
+}
+
+#introSplash.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#introSplash .intro-splash-frame {
+  width: min(100vw, 1024px);
+  height: min(100dvh, 600px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000000;
+}
+
+#introSplash .intro-splash-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000000;
+}
+</style>
+<title>eBoxster VCU</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body class="is-booting">
+  <div class="intro-splash" id="introSplash" aria-hidden="true">
+    <div class="intro-splash-frame">
+      <img class="intro-splash-image" id="introSplashImage" src="i/intro.webp" alt="">
+    </div>
+  </div>
+  <main class="screen" id="screenRoot" hidden aria-label="Touchscreen dashboard 1024 by 600">
+    <aside class="left-nav" aria-label="First level navigation">
+      <button class="l1-icon" type="button" data-section="home" aria-label="Overview">
+        <img src="a/home.svg" alt="Overview">
+      </button>
+      <button class="l1-icon active" type="button" data-section="vehicle" aria-label="Vehicle">
+        <img src="a/i_car.svg" alt="Vehicle">
+      </button>
+      <button class="l1-icon" type="button" data-section="coolant" aria-label="Coolant system">
+        <img src="a/i_ecu.svg" alt="Coolant system">
+      </button>
+      <button class="l1-icon" type="button" data-section="styleTest" aria-label="Porsche reference UI test">
+        <img src="a/i_sdu.svg" alt="SDU">
+      </button>
+      <button class="l1-icon" type="button" data-section="ventilation" aria-label="Active cabin ventilation">
+        <img src="a/vent.svg" alt="Active ventilation">
+      </button>
+      <button class="l1-icon" type="button" data-section="stopwatch" aria-label="Stopwatch">
+        <img src="a/stopwatch.svg" alt="Stopwatch">
+      </button>
+      <button class="l1-icon" type="button" data-section="cluster" data-engineering-only="true" aria-label="Cluster">
+        <img src="a/i_cluster.svg" alt="Cluster">
+      </button>
+      <button class="l1-icon" type="button" data-section="adjust" data-engineering-only="true" aria-label="Adjust">
+        <img src="a/adjust.svg" alt="Adjust">
+      </button>
+    </aside>
+
+    <section class="main-area">
+      <header class="topbar" aria-label="Section tabs">
+        <button class="tab active" type="button" data-tab-index="0">Drive</button>
+        <button class="tab" type="button" data-tab-index="1">Brake</button>
+        <button class="tab" type="button" data-tab-index="2">Stability</button>
+        <button class="tab" type="button" data-tab-index="3">Steering</button>
+        <div class="topbar-time" id="topbarTime" aria-label="Current time">--:--</div>
+      </header>
+
+      <section class="content">
+        <section class="home-stage" id="homeStage" hidden aria-label="Home landing page">
+          <div class="home-battery-slot" id="homeBatteryMount" aria-label="Battery overview"></div>
+          <div class="home-hero">
+            <img id="homeHeroImage" src="i/front.webp" alt="Home hero image">
+          </div>
+        </section>
+        <section class="coolant-stage" id="coolantStage" hidden aria-label="Coolant system overview">
+          <div class="coolant-stage-mount" id="coolantStageMount"></div>
+        </section>
+        <section class="style-test-stage" id="styleTestStage" hidden aria-label="Porsche reference UI test page"></section>
+        <section class="table-panel" aria-label="Live values table">
+          <div class="table-head">
+            <h1 id="pageHeading">Vehicle Drive</h1>
+            <p id="statusText">Waiting for live data</p>
+          </div>
+          <div class="table-scroll" id="tableScroll">
+            <table class="value-table">
+              <tbody id="valueRows"></tbody>
+            </table>
+            <div class="metric-board" id="metricBoard" hidden></div>
+          </div>
+        </section>
+
+        <aside class="image-panel" aria-label="Touch dashboard summary">
+          <div class="image-wrap">
+            <img id="heroImage" src="a/car.svg" alt="Section overview">
+          </div>
+          <div class="hero-copy">
+            <h2 id="heroTitle">Vehicle Drive</h2>
+            <p id="heroSubtitle">Primary drivetrain telemetry for the large-format touchscreen.</p>
+          </div>
+          <div class="hero-metrics" id="heroMetrics"></div>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <noscript><p style="color:#fff;font:16px sans-serif;padding:24px">JavaScript is required for the eBoxster VCU display.</p></noscript>
+  <script src="js/net.js"></script>
+  <script src="js/home-battery.js"></script>
+  <script src="js/bset.js"></script>
+  <script src="js/coolant-stage.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pwa.js"></script>
+</body>
+</html>
