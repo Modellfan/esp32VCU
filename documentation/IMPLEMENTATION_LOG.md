@@ -4109,7 +4109,7 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Automated Tests Run
 - `python -m pytest pwa/tests -q -k "versioned or cache_status or radio or insecure or service_worker"`: PASS (6)
-- `python -m pytest pwa/tests -q` (full): see Result
+- `python -m pytest pwa/tests -q` (full): run 1 FAIL (1, outdated precache test, fixed), run 2 FAIL (1, `test_rapid_slider_changes_coalesce`, Playwright error, details not captured), run 3 PASS (32 passed); the slider test alone passed 3/3
 - `pio run -e esp32s3`: PASS (flash 32.9 %)
 
 ### Result
@@ -4121,3 +4121,4 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - The flag only works in full Chrome/Chromium (Playwright's headless shell ignores it; the test uses channel "chromium").
 - Not tested on the radio itself.
+- `test_rapid_slider_changes_coalesce` failed once in a full run (likely timing under load); watch for recurrence.
