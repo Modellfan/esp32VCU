@@ -12,7 +12,7 @@ Die Touch-Oberfläche für das Navi-Display (1024×600) als Progressive Web App.
 | `tools/import_touch_ui.py` | einmalige Übernahme aus `data/touch` (Bilder → WebP, Pfade umschreiben); handgepflegte Dateien werden nur mit `--force` überschrieben |
 | `tools/build.py` | baut `dist/` (Text gzip-komprimiert, Service Worker mit Version und Precache-Liste) und prüft Budget, Dateinamen und Verweise |
 | `tools/serve.py` | Testserver, der sich wie die VCU verhält (gzip-Auslieferung, Mock-API mit Fehlereinspeisung) |
-| `tests/` | pytest + Playwright (Chromium, 1024×600) |
+| `tests/` | pytest + Playwright (Chromium, 1024×600), u. a. Offline-Szenario des Radios |
 | `dist/` | Build-Ergebnis für das SPIFFS-Image (nicht versioniert) |
 
 ## Befehle
@@ -36,10 +36,28 @@ python -m pytest pwa/tests -q        # baut selbst, ca. 5 min
 
 ## Grenzen
 
-- **Service Worker nur über HTTPS oder localhost.** Über `http://` vom Zugangspunkt der VCU registriert der Browser keinen Service Worker. Manifest, Icons und Vollbild beim Ablegen auf dem Homescreen funktionieren trotzdem; Offline-Start aus dem Cache nicht. Getestet ist der Service Worker auf localhost.
+- **Service Worker nur in sicherem Kontext.** Browser starten Service Worker nur über HTTPS oder localhost. Für das Android-Radio wird Chrome deshalb so eingestellt, dass es die VCU-Adresse als sicher behandelt (siehe unten). Ohne diese Einstellung läuft die App ohne Offline-Cache; die Bilder kommen dann aus dem normalen Browser-Cache (versionierte Adressen, 1 Jahr gültig).
 - **Intro-Video entfällt.** `intro.mp4` (735 KB) passt nicht ins Budget; das Intro zeigt das Standbild `i/intro.webp`. Für ein Video bräuchte es eine kleinere Fassung (z. B. mit ffmpeg).
 - **Energiefluss-Editor** (`?energyEditor=1`) speichert über `POST /api/energy-flow-layout`, das nur der Python-Testserver kennt, nicht die Firmware.
 - Getestet nur mit Chromium. Welchen Browser das Navi-Display nutzt, ist offen.
+
+## Offline-Cache auf dem Android-Radio (Chrome)
+
+Einmalig am Radio, solange es mit dem WLAN `eboxster` verbunden ist:
+
+1. Chrome öffnen, `chrome://flags` eingeben.
+2. Nach **insecure origins** suchen: Eintrag „Insecure origins treated as secure“.
+3. In das Textfeld `http://192.168.4.1` eintragen und auf **Enabled** stellen.
+4. Unten **Relaunch** tippen.
+5. `http://192.168.4.1/` öffnen und warten, bis im Netzwerk-Fenster (Tipp auf die Uhrzeit oben rechts) bei **Offline** „aktiv (… Dateien)“ steht.
+6. Chrome-Menü → **Zum Startbildschirm hinzufügen** bzw. **App installieren**.
+
+Danach startet die App auch ohne VCU aus dem Cache, mit allen Bildern; die Live-Werte zeigen „VCU connection lost“, bis die VCU wieder erreichbar ist. Nach einem `uploadfs` mit neuer Version lädt der Service Worker die geänderten Dateien beim nächsten Verbindungsaufbau nach und übernimmt sie, sobald die App im Hintergrund ist.
+
+Hinweise:
+- Die Adresse muss genau stimmen: `http://192.168.4.1` (Zugangspunkt der VCU, ohne Schrägstrich am Ende). Über die Heimnetz-Adresse gilt die Einstellung nicht.
+- Chrome-Updates können Flags zurücksetzen; dann zeigt das Netzwerk-Fenster „aus: http ohne Chrome-Flag“.
+- Getestet mit Chromium und genau diesem Flag (`tests/test_pwa.py::test_android_radio_chrome_flag_offline`), nicht auf dem Radio selbst.
 
 ## Auf die VCU bringen
 

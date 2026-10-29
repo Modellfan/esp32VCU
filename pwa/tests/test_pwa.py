@@ -86,10 +86,11 @@ def test_sw_precache_matches_dist(build_report):
     sw = gzip.decompress((build.DIST / "sw.js.gz").read_bytes()).decode("utf-8")
     assert build_report["version"] in sw
     precache = json.loads(re.search(r"const PRECACHE = (\[.*?\]);", sw).group(1))
-    for rel in precache:
-        if rel == "./":
+    for url in precache:
+        if url == "./":
             continue
-        assert (build.DIST / rel).exists() or (build.DIST / (rel + ".gz")).exists(), rel
+        rel = url.split("?", 1)[0]
+        assert (build.DIST / rel).exists() or (build.DIST / (rel + ".gz")).exists(), url
 
 
 def test_manifest_and_icons():
@@ -439,4 +440,120 @@ def test_insecure_origin_skips_service_worker(browser, server, api):
         assert not errors
     finally:
         context.close()
+        srv.shutdown()
+
+
+# --------------------------------------------------------------------------- offline cache (Android radio)
+
+ASSET_REF = re.compile(r"""["'(]((?:a|i|e|css|js)/[A-Za-z0-9._/-]+\.(?:svg|png|webp|css|js|json))(\?v=[0-9a-f]+)?["')]""")
+
+
+def test_all_asset_references_are_versioned(build_report):
+    """Every asset URL carries its content hash, so the browser may cache it forever."""
+    versions = build_report["asset_versions"]
+    for path in build.DIST.rglob("*.gz"):
+        if path.name == "sw.js.gz":
+            continue
+        text = gzip.decompress(path.read_bytes()).decode("utf-8", "replace")
+        for ref, version in ASSET_REF.findall(text):
+            assert version == "?v=" + versions[ref], (path.name, ref, version)
+    layout = json.loads(gzip.decompress((build.DIST / "e" / "layout.json.gz").read_bytes()))
+    for image in layout["images"]:
+        if image.get("file"):
+            assert "?v=" in image["file"], image
+
+
+def test_versioned_assets_cached_for_a_year(server, build_report):
+    ref, version = next(iter(build_report["asset_versions"].items()))
+    with urllib.request.urlopen(f"{server}/{ref}?v={version}", timeout=5) as response:
+        assert "immutable" in response.headers.get("Cache-Control", "")
+    with urllib.request.urlopen(server + "/", timeout=5) as response:
+        assert response.headers.get("Cache-Control") == "no-cache"
+
+
+def lan_ip():
+    import socket
+    ip = socket.gethostbyname(socket.gethostname())
+    return None if ip.startswith("127.") else ip
+
+
+def wait_cache_complete(page, timeout_s=30):
+    end = time.time() + timeout_s
+    status = None
+    while time.time() < end:
+        status = page.evaluate(
+            "() => { window.VcuPwa && window.VcuPwa.refreshCache(); return window.VcuPwa && window.VcuPwa.cache; }")
+        if status and status.get("total") and status["cached"] == status["total"]:
+            return status
+        page.wait_for_timeout(500)
+    return status
+
+
+def test_cache_status_shown_in_network_popover(browser, server, api):
+    context = browser.new_context(viewport=VIEWPORT)
+    page = context.new_page()
+    open_app(page, server)
+    status = wait_cache_complete(page)
+    assert status and status["cached"] == status["total"] > 30, status
+    goto_section(page, "vehicle")
+    page.click("#topbarTime")
+    page.wait_for_selector("[data-offline-cache]")
+    text = page.inner_text("[data-offline-cache]")
+    assert text.startswith("aktiv"), text
+    context.close()
+
+
+def test_android_radio_chrome_flag_offline(browser, tmp_path, api):
+    """Radio scenario: Chrome with 'Insecure origins treated as secure' for the VCU address.
+
+    Plain http on a LAN address, cache filled once, then the VCU disappears completely:
+    the app must start from the cache with every image present.
+    """
+    ip = lan_ip()
+    if not ip:
+        pytest.skip("no LAN address to emulate the VCU access point")
+    import serve
+    srv, _ = serve.start(build.DIST, host="0.0.0.0")
+    origin = f"http://{ip}:{srv.server_address[1]}"
+    try:
+        if True:
+            context = browser.browser_type.launch_persistent_context(
+                str(tmp_path / "profile"), viewport=VIEWPORT, channel="chromium",
+                args=[f"--unsafely-treat-insecure-origin-as-secure={origin}"])
+            page = context.pages[0] if context.pages else context.new_page()
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            page.goto(origin + "/")
+            page.wait_for_selector("#screenRoot:not([hidden])", timeout=10000)
+            assert page.evaluate("() => window.isSecureContext")
+            status = wait_cache_complete(page, 40)
+            assert status and status["cached"] == status["total"], status
+
+            serve.FAULT["mode"] = "all_down"  # VCU switched off: no files, no API
+            page.reload()
+            page.wait_for_selector("#screenRoot:not([hidden])", timeout=15000)
+            page.evaluate("localStorage.setItem('touchEngineeringMode','1')")
+            page.reload()
+            page.wait_for_selector("#screenRoot:not([hidden])", timeout=15000)
+            assert wait_until(lambda: is_offline_marked(page), 10)
+
+            broken = {}
+            for section in SECTIONS:
+                page.click(f".l1-icon[data-section='{section}']")
+                for tab in visible_tabs(page) or [None]:
+                    if tab is not None:
+                        page.click(f".tab[data-tab-index='{tab}']")
+                    page.wait_for_timeout(600)
+                    missing = page.evaluate(
+                        "() => Array.from(document.querySelectorAll('#screenRoot img'))"
+                        ".filter(i => i.getAttribute('src') && i.complete && i.naturalWidth === 0)"
+                        ".map(i => i.getAttribute('src'))")
+                    if missing:
+                        broken[f"{section}-{tab}"] = missing
+            screenshot(page, "offline-radio-last-view")
+            assert not broken, broken
+            assert not errors, errors
+            context.close()
+    finally:
+        serve.FAULT["mode"] = "ok"
         srv.shutdown()

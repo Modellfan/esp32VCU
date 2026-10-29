@@ -79,11 +79,12 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def _send(self, status: int, body: bytes, ctype: str, extra: dict | None = None) -> None:
+        extra = dict(extra or {})
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        for key, value in (extra or {}).items():
+        self.send_header("Cache-Control", extra.pop("Cache-Control", "no-store"))
+        for key, value in extra.items():
             self.send_header(key, value)
         self.end_headers()
         if self.command != "HEAD":
@@ -116,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
             mode = FAULT["mode"]
         if mode in ("static_down", "all_down"):
             return self._drop()
-        return self._static(path)
+        return self._static(path, versioned="v" in query)
 
     def _test_control(self, path: str, query: dict) -> None:
         if path == "/__test/fault":
@@ -208,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
             snapshot = dict(mock.MOCK_STATE)
         self._json(snapshot)
 
-    def _static(self, path: str) -> None:
+    def _static(self, path: str, versioned: bool = False) -> None:
         rel = path.lstrip("/")
         if rel == "" or rel.endswith("/"):
             rel += "index.html"
@@ -216,7 +217,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.root.resolve() not in target.parents and target != self.root.resolve():
             return self._send(403, b"forbidden", "text/plain")
         ctype = MIME.get(Path(rel).suffix, mimetypes.guess_type(rel)[0] or "application/octet-stream")
-        extra = {}
+        shell = rel.endswith(".html") or rel.endswith("sw.js") or rel.endswith("manifest.json")
+        # Same cache policy as the firmware (webinterface.cpp serveStaticFile).
+        extra = {"Cache-Control": "no-cache" if shell else
+                 "public, max-age=31536000, immutable" if versioned else "max-age=300"}
         if not target.is_file():
             gz = target.with_name(target.name + ".gz")
             if gz.is_file():

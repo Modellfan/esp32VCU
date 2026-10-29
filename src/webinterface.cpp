@@ -466,10 +466,11 @@ bool serveStaticFile(String path) {
     if (!file) {
         return false;
     }
-    // index.html, the service worker and the manifest must revalidate after an update;
-    // the other assets may be cached briefly (file names are not versioned).
+    // Assets are referenced with a content hash (?v=...) by pwa/tools/build.py: cache them
+    // for a year. index.html, sw.js and manifest.json must revalidate after an update.
     const bool shell = path.endsWith(".html") || path.endsWith("sw.js") || path.endsWith("manifest.json");
-    server.sendHeader("Cache-Control", shell ? "no-cache" : "max-age=300");
+    const char *cache = shell ? "no-cache" : server.hasArg("v") ? "public, max-age=31536000, immutable" : "max-age=300";
+    server.sendHeader("Cache-Control", cache);
     server.streamFile(file, contentTypeFor(path));
     file.close();
     return true;

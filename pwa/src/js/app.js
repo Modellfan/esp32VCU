@@ -3717,6 +3717,34 @@
     return String(network.signal);
   }
 
+  /* Offline cache state for the network popover (service worker, see js/pwa.js). */
+  function offlineCacheText() {
+    const pwa = window.VcuPwa || {};
+    if (pwa.reason === "insecure-context") {
+      return "aus: http ohne Chrome-Flag";
+    }
+    if (pwa.reason === "unsupported") {
+      return "aus: Browser ohne Service Worker";
+    }
+    if (pwa.reason === "register-failed") {
+      return "aus: Registrierung fehlgeschlagen";
+    }
+    const cache = pwa.cache;
+    if (!cache) {
+      return pwa.registered ? "wird eingerichtet" : "--";
+    }
+    if (cache.cached === cache.total) {
+      return "aktiv (" + cache.total + " Dateien)";
+    }
+    return "lädt " + cache.cached + "/" + cache.total;
+  }
+
+  window.addEventListener("vcu-pwa-status", function () {
+    if (state.networkPopupOpen) {
+      updateTopbarTime();
+    }
+  });
+
   function networkPopoverMarkup(network) {
     if (!state.networkPopupOpen || !network) {
       return "";
@@ -3744,6 +3772,7 @@
         "<div><dt>IP</dt><dd>" + escapeHtml(network.ip || "--") + "</dd></div>" +
         "<div><dt>SSID/Netz</dt><dd>" + escapeHtml(network.ssid || network.operator || "--") + "</dd></div>" +
         "<div><dt>Signal</dt><dd>" + escapeHtml(networkSignalText(network)) + "</dd></div>" +
+        "<div><dt>Offline</dt><dd data-offline-cache>" + escapeHtml(offlineCacheText()) + "</dd></div>" +
       "</dl>" +
       (networkTestEnabled ? "<small>Testmodus: Status wird lokal simuliert.</small>" : "<small>Tippen schliesst. Langer Druck: Engineering.</small>") +
       testControls +

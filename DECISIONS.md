@@ -77,7 +77,8 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Status:** accepted (Nutzerentscheidung 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-011
 - **Entscheidung:** Die Touch-UI liegt als PWA in `pwa/`, wird mit `pwa/tools/build.py` nach `pwa/dist` gebaut (WebP, gzip, Budget 1,1 MB) und ist das SPIFFS-Image (`data_dir = pwa/dist`). Die Firmware liefert sie unter `/` aus (eigener Handler: `.gz`-Varianten, WebP-MIME-Typ). Die Handy-UI (`data/index.html`) ist entfernt; `data/touch*` bleibt als Vorlage.
-- **Konsequenzen:** Ohne HTTPS registriert der Browser keinen Service Worker; die PWA läuft dann ohne Offline-Cache. Nach Änderungen an der UI: `build.py`, dann `uploadfs`.
+- **Offline-Cache (Nutzerentscheidung 2026-10-29):** Auf dem Android-Radio wird Chrome per Flag „Insecure origins treated as secure“ für `http://192.168.4.1` eingestellt; der Service Worker legt dann alle Dateien einschließlich aller Bilder im Cache ab (nacheinander, mit Wiederholung). Verworfene Alternativen: HTTPS auf der VCU mit eigener CA (TLS-Aufwand, Leistung, Radio-Kompatibilität), eigene Android-App (APK-Build und -Pflege). Zusätzlich tragen alle Dateiverweise einen Inhalts-Hash (`?v=`); die VCU liefert sie mit einem Jahr Cache-Dauer aus.
+- **Konsequenzen:** Ohne das Flag läuft die PWA ohne Offline-Start. Das Flag ist Handarbeit am Radio und kann durch Chrome-Updates verloren gehen; die App zeigt den Zustand im Netzwerk-Fenster. Nach Änderungen an der UI: `build.py`, dann `uploadfs`.
 
 ## VCU-DEC-013 – VW-PQ-Codec bleibt im Repo
 - **Status:** accepted (Nutzer 2026-10-28)

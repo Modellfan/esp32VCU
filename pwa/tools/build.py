@@ -3,7 +3,9 @@
 
 * Text files (html/css/js/json/svg) are stored gzip-only (`x.js.gz`); the ESP32
   WebServer serves `x.js.gz` with Content-Encoding gzip when `x.js` is requested.
-* sw.js gets the build version and the precache list.
+* Every asset reference gets its content hash (`a/x.svg?v=1a2b3c4d5e`). The VCU serves
+  such requests as immutable (1 year), so the browser loads each image only once.
+* sw.js gets the build version and the precache list (versioned URLs).
 * Checks: SPIFFS name length, allowed characters, every referenced asset exists,
   total size within budget. Any violation fails the build (exit code 1).
 """
@@ -30,6 +32,32 @@ TEXT_SUFFIXES = {".html", ".css", ".js", ".json", ".svg"}
 NAME_PATTERN = re.compile(r"^/[a-z0-9._/-]+$")
 REF_PATTERN = re.compile(r"""["'(]((?:a|i|e|css|js)/[A-Za-z0-9._/-]+\.[a-z0-9]+)["')]""")
 EXCLUDE = {".DS_Store", "Thumbs.db"}
+SHELL = {"index.html", "sw.js", "manifest.json"}  # never versioned, always revalidated
+VERSIONED_REF = re.compile(r"""(["'(])((?:a|i|e|css|js)/[A-Za-z0-9._/-]+\.[a-z0-9]+)(["')])""")
+
+
+def file_versions(files: list[Path]) -> dict[str, str]:
+    return {p.relative_to(SRC).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()[:10]
+            for p in files if p.relative_to(SRC).as_posix() not in SHELL}
+
+
+def add_versions(text: str, versions: dict[str, str]) -> str:
+    def repl(match: re.Match) -> str:
+        ref = match.group(2)
+        if ref in versions:
+            return f"{match.group(1)}{ref}?v={versions[ref]}{match.group(3)}"
+        return match.group(0)
+    return VERSIONED_REF.sub(repl, text)
+
+
+def version_layout(text: str, versions: dict[str, str]) -> str:
+    layout = json.loads(text)
+    base = layout.get("assetsBasePath", "")
+    for image in layout.get("images", []):
+        ref = base + image.get("file", "")
+        if image.get("file") and ref in versions:
+            image["file"] = f"{image['file']}?v={versions[ref]}"
+    return json.dumps(layout, indent=2, ensure_ascii=False) + "\n"
 
 
 def source_files() -> list[Path]:
@@ -64,7 +92,12 @@ def build(budget: int) -> dict:
     files = source_files()
     errors = check_references(files)
 
-    precache = ["./"] + [p.relative_to(SRC).as_posix() for p in files if p.name != "sw.js"]
+    versions = file_versions(files)
+    precache = ["./"] + [
+        rel if rel in SHELL else f"{rel}?v={versions[rel]}"
+        for rel in (p.relative_to(SRC).as_posix() for p in files)
+        if rel != "sw.js"
+    ]
     digest = hashlib.sha256()
     for path in files:
         digest.update(path.relative_to(SRC).as_posix().encode())
@@ -75,7 +108,7 @@ def build(budget: int) -> dict:
         shutil.rmtree(DIST)
     DIST.mkdir(parents=True)
 
-    report = {"version": version, "files": [], "total_bytes": 0}
+    report = {"version": version, "files": [], "total_bytes": 0, "asset_versions": versions}
     for path in files:
         rel = path.relative_to(SRC).as_posix()
         data = path.read_bytes()
@@ -88,6 +121,10 @@ def build(budget: int) -> dict:
             if version not in text:
                 errors.append("sw.js: build placeholders not found")
             data = text.encode("utf-8")
+        if rel == "e/layout.json":
+            data = version_layout(data.decode("utf-8"), versions).encode("utf-8")
+        elif path.suffix in {".html", ".css", ".js", ".json"} and path.name != "sw.js":
+            data = add_versions(data.decode("utf-8"), versions).encode("utf-8")
         stored = rel
         if path.suffix in TEXT_SUFFIXES:
             data = gzip.compress(data, compresslevel=9, mtime=0)
