@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VCU Architektur</title>
+<!--
+  Interaktive Architekturkarte der esp32VCU (im Stil von archify: eine eigenständige HTML-Datei,
+  Daten als JSON im Block #arch-data, Viewer darunter).
+
+  DETAILS PFLEGEN: nur den JSON-Block #arch-data bearbeiten.
+    layers[]  Ebenen (Reihenfolge = von oben nach unten)
+    nodes[]   id, title, layer, col (1-5), kind (module|data|hardware|external|service),
+              status (umgesetzt|teilweise|geplant|offen|referenz), summary, details{
+                responsibilities[], files[], interfaces[], timing, reqs[], decs[], open[] }
+    edges[]   from, to, label, kind (data|bus|control|planned)
+  Stand und Quelle: Code nach Commit 88c33de (2026-10-29), REQUIREMENTS.md, DECISIONS.md.
+-->
+<script type="application/json" id="arch-data">
+{
+  "meta": {
+    "title": "esp32VCU – Architektur",
+    "subtitle": "Ebenenmodell nach AUTOSAR-Prinzip (VCU-DEC-002) · Stand 2026-10-29 · nicht auf Hardware geprüft",
+    "columns": ["Aktoren", "Kombi / Motorsteuergerät", "Messwerte / CAN 1+2", "Batterie / CAN 3", "Dienste"]
+  },
+  "layers": [
+    {"id": "app", "title": "Anwendung", "hint": "High Level"},
+    {"id": "data", "title": "Daten", "hint": "RTE · params, Mutex"},
+    {"id": "comm", "title": "Kommunikation", "hint": "Codecs"},
+    {"id": "drv", "title": "Treiber", "hint": "Low Level"},
+    {"id": "hw", "title": "Hardware", "hint": "ESP32-S3-DevKitC-1"},
+    {"id": "ext", "title": "Außenwelt", "hint": "Fahrzeug, Radio, PC"}
+  ],
+  "nodes": [
+    {"id": "fan_logic", "title": "Lüfterlogik", "layer": "app", "col": 1, "kind": "module", "status": "teilweise",
+     "summary": "Wählt die Lüfterstufe: Hand oder Automatik aus Motor- und Kühlkörpertemperatur.",
+     "details": {
+       "responsibilities": ["Automatik-Stufe 0/1/2 mit Hysterese 5 K", "Fail-safe Stufe 2, wenn 0x504 (Temperaturen) veraltet ist", "Hand-Stufe begrenzen, aktive Stufe nach params.outputs.fan_level"],
+       "files": ["src/vcu_app.cpp"],
+       "interfaces": ["liest params::tesla_sdu.tmpm/tmphs, rxFresh(RX_SDU_504)", "schreibt params::outputs.fan_level_auto, fan_level"],
+       "timing": "alle 6 ms im Echtzeit-Task",
+       "reqs": ["VCU-REQ-008"], "decs": ["VCU-DEC-004"],
+       "open": ["Schwellen sind Entwurf (Motor 70/110 °C, Kühlkörper 50/65 °C)", "Start im Handbetrieb bis zur Bestätigung"]}},
+    {"id": "cluster", "title": "Kombi-Rechnung", "layer": "app", "col": 2, "kind": "module", "status": "umgesetzt",
+     "summary": "Leistung als Drehzahlzeiger, Motortemperatur als Kühlmittelanzeige, 0–50/0–100, Verbrauchssignal.",
+     "details": {
+       "responsibilities": ["Leistung in % aus sdu_udc × sdu_idc (Bezug 348 V × 300 A / 100 A)", "Zeigerstellung R/N/Antrieb/Rekuperation", "Kühlmittelwarnung ab Kühlkörper 80 °C oder Motor 160 °C", "Beschleunigungsmessung 0–50 und 0–100", "MO5-Verbrauch (heute Simulation)"],
+       "files": ["src/cluster_calc.cpp", "src/cluster_calc.h"],
+       "interfaces": ["liest params::tesla_sdu, params::vehicle.vehicle_speed_510", "schreibt params::cluster, params::ecu (rpm, coolant, mo5_verbrauch)"],
+       "timing": "alle 6 ms",
+       "reqs": ["VCU-REQ-005", "VCU-REQ-006", "VCU-REQ-007"], "decs": [],
+       "open": ["Verbrauch soll echten Energieverbrauch zeigen, Umrechnung offen", "Bestwerte gehen beim Neustart verloren (gewollt)"]}},
+    {"id": "overrides", "title": "ECU-Overrides", "layer": "app", "col": 2, "kind": "module", "status": "umgesetzt",
+     "summary": "Vorgaben aus der Oberfläche haben Vorrang vor der Rechnung.",
+     "details": {
+       "responsibilities": ["Drehzahl, Kühlmitteltemperatur, Kühlmittelwarnung, Verbrauch überschreiben", "Wert 'auto' hebt den Override auf"],
+       "files": ["src/vcu_app.cpp", "src/vcu_params.h"],
+       "interfaces": ["params::ecu_override → params::ecu"],
+       "timing": "nach der Kombi-Rechnung, alle 6 ms",
+       "reqs": ["VCU-REQ-010"], "decs": ["VCU-DEC-005"], "open": []}},
+
+    {"id": "p_out", "title": "Aktor-Params", "layer": "data", "col": 1, "kind": "data", "status": "umgesetzt",
+     "summary": "Sollwerte und Ist-Zustand für Lüfter und Tankanzeige.",
+     "details": {
+       "responsibilities": ["fan_mode, fan_level_manual/auto, fan_level, fan_stage1/2", "digipot_pct (Soll), digipot_applied_pct, digipot_wiper"],
+       "files": ["src/vcu_params.h"],
+       "interfaces": ["Schreiber: Webserver (Soll), Lüfterlogik (Automatik), Echtzeit-Task (Ist)"],
+       "timing": "unter Mutex", "reqs": ["VCU-REQ-008", "VCU-REQ-009"], "decs": ["VCU-DEC-004"], "open": []}},
+    {"id": "p_ecu", "title": "Kombi-Params", "layer": "data", "col": 2, "kind": "data", "status": "umgesetzt",
+     "summary": "Werte, die als Motorsteuergerät gesendet werden, plus Kombi-Ergebnisse.",
+     "details": {
+       "responsibilities": ["params::ecu (Motor_1/2/3, MO5, 0x7A0, Standardbits)", "params::cluster (Zeiger, Leistung, Beschleunigung)", "params::ecu_override"],
+       "files": ["src/986_ecu_messages.h", "src/cluster_calc.h", "src/vcu_params.h"],
+       "interfaces": ["gelesen vom ECU-Codec beim Kodieren"],
+       "timing": "unter Mutex", "reqs": ["VCU-REQ-001", "VCU-REQ-005"], "decs": [], "open": []}},
+    {"id": "p_meas", "title": "Mess-Params", "layer": "data", "col": 3, "kind": "data", "status": "umgesetzt",
+     "summary": "Dekodierte Fahrzeug- und Umrichterwerte mit Empfangszeit je Botschaft.",
+     "details": {
+       "responsibilities": ["params::vehicle (0x1A0, 0x2A8, 0x4A1, 0x510, 0x520, 0x560, 0x440, 0x0C0)", "params::tesla_sdu (0x500–0x508)", "Empfangszeit je Botschaft → stale nach 500 ms"],
+       "files": ["src/986_vehicle_messages.h", "src/tesla_sdu_messages.h", "src/vcu_params.cpp"],
+       "interfaces": ["rxMark(bus, id), rxFresh(source, now)"],
+       "timing": "geschrieben im Echtzeit-Task", "reqs": ["VCU-REQ-003", "VCU-REQ-004", "VCU-REQ-013"], "decs": ["VCU-DEC-006"],
+       "open": ["Zeitgrenze 500 ms ist Entwurf", "PWA wertet stale noch nicht aus"]}},
+    {"id": "p_bat", "title": "Batterie-Params", "layer": "data", "col": 4, "kind": "data", "status": "geplant",
+     "summary": "SoC, Packspannung, -strom, Stecker, Laden – Platzhalter, immer stale.",
+     "details": {
+       "responsibilities": ["params::battery", "params::charging (Ziel-SoC 50–100 %, AC-Strom 6–32 A)"],
+       "files": ["src/vcu_params.h"],
+       "interfaces": ["/api/live: battery_*, target_charge_pct, ac_current_limit_a"],
+       "timing": "-", "reqs": ["VCU-REQ-017", "VCU-REQ-018"], "decs": ["VCU-DEC-008"],
+       "open": ["Botschaften von BMS und Ladegerät", "Ladeparameter wirken noch auf kein Ladegerät"]}},
+    {"id": "sigtab", "title": "Signaltabelle", "layer": "data", "col": 4, "kind": "data", "status": "umgesetzt",
+     "summary": "196 Signale: Name, Gruppe, Typ, Format, Quellbotschaft, Schreibrecht.",
+     "details": {
+       "responsibilities": ["Grundlage für /api/live, /api/set-ecu, /api/signals", "Snapshot aller Gruppen unter Mutex", "Typ- und Bereichsprüfung beim Setzen"],
+       "files": ["src/signal_table.cpp", "src/signal_table.h"],
+       "interfaces": ["kSignals[], takeSnapshot(), readSignal(), writeSignal()"],
+       "timing": "pro HTTP-Anfrage", "reqs": ["VCU-REQ-010"], "decs": ["VCU-DEC-007"], "open": []}},
+
+    {"id": "c_ecu", "title": "ECU-Codec", "layer": "comm", "col": 2, "kind": "module", "status": "umgesetzt",
+     "summary": "Kodiert 0x280, 0x289, 0x298, 0x4E0, 0x7A0 nach DBC.",
+     "details": {
+       "responsibilities": ["encode986Ecu0x280/0x289/0x298/0x4E0/0x7A0", "Standardbits und 0x289-Byte0-Sequenz"],
+       "files": ["src/986_ecu_messages.cpp", "documentation/can_signals.md", "documentation/porsche_986_996_compiled_working.dbc"],
+       "interfaces": ["liest params::ecu"], "timing": "eine Botschaft je 6-ms-Slot → je 30 ms",
+       "reqs": ["VCU-REQ-001"], "decs": [], "open": ["0x4F8 definiert, aber nicht gesendet"]}},
+    {"id": "c_veh", "title": "Fahrzeug-Codec", "layer": "comm", "col": 3, "kind": "module", "status": "umgesetzt",
+     "summary": "Dekodiert die 986-Fahrzeugbotschaften von CAN 1.",
+     "details": {
+       "responsibilities": ["decode986Vehicle: 0x1A0, 0x2A8, 0x4A1, 0x510, 0x520, 0x560, 0x440, 0x0C0"],
+       "files": ["src/986_vehicle_messages.cpp", "documentation/can_signals.md"],
+       "interfaces": ["schreibt params::vehicle"], "timing": "bis 32 Frames je Bus und Zyklus",
+       "reqs": ["VCU-REQ-003"], "decs": [], "open": []}},
+    {"id": "c_sdu", "title": "SDU-Codec", "layer": "comm", "col": 3, "kind": "module", "status": "umgesetzt",
+     "summary": "Dekodiert OpenInverter stm32-sine 0x500–0x508 von CAN 2.",
+     "details": {
+       "responsibilities": ["decodeTeslaSdu: Spannungen, Ströme, Drehzahl, Richtung, Temperaturen, Fehler, Eingänge"],
+       "files": ["src/tesla_sdu_messages.cpp"], "interfaces": ["schreibt params::tesla_sdu"],
+       "timing": "bis 32 Frames je Zyklus", "reqs": ["VCU-REQ-004"], "decs": [], "open": []}},
+    {"id": "c_bat", "title": "Batterie-Codec", "layer": "comm", "col": 4, "kind": "module", "status": "geplant",
+     "summary": "Platzhalter für BMS- und Ladegerätbotschaften auf CAN 3.",
+     "details": {
+       "responsibilities": ["decodeBattery() – nimmt noch nichts an"], "files": ["src/battery_messages.cpp"],
+       "interfaces": ["schreibt params::battery"], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"],
+       "open": ["Botschaftsdefinition von BMS und Ladegerät"]}},
+    {"id": "c_pq", "title": "VW-PQ-Codec", "layer": "comm", "col": 4, "kind": "module", "status": "referenz",
+     "summary": "Ungenutzt, bleibt zum Abgleich mit den 986-Botschaften.",
+     "details": {"responsibilities": ["Referenz, ca. 10 000 Zeilen"], "files": ["src/vw_pq_messages.cpp", "documentation/PQ_messages.md"],
+       "interfaces": [], "timing": "-", "reqs": [], "decs": ["VCU-DEC-013"], "open": []}},
+
+    {"id": "d_fan", "title": "Lüftertreiber", "layer": "drv", "col": 1, "kind": "module", "status": "teilweise",
+     "summary": "Zwei Relaisausgänge Stufe 1/2.",
+     "details": {"responsibilities": ["coolantFanWrite(stage1, stage2)"], "files": ["src/coolant_fan_control.cpp"],
+       "interfaces": ["GPIO_FAN_STAGE1/2 aus board.h"], "timing": "jeder Zyklus", "reqs": ["VCU-REQ-008"], "decs": ["VCU-DEC-009"],
+       "open": ["Pin Stufe 1 unbekannt → Ausgänge abgeschaltet"]}},
+    {"id": "d_pot", "title": "Poti-Treiber", "layer": "drv", "col": 1, "kind": "module", "status": "umgesetzt",
+     "summary": "X9C103S schrittweise stellen (Tankanzeige).",
+     "details": {"responsibilities": ["digipotSetPercent() nur bei Änderung, ca. 2 ms"], "files": ["src/digipot_control.cpp", "lib/X9C103S"],
+       "interfaces": ["GPIO 4/5/6"], "timing": "bei Änderung", "reqs": ["VCU-REQ-009"], "decs": [],
+       "open": ["Zuordnung Prozent → Tankzeiger"]}},
+    {"id": "d_led", "title": "LED-Treiber", "layer": "drv", "col": 1, "kind": "module", "status": "umgesetzt",
+     "summary": "WS2812 über FastLED, 1 Hz grün.",
+     "details": {"responsibilities": ["fastled(), fastledOff()"], "files": ["src/utils.h"], "interfaces": ["GPIO 48"],
+       "timing": "500 ms (Dienst-Task)", "reqs": ["VCU-REQ-019"], "decs": [], "open": []}},
+    {"id": "d_mcp", "title": "CAN-Treiber", "layer": "drv", "col": 3, "kind": "module", "status": "umgesetzt",
+     "summary": "Zwei MCP2515 über ACAN2515 (8 MHz, 500 kbit/s).",
+     "details": {"responsibilities": ["canManager_setup(), Fehlercode je Bus", "receive()/tryToSend() aus dem Echtzeit-Task"],
+       "files": ["src/canmanager.cpp", "lib: ACAN2515 (Modellfan-Fork)"], "interfaces": ["SPI SCK12 MOSI11 MISO13, CS 10/7, INT 9/8"],
+       "timing": "Interrupt-Task der Bibliothek + Abfrage alle 6 ms", "reqs": ["VCU-REQ-001", "VCU-REQ-003", "VCU-REQ-004"], "decs": ["VCU-DEC-001"], "open": []}},
+    {"id": "d_twai", "title": "TWAI-Treiber", "layer": "drv", "col": 4, "kind": "module", "status": "geplant",
+     "summary": "CAN 3 über den eingebauten CAN-Controller des ESP32-S3.",
+     "details": {"responsibilities": ["can3Begin(), can3Receive()"], "files": ["src/can3_twai.cpp"],
+       "interfaces": ["GPIO_CAN3_TX/RX (nicht zugewiesen)"], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"],
+       "open": ["Pins und Transceiver"]}},
+
+    {"id": "h_relay", "title": "Relais-GPIO", "layer": "hw", "col": 1, "kind": "hardware", "status": "offen",
+     "summary": "Stufe 1 ?, Stufe 2 GPIO 15.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-008"], "decs": ["VCU-DEC-009"], "open": ["Pin Stufe 1"]}},
+    {"id": "h_x9c", "title": "X9C103S", "layer": "hw", "col": 1, "kind": "hardware", "status": "umgesetzt",
+     "summary": "10 kΩ Digitalpoti, Tankgeber-Ersatz.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": ["CS 4, INC 5, U/D 6"], "timing": "-", "reqs": ["VCU-REQ-009"], "decs": [], "open": []}},
+    {"id": "h_led", "title": "RGB-LED", "layer": "hw", "col": 1, "kind": "hardware", "status": "umgesetzt",
+     "summary": "WS2812 auf GPIO 48.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-019"], "decs": [], "open": []}},
+    {"id": "h_mcp", "title": "2× MCP2515", "layer": "hw", "col": 3, "kind": "hardware", "status": "umgesetzt",
+     "summary": "CAN 1 Fahrzeug, CAN 2 Umrichter.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": ["8-MHz-Quarz, 500 kbit/s"], "timing": "-", "reqs": [], "decs": ["VCU-DEC-001"], "open": []}},
+    {"id": "h_twai", "title": "TWAI + Transceiver", "layer": "hw", "col": 4, "kind": "hardware", "status": "geplant",
+     "summary": "CAN 3 für BMS und Ladegerät.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"], "open": ["Pins, Transceiver"]}},
+    {"id": "h_radio", "title": "WLAN", "layer": "hw", "col": 5, "kind": "hardware", "status": "umgesetzt",
+     "summary": "AP eboxster (WPA2) + Heimnetz.", "details": {"responsibilities": [], "files": ["src/webinterface.cpp", "src/secrets.example.h"], "interfaces": ["AP 192.168.4.1", "Host eboxster-vcu"], "timing": "-", "reqs": ["VCU-REQ-014", "VCU-REQ-015", "VCU-REQ-016"], "decs": ["VCU-DEC-011"], "open": []}},
+    {"id": "h_usb", "title": "UART0 + USB-JTAG", "layer": "hw", "col": 5, "kind": "hardware", "status": "umgesetzt",
+     "summary": "UART0: GVRET · nativer USB: Textlog.", "details": {"responsibilities": [], "files": ["src/vcu_log.cpp"], "interfaces": ["115200 Baud"], "timing": "-", "reqs": ["VCU-REQ-012"], "decs": ["VCU-DEC-010"], "open": ["Zuordnung COM16/COM24 ungeprüft"]}},
+
+    {"id": "s_rt", "title": "Echtzeit-Task", "layer": "app", "col": 5, "kind": "service", "status": "umgesetzt",
+     "summary": "6 ms, Kern 1: empfangen, rechnen, senden, Ausgänge.",
+     "details": {
+       "responsibilities": ["CAN 1/2/3 lesen (je max. 32 Frames)", "appStep(): Kombi, Overrides, Lüfter", "eine ECU-Botschaft je Slot senden", "Ausgänge anwenden, Statistik (Überläufe, max. Zykluszeit)"],
+       "files": ["src/vcu_rt.cpp", "src/main.cpp"], "interfaces": ["rtStats() → /api/live rt_*"],
+       "timing": "vTaskDelayUntil 6 ms, Priorität max−2, startet vor WLAN",
+       "reqs": ["VCU-REQ-001", "VCU-REQ-002"], "decs": ["VCU-DEC-003"], "open": ["Laufzeit auf Hardware nicht gemessen"]}},
+    {"id": "s_web", "title": "Webserver", "layer": "data", "col": 5, "kind": "service", "status": "umgesetzt",
+     "summary": "Kern 0: API, PWA-Auslieferung, GVRET-Weiterleitung, LED.",
+     "details": {
+       "responsibilities": ["/api/live, /api/signals, /api/set, /api/set-ecu, /api/set-cluster", "Statische Dateien aus SPIFFS (.gz, WebP, ?v= immutable)", "WLAN AP+STA nicht blockierend"],
+       "files": ["src/webinterface.cpp"], "interfaces": ["HTTP :80"],
+       "timing": "Dienst-Task, 2 ms Pause je Durchlauf", "reqs": ["VCU-REQ-010", "VCU-REQ-011", "VCU-REQ-014"], "decs": ["VCU-DEC-007", "VCU-DEC-011", "VCU-DEC-012"], "open": []}},
+    {"id": "s_fs", "title": "SPIFFS · PWA", "layer": "comm", "col": 5, "kind": "service", "status": "umgesetzt",
+     "summary": "pwa/dist: 0,49 MB, gzip + WebP, Service Worker.",
+     "details": {
+       "responsibilities": ["Touch-UI 1024×600 als PWA", "Offline-Cache auf dem Radio (Chrome-Flag)"],
+       "files": ["pwa/README.md", "pwa/src/", "pwa/tools/build.py", "pwa/tests/test_pwa.py"],
+       "interfaces": ["data_dir = pwa/dist, uploadfs"], "timing": "-",
+       "reqs": ["VCU-REQ-011"], "decs": ["VCU-DEC-012"], "open": ["Auf dem Radio nicht getestet"]}},
+    {"id": "s_gvret", "title": "GVRET", "layer": "drv", "col": 5, "kind": "service", "status": "umgesetzt",
+     "summary": "Frames über Queue an SavvyCAN.",
+     "details": {"responsibilities": ["Queue 128 Frames, Verluste gezählt", "Weiterleitung nur im Binärmodus"],
+       "files": ["src/gvret_bridge.cpp", "src/gvret.h"], "interfaces": ["UART0"], "timing": "Dienst-Task",
+       "reqs": ["VCU-REQ-012"], "decs": ["VCU-DEC-010"], "open": ["Mit SavvyCAN nicht geprüft", "Senden vom PC nicht umgesetzt"]}},
+
+    {"id": "x_fan", "title": "Kühlmittellüfter", "layer": "ext", "col": 1, "kind": "external", "status": "umgesetzt", "summary": "Zwei Stufen über Relais.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-008"], "decs": [], "open": []}},
+    {"id": "x_fuel", "title": "Tankanzeige", "layer": "ext", "col": 1, "kind": "external", "status": "umgesetzt", "summary": "Im Kombiinstrument, über Poti.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-009"], "decs": [], "open": []}},
+    {"id": "x_vcan", "title": "Fahrzeug-CAN", "layer": "ext", "col": 2, "kind": "external", "status": "umgesetzt", "summary": "Kombi, ABS/PSM, Getriebe · 500 kbit/s.", "details": {"responsibilities": [], "files": ["documentation/can_signals.md"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-001", "VCU-REQ-003"], "decs": [], "open": []}},
+    {"id": "x_sdu", "title": "Tesla SDU", "layer": "ext", "col": 3, "kind": "external", "status": "umgesetzt", "summary": "OpenInverter stm32-sine, CAN 2.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-004"], "decs": [], "open": []}},
+    {"id": "x_bms", "title": "BMS / Ladegerät", "layer": "ext", "col": 4, "kind": "external", "status": "geplant", "summary": "Über CAN 3.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": [], "open": ["Botschaften"]}},
+    {"id": "x_radio", "title": "Android-Radio", "layer": "ext", "col": 5, "kind": "external", "status": "umgesetzt", "summary": "Chrome, PWA 1024×600.", "details": {"responsibilities": [], "files": ["pwa/README.md"], "interfaces": ["http://192.168.4.1"], "timing": "-", "reqs": ["VCU-REQ-011"], "decs": ["VCU-DEC-012"], "open": ["Chrome-Flag einrichten"]}},
+    {"id": "x_pc", "title": "PC · SavvyCAN", "layer": "ext", "col": 5, "kind": "external", "status": "umgesetzt", "summary": "CAN-Diagnose über USB.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-012"], "decs": [], "open": []}}
+  ],
+  "edges": [
+    {"from": "x_vcan", "to": "h_mcp", "label": "CAN 1", "kind": "bus"},
+    {"from": "h_mcp", "to": "x_vcan", "label": "ECU-Frames", "kind": "bus"},
+    {"from": "x_sdu", "to": "h_mcp", "label": "CAN 2", "kind": "bus"},
+    {"from": "x_bms", "to": "h_twai", "label": "CAN 3", "kind": "planned"},
+    {"from": "h_mcp", "to": "d_mcp", "label": "SPI", "kind": "bus"},
+    {"from": "h_twai", "to": "d_twai", "label": "TWAI", "kind": "planned"},
+    {"from": "d_mcp", "to": "c_veh", "label": "Frames CAN 1", "kind": "data"},
+    {"from": "d_mcp", "to": "c_sdu", "label": "Frames CAN 2", "kind": "data"},
+    {"from": "c_ecu", "to": "d_mcp", "label": "tryToSend", "kind": "data"},
+    {"from": "d_twai", "to": "c_bat", "label": "Frames CAN 3", "kind": "planned"},
+    {"from": "c_veh", "to": "p_meas", "label": "params::vehicle + rxMark", "kind": "data"},
+    {"from": "c_sdu", "to": "p_meas", "label": "params::tesla_sdu + rxMark", "kind": "data"},
+    {"from": "c_bat", "to": "p_bat", "label": "params::battery", "kind": "planned"},
+    {"from": "p_ecu", "to": "c_ecu", "label": "kodieren", "kind": "data"},
+    {"from": "p_meas", "to": "cluster", "label": "Leistung, Temp., Geschw.", "kind": "data"},
+    {"from": "cluster", "to": "p_ecu", "label": "rpm, coolant, MO5", "kind": "data"},
+    {"from": "overrides", "to": "p_ecu", "label": "Vorrang", "kind": "data"},
+    {"from": "p_meas", "to": "fan_logic", "label": "tmpm, tmphs, Alter", "kind": "data"},
+    {"from": "fan_logic", "to": "p_out", "label": "fan_level", "kind": "data"},
+    {"from": "p_out", "to": "d_fan", "label": "Stufe", "kind": "data"},
+    {"from": "p_out", "to": "d_pot", "label": "Prozent", "kind": "data"},
+    {"from": "d_fan", "to": "h_relay", "label": "GPIO", "kind": "data"},
+    {"from": "d_pot", "to": "h_x9c", "label": "INC/U-D", "kind": "data"},
+    {"from": "d_led", "to": "h_led", "label": "RMT", "kind": "data"},
+    {"from": "h_relay", "to": "x_fan", "label": "", "kind": "data"},
+    {"from": "h_x9c", "to": "x_fuel", "label": "Widerstand", "kind": "data"},
+    {"from": "s_rt", "to": "d_mcp", "label": "Takt: lesen/senden", "kind": "control"},
+    {"from": "s_rt", "to": "cluster", "label": "Takt: appStep", "kind": "control"},
+    {"from": "s_rt", "to": "fan_logic", "label": "Takt", "kind": "control"},
+    {"from": "s_rt", "to": "d_fan", "label": "Ausgänge", "kind": "control"},
+    {"from": "s_rt", "to": "d_pot", "label": "Ausgänge", "kind": "control"},
+    {"from": "sigtab", "to": "s_web", "label": "Snapshot", "kind": "data"},
+    {"from": "p_meas", "to": "sigtab", "label": "", "kind": "data"},
+    {"from": "p_ecu", "to": "sigtab", "label": "", "kind": "data"},
+    {"from": "p_out", "to": "sigtab", "label": "", "kind": "data"},
+    {"from": "p_bat", "to": "sigtab", "label": "", "kind": "data"},
+    {"from": "s_web", "to": "p_out", "label": "/api/set", "kind": "control"},
+    {"from": "s_web", "to": "overrides", "label": "/api/set-ecu", "kind": "control"},
+    {"from": "s_fs", "to": "s_web", "label": "PWA-Dateien", "kind": "data"},
+    {"from": "s_web", "to": "h_radio", "label": "HTTP", "kind": "data"},
+    {"from": "h_radio", "to": "x_radio", "label": "WLAN", "kind": "data"},
+    {"from": "s_web", "to": "d_led", "label": "1 Hz", "kind": "control"},
+    {"from": "d_mcp", "to": "s_gvret", "label": "alle Frames", "kind": "data"},
+    {"from": "s_gvret", "to": "h_usb", "label": "UART0", "kind": "data"},
+    {"from": "h_usb", "to": "x_pc", "label": "USB", "kind": "data"}
+  ]
+}
+</script>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --ink: #1d1d1b; --muted: #6b6a64; --line: #d6d3ca; --lane: #efede6;
+  --module: #ecebfd; --module-b: #534ab7; --module-t: #2f2878;
+  --data: #fbefd9; --data-b: #8a5310; --data-t: #5c3708;
+  --hw: #eceae3; --hw-b: #5f5e5a; --hw-t: #3a3936;
+  --ext: #def3eb; --ext-b: #0f6e56; --ext-t: #08493a;
+  --service: #e6effa; --service-b: #185fa5; --service-t: #0c3d6e;
+  --accent: #c2410c; --edge: #8b8981; --edge-hi: #c2410c; --edge-ctl: #185fa5;
+  --ok: #2f7d32; --warn: #a66300; --plan: #6b6a64; --open: #b42318;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161614; --surface: #20201e; --ink: #ecebe6; --muted: #a3a29b; --line: #3a3935; --lane: #1c1c1a;
+    --module: #26234a; --module-b: #8f87ea; --module-t: #d9d6ff;
+    --data: #3a2a12; --data-b: #d39a4a; --data-t: #f5ddb8;
+    --hw: #2a2a27; --hw-b: #9a9890; --hw-t: #e3e1da;
+    --ext: #133a30; --ext-b: #4fc3a1; --ext-t: #c7f0e2;
+    --service: #142c45; --service-b: #6aa8e6; --service-t: #d3e6fa;
+    --accent: #fb923c; --edge: #6e6d67; --edge-hi: #fb923c; --edge-ctl: #6aa8e6;
+    --ok: #6cc070; --warn: #e3a248; --plan: #a3a29b; --open: #f97066;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161614; --surface: #20201e; --ink: #ecebe6; --muted: #a3a29b; --line: #3a3935; --lane: #1c1c1a;
+  --module: #26234a; --module-b: #8f87ea; --module-t: #d9d6ff;
+  --data: #3a2a12; --data-b: #d39a4a; --data-t: #f5ddb8;
+  --hw: #2a2a27; --hw-b: #9a9890; --hw-t: #e3e1da;
+  --ext: #133a30; --ext-b: #4fc3a1; --ext-t: #c7f0e2;
+  --service: #142c45; --service-b: #6aa8e6; --service-t: #d3e6fa;
+  --accent: #fb923c; --edge: #6e6d67; --edge-hi: #fb923c; --edge-ctl: #6aa8e6;
+  --ok: #6cc070; --warn: #e3a248; --plan: #a3a29b; --open: #f97066;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 16px 20px 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+.sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toolbar input[type=search] { width: 200px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink); font: inherit; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px;
+  padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 8px 20px 24px; }
+#stage { position: relative; min-width: 0; }
+#edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1; }
+.grid { display: grid; grid-template-columns: 110px repeat(4, minmax(0, 1fr)) minmax(0, 1fr); gap: 8px; position: relative; }
+.colhead { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 4px 2px; }
+.lanelabel { background: var(--lane); border-radius: 10px 0 0 10px; padding: 10px; font-weight: 600; font-size: 13px; }
+.lanelabel small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+.cell { background: var(--lane); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 64px; }
+.cell.last { border-radius: 0 10px 10px 0; }
+.cell.svc { background: transparent; border-left: 2px dashed var(--line); }
+.node { border: 1.5px solid; border-radius: 9px; padding: 7px 9px; cursor: pointer; text-align: left; font: inherit;
+  width: 100%; position: relative; z-index: 2; transition: opacity .15s, box-shadow .15s; }
+.node b { display: block; font-size: 13px; font-weight: 600; }
+.node span { display: block; font-size: 11.5px; opacity: .85; line-height: 1.3; }
+.node[data-kind=module] { background: var(--module); border-color: var(--module-b); color: var(--module-t); }
+.node[data-kind=data] { background: var(--data); border-color: var(--data-b); color: var(--data-t); }
+.node[data-kind=hardware] { background: var(--hw); border-color: var(--hw-b); color: var(--hw-t); }
+.node[data-kind=external] { background: var(--ext); border-color: var(--ext-b); color: var(--ext-t); }
+.node[data-kind=service] { background: var(--service); border-color: var(--service-b); color: var(--service-t); }
+.node[data-status=geplant], .node[data-status=referenz] { border-style: dashed; }
+.node::after { content: ""; position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; }
+.node[data-status=umgesetzt]::after { background: var(--ok); }
+.node[data-status=teilweise]::after { background: var(--warn); }
+.node[data-status=geplant]::after, .node[data-status=referenz]::after { background: var(--plan); }
+.node[data-status=offen]::after { background: var(--open); }
+.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.node.sel { box-shadow: 0 0 0 3px var(--accent); }
+.node.hit { box-shadow: 0 0 0 2px var(--accent); }
+.dim .node:not(.on) { opacity: .25; }
+path.e { fill: none; stroke: var(--edge); stroke-width: 1.2; opacity: .55; }
+path.e.control { stroke: var(--edge-ctl); stroke-dasharray: 2 4; }
+path.e.planned { stroke-dasharray: 6 5; }
+path.e.on { stroke: var(--edge-hi); opacity: 1; stroke-width: 2; }
+path.e.control.on { stroke: var(--edge-ctl); }
+.dim path.e:not(.on) { opacity: .08; }
+text.el { font-size: 11px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; display: none; }
+text.el.on { display: block; }
+aside { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; align-self: start;
+  position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+aside h2 { font-size: 17px; margin: 0 0 2px; }
+aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 4px; }
+aside ul { margin: 0; padding-left: 18px; }
+aside li { margin: 2px 0; }
+aside code, aside a.file { font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+aside a { color: var(--accent); }
+.badge { display: inline-block; font-size: 11px; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line); margin: 6px 4px 0 0; }
+.tags span { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; margin: 2px 4px 2px 0; }
+.rel button { border: 0; background: none; color: var(--accent); padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 20px 20px; color: var(--muted); font-size: 12px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid; vertical-align: -2px; margin-right: 5px; }
+.empty { color: var(--muted); }
+@media (max-width: 1100px) {
+  main { grid-template-columns: 1fr; }
+  aside { position: static; max-height: none; }
+}
+@media (max-width: 760px) {
+  header, main, .legend { padding-left: 16px; padding-right: 16px; }
+  .grid { grid-template-columns: 1fr; }
+  .colhead, #edges { display: none; }
+  .lanelabel { border-radius: 10px 10px 0 0; margin-top: 8px; }
+  .cell { border-radius: 0; min-height: 0; }
+  .cell:empty { display: none; }
+  .cell.svc { border-left: 0; background: var(--lane); }
+  .toolbar input[type=search] { width: 100%; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="title"></h1>
+    <div class="sub" id="subtitle"></div>
+  </div>
+  <div class="toolbar" role="toolbar" aria-label="Ansicht">
+    <input type="search" id="search" placeholder="Suchen: Datei, REQ, Signal …" aria-label="Bausteine durchsuchen">
+    <button class="chip" data-lens="all" aria-pressed="true">Alle</button>
+    <button class="chip" data-lens="can">CAN-Datenfluss</button>
+    <button class="chip" data-lens="rt">Echtzeit (Kern 1)</button>
+    <button class="chip" data-lens="web">Web / Radio</button>
+    <button class="chip" data-lens="open">Offen / geplant</button>
+    <button class="chip" id="theme" aria-label="Hell/Dunkel umschalten">◐</button>
+  </div>
+</header>
+<main>
+  <div id="stage">
+    <svg id="edges" aria-hidden="true"></svg>
+    <div class="grid" id="grid"></div>
+  </div>
+  <aside id="panel" aria-live="polite"><p class="empty">Baustein anklicken: Aufgabe, Dateien, Schnittstellen, Timing, Requirements, Entscheidungen, offene Punkte und Verbindungen.</p></aside>
+</main>
+<div class="legend">
+  <span><i style="background:var(--module);border-color:var(--module-b)"></i>Modul</span>
+  <span><i style="background:var(--data);border-color:var(--data-b)"></i>Daten (params)</span>
+  <span><i style="background:var(--service);border-color:var(--service-b)"></i>Dienst</span>
+  <span><i style="background:var(--hw);border-color:var(--hw-b)"></i>Hardware</span>
+  <span><i style="background:var(--ext);border-color:var(--ext-b)"></i>extern</span>
+  <span>● grün umgesetzt · ● gelb teilweise · ● grau geplant/Referenz · ● rot offen</span>
+  <span>— Daten · ┄ Takt/Steuerung (blau) · - - geplant</span>
+</div>
+<script>
+(function () {
+  "use strict";
+  const data = JSON.parse(document.getElementById("arch-data").textContent);
+  const nodes = new Map(data.nodes.map(n => [n.id, n]));
+  const grid = document.getElementById("grid");
+  const svg = document.getElementById("edges");
+  const panel = document.getElementById("panel");
+  const stage = document.getElementById("stage");
+  const SVGNS = "http://www.w3.org/2000/svg";
+  let selected = null;
+  let lens = "all";
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"}[c]));
+  document.getElementById("title").textContent = data.meta.title;
+  document.getElementById("subtitle").textContent = data.meta.subtitle;
+
+  // ---- grid ----
+  grid.appendChild(document.createElement("div"));
+  data.meta.columns.forEach(c => {
+    const h = document.createElement("div");
+    h.className = "colhead";
+    h.textContent = c;
+    grid.appendChild(h);
+  });
+  const nodeEls = new Map();
+  data.layers.forEach(layer => {
+    const label = document.createElement("div");
+    label.className = "lanelabel";
+    label.innerHTML = esc(layer.title) + "<small>" + esc(layer.hint || "") + "</small>";
+    grid.appendChild(label);
+    for (let col = 1; col <= 5; col++) {
+      const cell = document.createElement("div");
+      cell.className = "cell" + (col === 4 ? " last" : "") + (col === 5 ? " svc" : "");
+      data.nodes.filter(n => n.layer === layer.id && n.col === col).forEach(n => {
+        const b = document.createElement("button");
+        b.className = "node";
+        b.type = "button";
+        b.dataset.id = n.id;
+        b.dataset.kind = n.kind;
+        b.dataset.status = n.status;
+        b.title = n.status;
+        b.innerHTML = "<b>" + esc(n.title) + "</b><span>" + esc(n.summary) + "</span>";
+        b.addEventListener("click", () => select(n.id === selected ? null : n.id));
+        cell.appendChild(b);
+        nodeEls.set(n.id, b);
+      });
+      grid.appendChild(cell);
+    }
+  });
+
+  // ---- edges ----
+  const edgeEls = data.edges.map((e, i) => {
+    const p = document.createElementNS(SVGNS, "path");
+    p.setAttribute("class", "e " + e.kind);
+    const t = document.createElementNS(SVGNS, "text");
+    t.setAttribute("class", "el");
+    t.textContent = e.label || "";
+    svg.appendChild(p);
+    svg.appendChild(t);
+    return {e, p, t, i};
+  });
+
+  function anchor(el, toward) {
+    const r = el.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    const cx = r.left + r.width / 2 - s.left, cy = r.top + r.height / 2 - s.top;
+    const dx = toward.x - cx, dy = toward.y - cy;
+    if (Math.abs(dy) * r.width > Math.abs(dx) * r.height) {
+      return {x: cx, y: dy > 0 ? r.bottom - s.top : r.top - s.top, v: true};
+    }
+    return {x: dx > 0 ? r.right - s.left : r.left - s.left, y: cy, v: false};
+  }
+  function center(el) {
+    const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+    return {x: r.left + r.width / 2 - s.left, y: r.top + r.height / 2 - s.top};
+  }
+  function layoutEdges() {
+    edgeEls.forEach(({e, p, t}) => {
+      const a = nodeEls.get(e.from), b = nodeEls.get(e.to);
+      if (!a || !b) return;
+      const A = anchor(a, center(b)), B = anchor(b, center(a));
+      const k = Math.max(30, Math.hypot(B.x - A.x, B.y - A.y) * 0.35);
+      const c1 = A.v ? {x: A.x, y: A.y + Math.sign(B.y - A.y) * k} : {x: A.x + Math.sign(B.x - A.x) * k, y: A.y};
+      const c2 = B.v ? {x: B.x, y: B.y + Math.sign(A.y - B.y) * k} : {x: B.x + Math.sign(A.x - B.x) * k, y: B.y};
+      p.setAttribute("d", `M${A.x},${A.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${B.x},${B.y}`);
+      t.setAttribute("x", (A.x + B.x) / 2 + 4);
+      t.setAttribute("y", (A.y + B.y) / 2 - 4);
+    });
+  }
+
+  // ---- lenses ----
+  const lensNodes = {
+    can: n => ["x_vcan", "x_sdu", "x_bms", "h_mcp", "h_twai", "d_mcp", "d_twai", "c_ecu", "c_veh", "c_sdu", "c_bat", "p_meas", "p_ecu", "p_bat", "cluster", "s_gvret"].includes(n.id),
+    rt: n => ["s_rt", "d_mcp", "c_ecu", "c_veh", "c_sdu", "c_bat", "p_meas", "p_ecu", "p_out", "cluster", "overrides", "fan_logic", "d_fan", "d_pot"].includes(n.id),
+    web: n => ["s_web", "s_fs", "sigtab", "h_radio", "x_radio", "p_out", "overrides", "p_meas", "p_ecu", "p_bat", "d_led"].includes(n.id),
+    open: n => n.status !== "umgesetzt" || (n.details.open || []).length > 0
+  };
+
+  function apply() {
+    const q = document.getElementById("search").value.trim().toLowerCase();
+    const on = new Set();
+    let dim = false;
+    if (selected) {
+      dim = true;
+      on.add(selected);
+      data.edges.forEach(e => { if (e.from === selected) on.add(e.to); if (e.to === selected) on.add(e.from); });
+    } else if (lens !== "all") {
+      dim = true;
+      data.nodes.filter(lensNodes[lens]).forEach(n => on.add(n.id));
+    }
+    nodeEls.forEach((el, id) => {
+      el.classList.toggle("on", on.has(id));
+      el.classList.toggle("sel", id === selected);
+      const n = nodes.get(id);
+      const hay = JSON.stringify(n).toLowerCase();
+      el.classList.toggle("hit", q.length > 1 && hay.includes(q));
+    });
+    edgeEls.forEach(({e, p, t}) => {
+      const active = selected ? (e.from === selected || e.to === selected) : (dim && on.has(e.from) && on.has(e.to));
+      p.classList.toggle("on", active);
+      t.classList.toggle("on", active && !!e.label);
+    });
+    stage.classList.toggle("dim", dim);
+  }
+
+  // ---- panel ----
+  function list(title, items, fmt) {
+    if (!items || !items.length) return "";
+    return "<h3>" + title + "</h3><ul>" + items.map(fmt || (x => "<li>" + esc(x) + "</li>")).join("") + "</ul>";
+  }
+  function fileLink(f) {
+    const clean = f.replace(/^lib: /, "");
+    const href = /^(src|lib|pwa|documentation)\//.test(clean) ? "../" + clean : null;
+    return "<li>" + (href ? "<a class=\"file\" href=\"" + esc(href) + "\">" + esc(f) + "</a>" : "<code>" + esc(f) + "</code>") + "</li>";
+  }
+  function select(id) {
+    selected = id;
+    apply();
+    if (!id) {
+      panel.innerHTML = "<p class=\"empty\">Baustein anklicken: Aufgabe, Dateien, Schnittstellen, Timing, Requirements, Entscheidungen, offene Punkte und Verbindungen.</p>";
+      return;
+    }
+    const n = nodes.get(id), d = n.details || {};
+    const layer = data.layers.find(l => l.id === n.layer);
+    const rel = (arr, dir) => arr.map(e => {
+      const other = nodes.get(dir === "in" ? e.from : e.to);
+      return "<li class=\"rel\"><button data-go=\"" + esc(other.id) + "\">" + esc(other.title) + "</button>" +
+        (e.label ? " – " + esc(e.label) : "") + (e.kind !== "data" ? " <small>(" + esc(e.kind) + ")</small>" : "") + "</li>";
+    }).join("");
+    const incoming = data.edges.filter(e => e.to === id), outgoing = data.edges.filter(e => e.from === id);
+    panel.innerHTML =
+      "<h2>" + esc(n.title) + "</h2>" +
+      "<span class=\"badge\">" + esc(layer ? layer.title : n.layer) + "</span>" +
+      "<span class=\"badge\">" + esc(n.kind) + "</span>" +
+      "<span class=\"badge\">" + esc(n.status) + "</span>" +
+      "<p>" + esc(n.summary) + "</p>" +
+      list("Aufgaben", d.responsibilities) +
+      list("Dateien", d.files, fileLink) +
+      list("Schnittstellen", d.interfaces) +
+      (d.timing && d.timing !== "-" ? "<h3>Timing</h3><p>" + esc(d.timing) + "</p>" : "") +
+      ((d.reqs || []).length || (d.decs || []).length ? "<h3>Requirements · Entscheidungen</h3><div class=\"tags\">" +
+        (d.reqs || []).map(r => "<span>" + esc(r) + "</span>").join("") + (d.decs || []).map(r => "<span>" + esc(r) + "</span>").join("") + "</div>" : "") +
+      list("Offen", d.open) +
+      (incoming.length ? "<h3>Eingänge</h3><ul>" + rel(incoming, "in") + "</ul>" : "") +
+      (outgoing.length ? "<h3>Ausgänge</h3><ul>" + rel(outgoing, "out") + "</ul>" : "");
+    panel.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+      select(b.dataset.go);
+      nodeEls.get(b.dataset.go).focus({preventScroll: false});
+    }));
+  }
+
+  // ---- controls ----
+  document.querySelectorAll("[data-lens]").forEach(b => b.addEventListener("click", () => {
+    lens = b.dataset.lens;
+    document.querySelectorAll("[data-lens]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    selected = null;
+    select(null);
+  }));
+  document.getElementById("search").addEventListener("input", apply);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") select(null); });
+  const themeBtn = document.getElementById("theme");
+  try { const t = localStorage.getItem("vcu-arch-theme"); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+  themeBtn.addEventListener("click", () => {
+    const dark = document.documentElement.dataset.theme
+      ? document.documentElement.dataset.theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("vcu-arch-theme", document.documentElement.dataset.theme); } catch (_) {}
+  });
+  new ResizeObserver(layoutEdges).observe(stage);
+  window.addEventListener("load", layoutEdges);
+  layoutEdges();
+  apply();
+  const hash = decodeURIComponent(location.hash.slice(1));
+  if (nodes.has(hash)) select(hash);
+})();
+</script>
+</body>
+</html>
