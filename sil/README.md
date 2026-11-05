@@ -1,6 +1,8 @@
 # Software-in-the-Loop (`sil/`)
 
-Komponententests auf **Applikationsebene**: einzelne, unveränderte Komponenten aus `src/` laufen auf dem PC. Ein- und Ausgänge sind die Parameter der Signaltabelle, gesetzt und gelesen über ihren Namen. Es gibt **keine CAN-Ebene**: Codecs und Treiber werden nicht gebaut. Für geschlossene Szenarien liefert ein Python-Modell der Umgebung die Eingangsparameter. Demo-Prüfling ist die Kombi-Funktion. Architektur: [architecture.html](architecture.html).
+Komponententests auf **Applikationsebene**: einzelne, unveränderte Komponenten aus `src/` laufen auf dem PC. Ein- und Ausgänge sind die Parameter der Signaltabelle, gesetzt und gelesen über ihren Namen. Es gibt **keine CAN-Ebene**: Codecs und Treiber werden nicht gebaut. Für geschlossene Szenarien liefert ein Python-Modell der Umgebung die Eingangsparameter. Demo-Prüfling ist die Kombi-Funktion. Architektur: [architecture.html](architecture.html) (interaktiv), Bild: [architecture.png](architecture.png) / [architecture.svg](architecture.svg).
+
+![SIL-Architektur](architecture.png)
 
 | Komponente | Aufruf je Schritt | Quelle |
 |---|---|---|

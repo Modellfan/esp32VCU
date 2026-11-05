@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 815" width="1200" height="815" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+    <style>
+      .t{font-size:13px;font-weight:700;fill:#1e293b}
+      .m{font-size:11.5px;font-family:Consolas,'Courier New',monospace;fill:#334155}
+      .s{font-size:11.5px;fill:#475569}
+      .lt{font-size:14px;font-weight:700;fill:#1e293b}
+      .ls{font-size:11.5px;fill:#64748b}
+      .al{font-size:11px;fill:#334155}
+      .cl{font-size:11px;fill:#6d28d9}
+      .box{fill:#fff;stroke:#94a3b8;stroke-width:1.2}
+      .d{stroke:#334155;stroke-width:1.6;fill:none;marker-end:url(#a)}
+      .k{stroke:#7c3aed;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#c)}
+    </style>
+  </defs>
+  <rect width="1200" height="815" fill="#ffffff"/>
+
+  <text x="40" y="40" font-size="22" font-weight="700" fill="#0f172a">SIL-Umgebung esp32VCU</text>
+  <text x="40" y="64" font-size="13.5" fill="#475569">Komponententests auf Applikationsebene · Ein- und Ausgänge sind Parameter der Signaltabelle · keine CAN-Ebene</text>
+
+  <!-- Ebenen -->
+  <rect x="40" y="90" width="860" height="110" rx="10" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="56" y="116" class="lt">Testfälle</text><text x="56" y="134" class="ls">pytest</text>
+  <rect x="40" y="220" width="860" height="110" rx="10" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text x="56" y="246" class="lt">Umgebungs-</text><text x="56" y="264" class="lt">modell</text><text x="56" y="282" class="ls">Python</text>
+  <rect x="40" y="350" width="860" height="160" rx="10" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="56" y="376" class="lt">Wrapper</text><text x="56" y="394" class="ls">Python + C-Shim</text>
+  <rect x="40" y="530" width="860" height="130" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="56" y="556" class="lt">Komponenten</text><text x="56" y="574" class="ls">aus src/, unverändert</text><text x="56" y="590" class="ls">= Prüflinge</text>
+  <rect x="40" y="680" width="860" height="80" rx="10" fill="#f5f5f4" stroke="#d6d3d1"/>
+  <text x="56" y="706" class="lt">Stubs</text><text x="56" y="724" class="ls">statt Arduino / RTOS</text>
+  <rect x="920" y="90" width="240" height="670" rx="10" fill="#faf5ff" stroke="#e9d5ff"/>
+  <text x="936" y="116" class="lt">Werkzeuge</text>
+
+  <!-- Testfälle -->
+  <rect x="200" y="108" width="160" height="74" rx="7" class="box"/>
+  <text x="280" y="130" class="t" text-anchor="middle">test_app.py</text>
+  <text x="280" y="149" class="m" text-anchor="middle">VcuSil("app")</text>
+  <text x="280" y="167" class="s" text-anchor="middle">TC-SIL-07, 18</text>
+  <rect x="375" y="108" width="180" height="74" rx="7" class="box"/>
+  <text x="465" y="130" class="t" text-anchor="middle">test_cluster.py</text>
+  <text x="465" y="149" class="m" text-anchor="middle">VcuSil("cluster")</text>
+  <text x="465" y="167" class="s" text-anchor="middle">TC-SIL-01 … 17</text>
+  <rect x="570" y="108" width="150" height="74" rx="7" fill="#fffbeb" stroke="#d97706" stroke-width="1.2"/>
+  <text x="645" y="130" class="t" text-anchor="middle">Befunde (xfail)</text>
+  <text x="645" y="149" class="s" text-anchor="middle">02b/c: Richtung</text>
+  <text x="645" y="167" class="s" text-anchor="middle">17: Verbrauch im Stand</text>
+  <rect x="735" y="108" width="145" height="74" rx="7" class="box"/>
+  <text x="807" y="130" class="t" text-anchor="middle">Orakel</text>
+  <text x="807" y="149" class="m" text-anchor="middle">tests/oracle.py</text>
+  <text x="807" y="167" class="s" text-anchor="middle">Sollwerte aus REQ</text>
+
+  <!-- Umgebungsmodell -->
+  <rect x="340" y="238" width="100" height="74" rx="7" class="box"/>
+  <text x="390" y="260" class="t" text-anchor="middle">Fahrerprofil</text>
+  <text x="390" y="279" class="s" text-anchor="middle">Pedal, Bremse,</text>
+  <text x="390" y="296" class="s" text-anchor="middle">Richtung</text>
+  <rect x="460" y="238" width="120" height="74" rx="7" class="box"/>
+  <text x="520" y="260" class="t" text-anchor="middle">Antrieb + Akku</text>
+  <text x="520" y="279" class="s" text-anchor="middle">Moment, Grenzen,</text>
+  <text x="520" y="296" class="s" text-anchor="middle">Innenwiderstand</text>
+  <rect x="600" y="238" width="110" height="34" rx="7" class="box"/>
+  <text x="655" y="260" class="t" text-anchor="middle">Fahrzeug</text>
+  <rect x="600" y="278" width="110" height="34" rx="7" class="box"/>
+  <text x="655" y="300" class="t" text-anchor="middle">Thermik (PT1)</text>
+  <rect x="735" y="238" width="145" height="74" rx="7" class="box"/>
+  <text x="807" y="260" class="t" text-anchor="middle">Kopplung</text>
+  <text x="807" y="279" class="m" text-anchor="middle">vcu_sil/sim.py</text>
+  <text x="807" y="296" class="s" text-anchor="middle">Modell → Parameter</text>
+  <line x1="440" y1="275" x2="458" y2="275" class="d"/>
+  <line x1="580" y1="255" x2="598" y2="255" class="d"/>
+  <line x1="580" y1="295" x2="598" y2="295" class="d"/>
+  <line x1="710" y1="255" x2="733" y2="255" class="d"/>
+  <line x1="710" y1="295" x2="733" y2="295" class="d"/>
+
+  <!-- Wrapper -->
+  <rect x="200" y="370" width="680" height="48" rx="7" class="box"/>
+  <text x="540" y="390" class="t" text-anchor="middle">Python-Wrapper  <tspan class="m" font-weight="400">vcu_sil/vcu.py</tspan></text>
+  <text x="540" y="408" class="m" text-anchor="middle">VcuSil("cluster" | "app")  ·  set(name, wert)  ·  step()  ·  get(name)</text>
+  <rect x="200" y="445" width="680" height="48" rx="7" class="box"/>
+  <text x="540" y="465" class="t" text-anchor="middle">C-Shim  <tspan class="m" font-weight="400">shim/sil_api.cpp</tspan></text>
+  <text x="540" y="483" class="m" text-anchor="middle">sil_set / sil_get  ·  sil_step(component)  ·  simulierte Uhr, 6 ms je Schritt</text>
+  <line x1="540" y1="418" x2="540" y2="443" class="d"/>
+  <text x="548" y="436" class="al">ctypes, eigene DLL-Kopie je Instanz</text>
+
+  <!-- Komponenten -->
+  <rect x="200" y="548" width="180" height="90" rx="7" class="box" stroke="#2563eb"/>
+  <text x="290" y="568" class="t" text-anchor="middle">Komponente app</text>
+  <text x="290" y="588" class="m" text-anchor="middle">appStep(now)</text>
+  <text x="290" y="606" class="s" text-anchor="middle">Overrides, Lüfterlogik</text>
+  <text x="290" y="624" class="s" text-anchor="middle">src/vcu_app.cpp</text>
+  <rect x="420" y="548" width="190" height="90" rx="7" class="box" stroke="#2563eb"/>
+  <text x="515" y="568" class="t" text-anchor="middle">Komponente cluster</text>
+  <text x="515" y="588" class="m" text-anchor="middle">updateCluster()</text>
+  <text x="515" y="606" class="s" text-anchor="middle">Zeiger, Temperatur, Warnung,</text>
+  <text x="515" y="624" class="s" text-anchor="middle">0–100 km/h, Verbrauch</text>
+  <rect x="650" y="548" width="230" height="90" rx="7" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.2"/>
+  <text x="765" y="568" class="t" text-anchor="middle">Parameter = Kopplungsstelle</text>
+  <text x="765" y="588" class="m" text-anchor="middle">params::* + Signaltabelle</text>
+  <text x="765" y="606" class="s" text-anchor="middle">196 Signale, Zugriff per Name</text>
+  <text x="765" y="624" class="s" text-anchor="middle">angelegt in shim/params_storage.cpp</text>
+  <line x1="380" y1="593" x2="418" y2="593" class="k"/>
+  <line x1="648" y1="578" x2="612" y2="578" class="d"/>
+  <line x1="612" y1="610" x2="648" y2="610" class="d"/>
+
+  <!-- Shim zu Komponenten -->
+  <line x1="290" y1="493" x2="290" y2="546" class="k"/>
+  <text x="297" y="524" class="cl">sil_step(2)</text>
+  <line x1="515" y1="493" x2="515" y2="546" class="k"/>
+  <text x="522" y="524" class="cl">sil_step(1)</text>
+  <line x1="765" y1="493" x2="765" y2="546" class="d" marker-start="url(#a)"/>
+  <text x="772" y="524" class="al">sil_set / sil_get</text>
+
+  <!-- Stubs -->
+  <text x="200" y="726" class="s">ersetzen Hardware und Betriebssystem</text>
+  <rect x="420" y="694" width="190" height="52" rx="7" class="box"/>
+  <text x="515" y="714" class="t" text-anchor="middle">Arduino.h</text>
+  <text x="515" y="733" class="s" text-anchor="middle">millis() aus der Simulation</text>
+  <rect x="650" y="694" width="110" height="52" rx="7" class="box"/>
+  <text x="705" y="714" class="t" text-anchor="middle">FreeRTOS</text>
+  <text x="705" y="733" class="s" text-anchor="middle">Mutex ohne Wirkung</text>
+  <rect x="770" y="694" width="110" height="52" rx="7" class="box"/>
+  <text x="825" y="714" class="t" text-anchor="middle">ACAN2515.h</text>
+  <text x="825" y="733" class="s" text-anchor="middle">nur Typ, kein CAN</text>
+  <line x1="515" y1="638" x2="515" y2="692" class="k"/>
+  <text x="522" y="672" class="cl">millis()</text>
+  <line x1="705" y1="638" x2="705" y2="692" class="k"/>
+  <text x="712" y="672" class="cl">Mutex</text>
+
+  <!-- Pfade zwischen den Ebenen -->
+  <line x1="280" y1="182" x2="280" y2="368" class="d"/>
+  <text x="272" y="262" class="al" text-anchor="end">Parameter-</text>
+  <text x="272" y="277" class="al" text-anchor="end">tests:</text>
+  <text x="272" y="292" class="al" text-anchor="end">set / get</text>
+  <line x1="390" y1="182" x2="390" y2="236" class="d"/>
+  <text x="397" y="214" class="al">Closed-Loop: Szenario</text>
+  <line x1="807" y1="312" x2="807" y2="368" class="d"/>
+  <text x="799" y="344" class="al" text-anchor="end">sdu_udc, sdu_idc, sdu_seldir, sdu_tmpm, vehicle_speed_510</text>
+
+  <!-- Werkzeuge -->
+  <rect x="936" y="130" width="208" height="58" rx="7" class="box"/>
+  <text x="1040" y="152" class="t" text-anchor="middle">pytest</text>
+  <text x="1040" y="171" class="m" text-anchor="middle">pytest sil/tests -q</text>
+  <line x1="934" y1="159" x2="882" y2="159" class="k"/>
+  <rect x="936" y="236" width="208" height="76" rx="7" class="box"/>
+  <text x="1040" y="258" class="t" text-anchor="middle">run_demo.py</text>
+  <text x="1040" y="277" class="s" text-anchor="middle">Fahrzyklus + Testlauf</text>
+  <text x="1040" y="295" class="m" text-anchor="middle">→ results/report.html</text>
+  <line x1="934" y1="275" x2="882" y2="275" class="k"/>
+  <rect x="936" y="440" width="208" height="58" rx="7" class="box"/>
+  <text x="1040" y="462" class="t" text-anchor="middle">build.py</text>
+  <text x="1040" y="481" class="m" text-anchor="middle">zig c++ → vcu_sil.dll</text>
+  <line x1="934" y1="469" x2="882" y2="469" class="k"/>
+  <rect x="936" y="530" width="208" height="100" rx="7" fill="#ffffff" stroke="#7c3aed" stroke-width="1.2"/>
+  <text x="1040" y="552" class="t" text-anchor="middle">Neue Komponente</text>
+  <text x="952" y="573" class="s">1. Quelle in build.py</text>
+  <text x="952" y="592" class="s">2. sil_step() + COMPONENTS</text>
+  <text x="952" y="611" class="s">3. eigene Testdatei</text>
+  <rect x="936" y="648" width="208" height="98" rx="7" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="5 4"/>
+  <text x="1040" y="670" class="t" text-anchor="middle" fill="#64748b">Nicht in der SIL</text>
+  <text x="952" y="691" class="s">CAN-Codecs, MCP2515-Treiber</text>
+  <text x="952" y="710" class="s">Echtzeit-Task, WLAN, Web</text>
+  <text x="952" y="729" class="s">→ Prüfstand und Fahrzeug</text>
+
+  <!-- Legende -->
+  <line x1="40" y1="790" x2="80" y2="790" class="d"/><text x="88" y="794" class="al">Daten (Parameter)</text>
+  <line x1="220" y1="790" x2="260" y2="790" class="k"/><text x="268" y="794" class="cl">Aufruf / Steuerung</text>
+  <rect x="400" y="782" width="18" height="16" rx="3" fill="#fffbeb" stroke="#d97706"/><text x="426" y="794" class="al">bekannter Befund</text>
+  <rect x="560" y="782" width="18" height="16" rx="3" fill="#fff" stroke="#2563eb"/><text x="586" y="794" class="al">Prüfling aus src/</text>
+</svg>
