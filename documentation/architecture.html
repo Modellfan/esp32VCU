@@ -9,6 +9,7 @@
   Daten als JSON im Block #arch-data, Viewer darunter).
 
   DETAILS PFLEGEN: nur den JSON-Block #arch-data bearbeiten.
+    meta       title, subtitle, columns[5], lenses[] {id, label, nodes[]} (Filterknöpfe)
     layers[]  Ebenen (Reihenfolge = von oben nach unten)
     nodes[]   id, title, layer, col (1-5), kind (module|data|hardware|external|service),
               status (umgesetzt|teilweise|geplant|offen|referenz), summary, details{
@@ -20,6 +21,11 @@
 {
   "meta": {
     "title": "esp32VCU – Architektur",
+    "lenses": [
+      {"id": "can", "label": "CAN-Datenfluss", "nodes": ["x_vcan", "x_sdu", "x_bms", "h_mcp", "h_twai", "d_mcp", "d_twai", "c_ecu", "c_veh", "c_sdu", "c_bat", "p_meas", "p_ecu", "p_bat", "cluster", "s_gvret"]},
+      {"id": "rt", "label": "Echtzeit (Kern 1)", "nodes": ["s_rt", "d_mcp", "c_ecu", "c_veh", "c_sdu", "c_bat", "p_meas", "p_ecu", "p_out", "cluster", "overrides", "fan_logic", "d_fan", "d_pot"]},
+      {"id": "web", "label": "Web / Radio", "nodes": ["s_web", "s_fs", "sigtab", "h_radio", "x_radio", "p_out", "overrides", "p_meas", "p_ecu", "p_bat", "d_led"]}
+    ],
     "subtitle": "Ebenenmodell nach AUTOSAR-Prinzip (VCU-DEC-002) · Stand 2026-10-29 · nicht auf Hardware geprüft",
     "columns": ["Aktoren", "Kombi / Motorsteuergerät", "Messwerte / CAN 1+2", "Batterie / CAN 3", "Dienste"]
   },
@@ -374,11 +380,7 @@ aside a { color: var(--accent); }
   </div>
   <div class="toolbar" role="toolbar" aria-label="Ansicht">
     <input type="search" id="search" placeholder="Suchen: Datei, REQ, Signal …" aria-label="Bausteine durchsuchen">
-    <button class="chip" data-lens="all" aria-pressed="true">Alle</button>
-    <button class="chip" data-lens="can">CAN-Datenfluss</button>
-    <button class="chip" data-lens="rt">Echtzeit (Kern 1)</button>
-    <button class="chip" data-lens="web">Web / Radio</button>
-    <button class="chip" data-lens="open">Offen / geplant</button>
+    <span id="lenses" style="display:contents"></span>
     <button class="chip" id="theme" aria-label="Hell/Dunkel umschalten">◐</button>
   </div>
 </header>
@@ -490,12 +492,19 @@ aside a { color: var(--accent); }
   }
 
   // ---- lenses ----
-  const lensNodes = {
-    can: n => ["x_vcan", "x_sdu", "x_bms", "h_mcp", "h_twai", "d_mcp", "d_twai", "c_ecu", "c_veh", "c_sdu", "c_bat", "p_meas", "p_ecu", "p_bat", "cluster", "s_gvret"].includes(n.id),
-    rt: n => ["s_rt", "d_mcp", "c_ecu", "c_veh", "c_sdu", "c_bat", "p_meas", "p_ecu", "p_out", "cluster", "overrides", "fan_logic", "d_fan", "d_pot"].includes(n.id),
-    web: n => ["s_web", "s_fs", "sigtab", "h_radio", "x_radio", "p_out", "overrides", "p_meas", "p_ecu", "p_bat", "d_led"].includes(n.id),
-    open: n => n.status !== "umgesetzt" || (n.details.open || []).length > 0
-  };
+  // Lenses: "Alle", the data set's own lenses (meta.lenses: {id, label, nodes[]}), "Offen / geplant".
+  const lensNodes = {open: n => n.status !== "umgesetzt" || (n.details.open || []).length > 0};
+  const lensDefs = [{id: "all", label: "Alle"}].concat(data.meta.lenses || [], [{id: "open", label: "Offen / geplant"}]);
+  (data.meta.lenses || []).forEach(l => { const set = new Set(l.nodes); lensNodes[l.id] = n => set.has(n.id); });
+  const lensBar = document.getElementById("lenses");
+  lensDefs.forEach(l => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.dataset.lens = l.id;
+    b.textContent = l.label;
+    b.setAttribute("aria-pressed", String(l.id === "all"));
+    lensBar.appendChild(b);
+  });
 
   function apply() {
     const q = document.getElementById("search").value.trim().toLowerCase();

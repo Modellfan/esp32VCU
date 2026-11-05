@@ -4122,3 +4122,36 @@ ew_4e0_bit_booleans_added_to_ui: true
 - The flag only works in full Chrome/Chromium (Playwright's headless shell ignores it; the test uses channel "chromium").
 - Not tested on the radio itself.
 - `test_rapid_slider_changes_coalesce` failed once in a full run (likely timing under load); watch for recurrence.
+
+
+## 2026-11-05 17:50:00 +01:00 - Software-in-the-loop environment (sil/) with the Kombi function as demo
+
+### Planned Steps
+- Compile the unchanged firmware modules for the PC with stubs; C shim + ctypes wrapper coupled via the signal table.
+- Python environment model (driver, drive unit, battery, vehicle, thermal) and closed-loop simulation.
+- Test cases for the Kombi function; demo report; architecture map of the SIL environment.
+
+### Changes Made
+- `sil/stubs/` (Arduino.h, ACAN2515.h, freertos/), `sil/shim/sil_api.cpp`, `sil/build.py` (zig c++ from PyPI `ziglang`).
+- `sil/vcu_sil/` (vcu.py wrapper, model.py, sim.py), `sil/tests/` (oracle.py, 47 test cases), `sil/run_demo.py` (report), `sil/architecture.json` + `make_architecture.py` -> `sil/architecture.html`.
+- `documentation/architecture.html`: lenses now come from the data (`meta.lenses`).
+- `TESTPLAN.md` (stage S), `REQUIREMENTS.md` (VCU-REQ-005/007 evidence, direction finding), `DECISIONS.md` (VCU-DEC-014), `.gitignore`.
+- Tool install (outside repo): `python -m pip install --user ziglang==0.15.2`.
+
+### Automated Tests Run
+- `python sil/build.py --force`: PASS (no warnings)
+- `python -m pytest sil/tests -q`: PASS (44 passed, 3 xfailed as documented findings, 5 s)
+- `python sil/run_demo.py`: PASS (report written)
+
+### Result
+- `sil_tests: 44 passed, 3 xfail`
+- `accel_0_100_vcu_vs_model: 6.948 s vs 6.945 s`
+
+### Artifacts
+- [SIL README](sil/README.md)
+- [SIL architecture](sil/architecture.html)
+
+### Notes
+- Finding: sdu_seldir > 0 is treated as reverse by needleFromPercent(); OpenInverter defines 1 = forward (TC-SIL-02b/c).
+- Finding: MO5 consumption still simulated, rises at standstill (TC-SIL-17, VCU-REQ-006).
+- Model parameters are estimates; SIL does not cover ESP32 timing, drivers or WiFi.

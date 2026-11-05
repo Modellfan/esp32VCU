@@ -1,0 +1,767 @@
+{
+ "meta": {
+  "title": "SIL-Umgebung – Kombi-Funktion",
+  "subtitle": "Unveränderter Firmware-Code läuft auf dem PC, gekoppelt über die Signaltabelle mit einem Python-Umgebungsmodell · sil/",
+  "columns": [
+   "Eingänge (Umgebung → VCU)",
+   "Kombi-Funktion",
+   "Ausgänge (VCU → Prüfung)",
+   "Werkzeuge",
+   "Ablauf"
+  ],
+  "lenses": [
+   {
+    "id": "loop",
+    "label": "Modell → Firmware",
+    "nodes": [
+     "m_driver",
+     "m_drive",
+     "m_vehicle",
+     "m_thermal",
+     "m_sim",
+     "w_py",
+     "w_shim",
+     "f_params",
+     "f_app",
+     "f_cluster"
+    ]
+   },
+   {
+    "id": "dut",
+    "label": "Prüfling",
+    "nodes": [
+     "f_app",
+     "f_cluster",
+     "f_params",
+     "f_codec",
+     "s_arduino",
+     "s_acan",
+     "s_rtos"
+    ]
+   },
+   {
+    "id": "tests",
+    "label": "Tests & Befunde",
+    "nodes": [
+     "t_static",
+     "t_loop",
+     "t_find",
+     "t_oracle",
+     "t_run",
+     "w_py",
+     "m_sim"
+    ]
+   }
+  ]
+ },
+ "layers": [
+  {
+   "id": "test",
+   "title": "Testfälle",
+   "hint": "pytest, Orakel"
+  },
+  {
+   "id": "model",
+   "title": "Umgebungsmodell",
+   "hint": "Python"
+  },
+  {
+   "id": "wrap",
+   "title": "Wrapper",
+   "hint": "ctypes + C-Shim"
+  },
+  {
+   "id": "fw",
+   "title": "Firmware-Code",
+   "hint": "src/, unverändert"
+  },
+  {
+   "id": "stub",
+   "title": "Stubs",
+   "hint": "statt Arduino/RTOS"
+  },
+  {
+   "id": "tool",
+   "title": "Werkzeuge",
+   "hint": "Build, Bericht"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "t_static",
+   "title": "Parametertests",
+   "layer": "test",
+   "col": 1,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "TC-SIL-01…10: Zeiger, Totband, Temperatur, Warnung, Override, CAN-Frames.",
+   "details": {
+    "responsibilities": [
+     "Werte direkt über Signalnamen setzen, einen 6-ms-Schritt rechnen, Ausgang prüfen",
+     "0x500-Frame selbst kodieren (Eingangspfad), 0x280 selbst dekodieren (Ausgangspfad)"
+    ],
+    "files": [
+     "sil/tests/test_cluster_sil.py"
+    ],
+    "interfaces": [
+     "VcuSil.set/get/step/receive/encode_ecu"
+    ],
+    "timing": "< 1 s",
+    "reqs": [
+     "VCU-REQ-005",
+     "VCU-REQ-010"
+    ],
+    "decs": [
+     "VCU-DEC-005"
+    ],
+    "open": []
+   }
+  },
+  {
+   "id": "t_loop",
+   "title": "Closed-Loop-Tests",
+   "layer": "test",
+   "col": 2,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "TC-SIL-11…15: Beschleunigung, Bestwert, fliegender Start, Fahrzyklus, Überhitzung.",
+   "details": {
+    "responsibilities": [
+     "Modell und Firmware im Gleichtakt (6 ms, 6 Modell-Unterschritte)",
+     "Sollwerte aus der exakten Modellzeit (Interpolation)"
+    ],
+    "files": [
+     "sil/tests/test_cluster_sil.py",
+     "sil/vcu_sil/sim.py"
+    ],
+    "interfaces": [
+     "Simulation.run() → Trace"
+    ],
+    "timing": "ca. 4 s",
+    "reqs": [
+     "VCU-REQ-005",
+     "VCU-REQ-007"
+    ],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "t_find",
+   "title": "Befunde (xfail)",
+   "layer": "test",
+   "col": 3,
+   "kind": "module",
+   "status": "offen",
+   "summary": "TC-SIL-02b/c Richtung vertauscht · TC-SIL-17 Verbrauch im Stand.",
+   "details": {
+    "responsibilities": [
+     "xfail(strict): wird rot, sobald der Befund behoben ist – dann Markierung entfernen"
+    ],
+    "files": [
+     "sil/tests/test_cluster_sil.py"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [
+     "VCU-REQ-005",
+     "VCU-REQ-006"
+    ],
+    "decs": [],
+    "open": [
+     "sdu_seldir: +1 wird als Rückwärts gewertet (OpenInverter: Forward)",
+     "Verbrauch steigt ohne Leistung"
+    ]
+   }
+  },
+  {
+   "id": "t_oracle",
+   "title": "Orakel",
+   "layer": "test",
+   "col": 4,
+   "kind": "data",
+   "status": "umgesetzt",
+   "summary": "Sollwerte aus der Anforderung, unabhängig vom C-Code.",
+   "details": {
+    "responsibilities": [
+     "needle(), power_fraction(), coolant_gauge(), coolant_warning()",
+     "DBC-Kodierung 0x280/0x500"
+    ],
+    "files": [
+     "sil/tests/oracle.py"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [
+     "VCU-REQ-005"
+    ],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "t_run",
+   "title": "pytest",
+   "layer": "test",
+   "col": 5,
+   "kind": "service",
+   "status": "umgesetzt",
+   "summary": "python -m pytest sil/tests -q",
+   "details": {
+    "responsibilities": [
+     "eine frische Firmware-Instanz je Test (Fixture vcu)"
+    ],
+    "files": [
+     "sil/tests/conftest.py"
+    ],
+    "interfaces": [],
+    "timing": "ca. 5 s",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "m_driver",
+   "title": "Fahrerprofil",
+   "layer": "model",
+   "col": 1,
+   "kind": "external",
+   "status": "umgesetzt",
+   "summary": "Phasen: Pedal, Rekuperation, Richtung (OpenInverter).",
+   "details": {
+    "responsibilities": [
+     "Phase(duration, pedal, brake, direction)"
+    ],
+    "files": [
+     "sil/vcu_sil/model.py"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "m_drive",
+   "title": "Antrieb + Akku",
+   "layer": "model",
+   "col": 1,
+   "kind": "external",
+   "status": "umgesetzt",
+   "summary": "Drehmoment, Leistungs- und Stromgrenzen, Akku mit Innenwiderstand.",
+   "details": {
+    "responsibilities": [
+     "420 Nm, 110 kW, 300 A / 100 A Rekuperation",
+     "P = (U0 − R·I)·I gelöst nach I"
+    ],
+    "files": [
+     "sil/vcu_sil/model.py"
+    ],
+    "interfaces": [
+     "→ sdu_udc, sdu_idc, sdu_speed, sdu_seldir"
+    ],
+    "timing": "1 ms Integration",
+    "reqs": [],
+    "decs": [],
+    "open": [
+     "Parameter geschätzt, nicht am Fahrzeug gemessen"
+    ]
+   }
+  },
+  {
+   "id": "m_vehicle",
+   "title": "Fahrzeug",
+   "layer": "model",
+   "col": 2,
+   "kind": "external",
+   "status": "umgesetzt",
+   "summary": "Längsdynamik: Masse, Luft-, Rollwiderstand.",
+   "details": {
+    "responsibilities": [
+     "1450 kg, cdA 0,62 m², crr 0,012"
+    ],
+    "files": [
+     "sil/vcu_sil/model.py"
+    ],
+    "interfaces": [
+     "→ vehicle_speed_510 + exakte Geschwindigkeit"
+    ],
+    "timing": "1 ms",
+    "reqs": [
+     "VCU-REQ-007"
+    ],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "m_thermal",
+   "title": "Thermik",
+   "layer": "model",
+   "col": 3,
+   "kind": "external",
+   "status": "umgesetzt",
+   "summary": "Motor und Kühlkörper als PT1 mit Verlustleistung.",
+   "details": {
+    "responsibilities": [
+     "Verlustaufteilung 65/35 Motor/Inverter",
+     "Kühlung einstellbar (Szenario Überhitzung)"
+    ],
+    "files": [
+     "sil/vcu_sil/model.py"
+    ],
+    "interfaces": [
+     "→ sdu_tmpm, sdu_tmphs"
+    ],
+    "timing": "1 ms",
+    "reqs": [
+     "VCU-REQ-005"
+    ],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "m_sim",
+   "title": "Kopplung",
+   "layer": "model",
+   "col": 5,
+   "kind": "service",
+   "status": "umgesetzt",
+   "summary": "Simulation: Modell → Parameter → Schritt → Trace.",
+   "details": {
+    "responsibilities": [
+     "Eingänge setzen, Empfang markieren (0x500, 0x501, 0x504, 0x510)",
+     "Ausgänge je Zyklus aufzeichnen"
+    ],
+    "files": [
+     "sil/vcu_sil/sim.py"
+    ],
+    "interfaces": [
+     "Trace.column(), crossing_time()"
+    ],
+    "timing": "6 ms je Zyklus",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "w_py",
+   "title": "VcuSil (ctypes)",
+   "layer": "wrap",
+   "col": 2,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "Python-Wrapper; lädt je Instanz eine eigene DLL-Kopie.",
+   "details": {
+    "responsibilities": [
+     "set/get über Signalnamen",
+     "step(), run_for()",
+     "receive(), encode_ecu(), override_engine_speed()"
+    ],
+    "files": [
+     "sil/vcu_sil/vcu.py"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "w_shim",
+   "title": "C-Shim",
+   "layer": "wrap",
+   "col": 3,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "C-API: sil_set/get, sil_step, sil_receive, sil_encode_ecu.",
+   "details": {
+    "responsibilities": [
+     "schreibt Werte mit dem C++-Speichertyp der Signaltabelle",
+     "simulierte Uhr für millis()/micros()",
+     "sil_step() = appStep() wie im Echtzeit-Task"
+    ],
+    "files": [
+     "sil/shim/sil_api.cpp"
+    ],
+    "interfaces": [
+     "vcu_sil.dll"
+    ],
+    "timing": "-",
+    "reqs": [],
+    "decs": [
+     "VCU-DEC-007"
+    ],
+    "open": []
+   }
+  },
+  {
+   "id": "f_app",
+   "title": "vcu_app",
+   "layer": "fw",
+   "col": 2,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "appStep(): Kombi, Overrides, Lüfterlogik.",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "src/vcu_app.cpp"
+    ],
+    "interfaces": [],
+    "timing": "je Schritt",
+    "reqs": [],
+    "decs": [
+     "VCU-DEC-005"
+    ],
+    "open": []
+   }
+  },
+  {
+   "id": "f_cluster",
+   "title": "cluster_calc",
+   "layer": "fw",
+   "col": 2,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "Prüfling: Zeiger, Temperatur, Warnung, Beschleunigung, Verbrauch.",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "src/cluster_calc.cpp"
+    ],
+    "interfaces": [],
+    "timing": "je Schritt",
+    "reqs": [
+     "VCU-REQ-005",
+     "VCU-REQ-006",
+     "VCU-REQ-007"
+    ],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "f_params",
+   "title": "params + Signaltabelle",
+   "layer": "fw",
+   "col": 3,
+   "kind": "data",
+   "status": "umgesetzt",
+   "summary": "Die Kopplungsstelle: 196 Signale per Name.",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "src/signal_table.cpp",
+     "src/vcu_params.cpp"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [
+     "VCU-REQ-010",
+     "VCU-REQ-013"
+    ],
+    "decs": [
+     "VCU-DEC-006",
+     "VCU-DEC-007"
+    ],
+    "open": []
+   }
+  },
+  {
+   "id": "f_codec",
+   "title": "Codecs",
+   "layer": "fw",
+   "col": 1,
+   "kind": "module",
+   "status": "umgesetzt",
+   "summary": "986 ECU/Fahrzeug, Tesla SDU – für Frame-Tests.",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "src/986_ecu_messages.cpp",
+     "src/986_vehicle_messages.cpp",
+     "src/tesla_sdu_messages.cpp"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [
+     "VCU-REQ-001",
+     "VCU-REQ-004"
+    ],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "s_arduino",
+   "title": "Arduino.h",
+   "layer": "stub",
+   "col": 2,
+   "kind": "hardware",
+   "status": "umgesetzt",
+   "summary": "millis()/micros() aus der Simulation, minimale String-Klasse.",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "sil/stubs/Arduino.h"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "s_acan",
+   "title": "ACAN2515.h",
+   "layer": "stub",
+   "col": 1,
+   "kind": "hardware",
+   "status": "umgesetzt",
+   "summary": "nur CANMessage, gleiches Layout wie die Bibliothek.",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "sil/stubs/ACAN2515.h"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "s_rtos",
+   "title": "FreeRTOS",
+   "layer": "stub",
+   "col": 3,
+   "kind": "hardware",
+   "status": "umgesetzt",
+   "summary": "Mutex ohne Wirkung (ein Thread).",
+   "details": {
+    "responsibilities": [],
+    "files": [
+     "sil/stubs/freertos/semphr.h"
+    ],
+    "interfaces": [],
+    "timing": "-",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "x_build",
+   "title": "build.py",
+   "layer": "tool",
+   "col": 4,
+   "kind": "service",
+   "status": "umgesetzt",
+   "summary": "zig c++ (PyPI ziglang) → build/vcu_sil.dll, nur bei Änderung.",
+   "details": {
+    "responsibilities": [
+     "kein Visual Studio, kein MinGW nötig"
+    ],
+    "files": [
+     "sil/build.py"
+    ],
+    "interfaces": [
+     "python -m pip install --user ziglang"
+    ],
+    "timing": "ca. 10 s",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  },
+  {
+   "id": "x_report",
+   "title": "run_demo.py",
+   "layer": "tool",
+   "col": 5,
+   "kind": "service",
+   "status": "umgesetzt",
+   "summary": "Fahrzyklus + Testlauf → results/report.html.",
+   "details": {
+    "responsibilities": [
+     "SVG-Diagramme ohne Zusatzpakete",
+     "Testtabelle aus JUnit-XML"
+    ],
+    "files": [
+     "sil/run_demo.py"
+    ],
+    "interfaces": [],
+    "timing": "ca. 10 s",
+    "reqs": [],
+    "decs": [],
+    "open": []
+   }
+  }
+ ],
+ "edges": [
+  {
+   "from": "m_driver",
+   "to": "m_drive",
+   "label": "Pedal, Richtung",
+   "kind": "data"
+  },
+  {
+   "from": "m_drive",
+   "to": "m_vehicle",
+   "label": "Antriebskraft",
+   "kind": "data"
+  },
+  {
+   "from": "m_drive",
+   "to": "m_thermal",
+   "label": "Verluste",
+   "kind": "data"
+  },
+  {
+   "from": "m_drive",
+   "to": "m_sim",
+   "label": "sdu_udc, sdu_idc, sdu_seldir",
+   "kind": "data"
+  },
+  {
+   "from": "m_vehicle",
+   "to": "m_sim",
+   "label": "vehicle_speed_510",
+   "kind": "data"
+  },
+  {
+   "from": "m_thermal",
+   "to": "m_sim",
+   "label": "sdu_tmpm, sdu_tmphs",
+   "kind": "data"
+  },
+  {
+   "from": "m_sim",
+   "to": "w_py",
+   "label": "set(name, wert), step()",
+   "kind": "data"
+  },
+  {
+   "from": "w_py",
+   "to": "w_shim",
+   "label": "ctypes",
+   "kind": "data"
+  },
+  {
+   "from": "w_shim",
+   "to": "f_params",
+   "label": "Signaltabelle",
+   "kind": "data"
+  },
+  {
+   "from": "w_shim",
+   "to": "f_app",
+   "label": "sil_step()",
+   "kind": "control"
+  },
+  {
+   "from": "f_app",
+   "to": "f_cluster",
+   "label": "updateCluster()",
+   "kind": "control"
+  },
+  {
+   "from": "f_params",
+   "to": "f_cluster",
+   "label": "Eingänge",
+   "kind": "data"
+  },
+  {
+   "from": "f_cluster",
+   "to": "f_params",
+   "label": "Zeiger, Warnung, Zeiten",
+   "kind": "data"
+  },
+  {
+   "from": "f_params",
+   "to": "f_codec",
+   "label": "kodieren",
+   "kind": "data"
+  },
+  {
+   "from": "w_shim",
+   "to": "f_codec",
+   "label": "sil_receive / sil_encode_ecu",
+   "kind": "data"
+  },
+  {
+   "from": "f_cluster",
+   "to": "s_arduino",
+   "label": "millis()",
+   "kind": "control"
+  },
+  {
+   "from": "f_codec",
+   "to": "s_acan",
+   "label": "CANMessage",
+   "kind": "data"
+  },
+  {
+   "from": "f_params",
+   "to": "s_rtos",
+   "label": "Mutex",
+   "kind": "control"
+  },
+  {
+   "from": "t_static",
+   "to": "w_py",
+   "label": "Werte setzen/prüfen",
+   "kind": "data"
+  },
+  {
+   "from": "t_loop",
+   "to": "m_sim",
+   "label": "Szenario",
+   "kind": "data"
+  },
+  {
+   "from": "t_oracle",
+   "to": "t_static",
+   "label": "Sollwerte",
+   "kind": "data"
+  },
+  {
+   "from": "t_oracle",
+   "to": "t_loop",
+   "label": "Sollwerte",
+   "kind": "data"
+  },
+  {
+   "from": "t_run",
+   "to": "t_static",
+   "label": "",
+   "kind": "control"
+  },
+  {
+   "from": "x_build",
+   "to": "w_shim",
+   "label": "kompiliert",
+   "kind": "control"
+  },
+  {
+   "from": "x_report",
+   "to": "m_sim",
+   "label": "Fahrzyklus",
+   "kind": "control"
+  },
+  {
+   "from": "x_report",
+   "to": "t_run",
+   "label": "JUnit",
+   "kind": "control"
+  }
+ ]
+}

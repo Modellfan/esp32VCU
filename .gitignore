@@ -26,3 +26,7 @@ __pycache__/
 
 # Local credentials (VCU-REQ-015)
 src/secrets.h
+
+# SIL build output and reports
+sil/build/
+sil/results/

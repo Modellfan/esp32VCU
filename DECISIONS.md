@@ -83,3 +83,11 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-013 – VW-PQ-Codec bleibt im Repo
 - **Status:** accepted (Nutzer 2026-10-28)
 - **Entscheidung:** `src/vw_pq_messages.*` (ca. 10 000 Zeilen, ungenutzt) bleibt zum Abgleich mit den 986-Botschaften erhalten.
+
+## VCU-DEC-014 – Software-in-the-Loop mit unverändertem Firmware-Code
+- **Status:** accepted (Nutzerauftrag 2026-11-05)
+- **Betroffene Requirements:** VCU-REQ-005, -006, -007 (Demo-Prüfling Kombi-Funktion), künftig alle Anwendungsfunktionen
+- **Optionen:** A: Firmware-Module unverändert als PC-Bibliothek, Stubs für Arduino/ACAN2515/FreeRTOS, C-Shim + Python (ctypes), Kopplung über die Signaltabelle; B: Funktion in Python nachbauen; C: `pio test -e native` (Unity, ohne Umgebungsmodell).
+- **Entscheidung:** A, Ordner `sil/`. Compiler: Clang aus dem PyPI-Paket `ziglang` (kein Visual Studio/MinGW nötig).
+- **Begründung:** Getestet wird der echte Code; die Signaltabelle ist bereits die Datenschnittstelle aller Module; ein Python-Modell erlaubt geschlossene Szenarien (Beschleunigung, Thermik).
+- **Konsequenzen:** Firmware-Module, die in SIL laufen sollen, dürfen nur über `Arduino.h`-Grundfunktionen, `ACAN2515.h` (CANMessage) und FreeRTOS-Mutex von der Plattform abhängen. Zeit- und Treiberverhalten auf dem ESP32 bleiben Prüfstandsthema.

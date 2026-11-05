@@ -71,6 +71,8 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Abhängigkeiten:** VCU-REQ-001, VCU-REQ-004
 - **Umsetzung:** vorhanden (`src/cluster_calc.cpp`); Bezugsleistung fest 348 V × 300 A (Antrieb) bzw. 100 A (Rekuperation).
 - **Nutzerentscheidung 2026-10-28:** Der Schalter wird vorerst nicht gespeichert; nach jedem Start ist die Anpassung aktiv.
+- **Nachweis (SIL, 2026-11-05):** `sil/tests/test_cluster_sil.py` TC-SIL-01…15 bestanden. Nicht im Fahrzeug geprüft.
+- **Befund (SIL TC-SIL-02b/c):** Die Firmware wertet `sdu_seldir > 0` als Rückwärtsgang und `< 0` als Fahrt. OpenInverter und die Touch-UI definieren 1 = vorwärts, −1 = rückwärts. Klären, ob die Richtung im Fahrzeug invertiert ist oder `needleFromPercent()` korrigiert werden muss.
 
 ### VCU-REQ-006 – Verbrauchssignal für das Kombiinstrument
 - **Typ:** funktional
@@ -92,6 +94,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Abhängigkeiten:** VCU-REQ-003 (Geschwindigkeit aus 0x510)
 - **Umsetzung:** vorhanden (`src/cluster_calc.cpp`, Anzeige Touch-UI „Stopwatch“).
 - **Nutzerentscheidung 2026-10-28:** Bestwerte werden vorerst nicht gespeichert.
+- **Nachweis (SIL, 2026-11-05):** TC-SIL-11…13 (Abweichung < 0,01 s gegen das Modell, Bestwert, fliegender Start).
 
 ### Ausgänge
 

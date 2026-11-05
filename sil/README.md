@@ -1,0 +1,76 @@
+# Software-in-the-Loop (`sil/`)
+
+Führt **unveränderten Firmware-Code** aus `src/` auf dem PC aus und koppelt ihn über die Parameter der Signaltabelle an ein Python-Modell der Umgebung. Demo-Prüfling ist die Kombi-Funktion (`src/cluster_calc.cpp`, aufgerufen über `appStep()` in `src/vcu_app.cpp`). Architektur: [architecture.html](architecture.html).
+
+```text
+pytest / run_demo.py
+   │  Szenario, Sollwerte (tests/oracle.py)
+   ▼
+Umgebungsmodell (vcu_sil/model.py)   Fahrer → Antrieb + Akku → Fahrzeug, Thermik
+   │  sdu_udc, sdu_idc, sdu_seldir, sdu_tmpm, sdu_tmphs, vehicle_speed_510 …
+   ▼
+Kopplung (vcu_sil/sim.py) ─ set(name) / step() / get(name)
+   ▼
+Wrapper: VcuSil (ctypes, vcu_sil/vcu.py) → C-Shim (shim/sil_api.cpp)
+   ▼
+Firmware-Code: vcu_app, cluster_calc, Signaltabelle, Codecs   +  Stubs (Arduino, ACAN2515, FreeRTOS)
+```
+
+## Benutzen
+
+```bash
+python -m pip install --user ziglang   # einmalig: C++-Compiler (Clang) als Python-Paket
+python -m pytest sil/tests -q          # baut die DLL bei Bedarf selbst, ca. 5 s
+python sil/run_demo.py                 # Fahrzyklus + Testlauf -> sil/results/report.html
+python sil/make_architecture.py        # architecture.json -> architecture.html
+```
+
+Python-Beispiel:
+
+```python
+from vcu_sil import VcuSil
+vcu = VcuSil()                       # eigene Firmware-Instanz
+vcu.set_many({"sdu_udc": 348, "sdu_idc": 150, "sdu_seldir": -1})
+vcu.step()                           # ein 6-ms-Zyklus
+vcu.get("cluster_needle_position")   # 6055
+vcu.encode_ecu(0x280)                # Motor_1-Frame, wie er auf den Fahrzeug-CAN ginge
+```
+
+## Prinzip
+
+- **Gleicher Code:** `build.py` kompiliert die Firmware-Module direkt aus `src/`. Nur Hardware und Betriebssystem sind ersetzt (`stubs/`). Die Uhr (`millis()`) gibt die Simulation vor.
+- **Kopplung über Parameter:** Jeder Wert der Signaltabelle (196 Signale) lässt sich über seinen Namen setzen und lesen, mit dem C++-Speichertyp des Feldes. Für Frame-Tests gibt es zusätzlich `receive()` (Eingang über den Decoder) und `encode_ecu()` (Ausgang über den Encoder).
+- **Takt:** `step()` entspricht einem Zyklus des Echtzeit-Tasks (6 ms). Das Modell rechnet je Zyklus 6 Unterschritte.
+- **Unabhängige Sollwerte:** `tests/oracle.py` rechnet aus der Anforderung VCU-REQ-005 nach, nicht aus dem C-Code.
+- **Frischer Zustand:** Jede `VcuSil`-Instanz lädt eine eigene Kopie der DLL, damit statische Zustände der Firmware (Beschleunigungsmessung, Verbrauchszähler) je Test neu beginnen.
+
+## Testfälle
+
+| ID | Inhalt | Anforderung |
+|---|---|---|
+| TC-SIL-01 | Neutral → feste Zeigerstellung 822 | VCU-REQ-005 |
+| TC-SIL-02a | Richtungslogik festgehalten (Charakterisierung) | VCU-REQ-005 |
+| TC-SIL-02b/c | **Befund (xfail):** OpenInverter „Forward“ (+1) wird als Rückwärts gewertet, „Reverse“ (−1) zeigt Leistung | VCU-REQ-005 |
+| TC-SIL-03 | Leistungsskala: Totband ±5 %, Antrieb 4100–7950 (+30), Rekuperation bis 1600, Begrenzung; 17 Punkte | VCU-REQ-005 |
+| TC-SIL-04 | Zeiger steigt monoton mit der Leistung | VCU-REQ-005 |
+| TC-SIL-05 | Kühlmittelanzeige = Motortemperatur, begrenzt auf −48…143,25 °C | VCU-REQ-005 |
+| TC-SIL-06 | Kühlmittelwarnung ab Kühlkörper 80 °C oder Motor 160 °C (Grenzfälle) | VCU-REQ-005 |
+| TC-SIL-07 | Override vor Rechnung, `auto` gibt frei, auch im 0x280-Frame | VCU-DEC-005 |
+| TC-SIL-08 | Anpassung aus: ECU-Werte bleiben, kein Verbrauch | VCU-REQ-005 |
+| TC-SIL-09 | Ausgangspfad: Zeigerwert steht als Drehzahl in 0x280 (DBC) | VCU-REQ-001 |
+| TC-SIL-10 | Eingangspfad: selbst kodierter 0x500-Frame bewegt den Zeiger | VCU-REQ-004 |
+| TC-SIL-11 | 0–50 und 0–100 km/h ± 0,1 s gegen die exakte Modellzeit | VCU-REQ-007 |
+| TC-SIL-12 | Zwei Läufe: letzter und bester Wert | VCU-REQ-007 |
+| TC-SIL-13 | Fliegender Start wird nicht gewertet | VCU-REQ-007 |
+| TC-SIL-14 | Fahrzyklus: Zeiger folgt in jedem Zyklus dem Orakel | VCU-REQ-005 |
+| TC-SIL-15 | Überhitzung (schlechte Kühlung) setzt die Warnung im selben Zyklus | VCU-REQ-005 |
+| TC-SIL-16 | MO5-Zähler: 15-bit-Überlauf mit Überlauf-Bit | VCU-REQ-006 |
+| TC-SIL-17 | **Befund (xfail):** Verbrauch steigt im Stand (noch Simulation) | VCU-REQ-006 |
+
+`xfail(strict=True)` heißt: Der Test beschreibt das geforderte Verhalten und schlägt heute erwartungsgemäß fehl. Ist der Befund behoben, wird der Test rot, und die Markierung muss entfernt werden.
+
+## Grenzen
+
+- Das Modell ist grob (geschätzte Parameter, keine Reifenhaftung, keine Steigung). Es dient als plausible Umgebung, nicht als Abbild des Fahrzeugs.
+- Nicht abgedeckt: Zeitverhalten auf dem ESP32, Interrupts, SPI/CAN-Treiber, WLAN. Dafür bleiben Prüfstand und Fahrzeug (TESTPLAN.md).
+- Compiler ist Clang über Zig (`x86_64-windows-gnu`); der ESP32 nutzt GCC für Xtensa. Unterschiede bei Gleitkomma-Rundung sind möglich; die Toleranzen der Tests berücksichtigen das.
