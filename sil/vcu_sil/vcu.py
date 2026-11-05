@@ -1,7 +1,12 @@
-"""ctypes wrapper around build/vcu_sil.dll (unchanged firmware code + shim).
+"""ctypes wrapper around build/vcu_sil.dll (unchanged application components + shim).
 
-Each VcuSil instance loads its own copy of the library, so the static state inside
-the firmware (e.g. acceleration timing, fuel counter) starts fresh for every test.
+A VcuSil instance runs one component on the application level:
+    "cluster"  updateCluster()   Kombi calculation (src/cluster_calc.cpp)
+    "app"      appStep(now)      cluster + ECU overrides + fan logic (src/vcu_app.cpp)
+Inputs and outputs are parameters of the signal table, set and read by name.
+
+Each instance loads its own copy of the library, so static state inside the firmware
+(e.g. acceleration timing, fuel counter) starts fresh for every test.
 """
 
 from __future__ import annotations
@@ -18,8 +23,7 @@ sys.path.insert(0, str(SIL))
 
 import build as _build  # noqa: E402
 
-BUS_VEHICLE = 1
-BUS_DRIVE = 2
+COMPONENTS = {"cluster": 1, "app": 2}
 
 
 class SignalError(KeyError):
@@ -27,9 +31,13 @@ class SignalError(KeyError):
 
 
 class VcuSil:
-    """The VCU application step, driven by the simulation clock (6 ms per step)."""
+    """One application component, driven by the simulation clock (6 ms per step)."""
 
-    def __init__(self) -> None:
+    def __init__(self, component: str = "cluster") -> None:
+        if component not in COMPONENTS:
+            raise ValueError(f"unknown component {component!r}, choose {sorted(COMPONENTS)}")
+        self.component = component
+        self._component_id = COMPONENTS[component]
         library = _build.build()
         self._dir = Path(tempfile.mkdtemp(prefix="vcu_sil_"))
         copy = self._dir / f"vcu_sil_{uuid.uuid4().hex[:8]}{library.suffix}"
@@ -44,12 +52,9 @@ class VcuSil:
         lib.sil_signal_name.restype = ctypes.c_char_p
         lib.sil_now_ms.restype = ctypes.c_uint32
         lib.sil_cycle_ms.restype = ctypes.c_uint32
-        lib.sil_mark_rx.argtypes = [ctypes.c_int, ctypes.c_uint32]
+        lib.sil_step.argtypes = [ctypes.c_int]
+        lib.sil_step.restype = ctypes.c_int
         lib.sil_override_engine_speed.argtypes = [ctypes.c_int, ctypes.c_double]
-        lib.sil_encode_ecu.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint8)]
-        lib.sil_encode_ecu.restype = ctypes.c_int
-        lib.sil_receive.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint8), ctypes.c_int]
-        lib.sil_receive.restype = ctypes.c_int
         self.cycle_s = lib.sil_cycle_ms() / 1000.0
         self._value = ctypes.c_double()
 
@@ -77,26 +82,11 @@ class VcuSil:
 
     def step(self, cycles: int = 1) -> None:
         for _ in range(cycles):
-            self._lib.sil_step()
+            self._lib.sil_step(self._component_id)
 
     def run_for(self, seconds: float) -> None:
         self.step(max(1, round(seconds / self.cycle_s)))
 
-    # ------------------------------------------------------------ CAN
-    def mark_rx(self, bus: int, can_id: int) -> None:
-        self._lib.sil_mark_rx(bus, can_id)
-
-    def encode_ecu(self, can_id: int) -> bytes:
-        buf = (ctypes.c_uint8 * 8)()
-        length = self._lib.sil_encode_ecu(can_id, buf)
-        if length < 0:
-            raise ValueError(f"0x{can_id:X} is not an ECU emulation frame")
-        return bytes(buf)[:length]
-
-    def receive(self, bus: int, can_id: int, data: bytes) -> bool:
-        buf = (ctypes.c_uint8 * 8)(*data[:8])
-        return self._lib.sil_receive(bus, can_id, buf, len(data)) == 1
-
-    # ------------------------------------------------------------ overrides
+    # ------------------------------------------------------------ overrides (component "app")
     def override_engine_speed(self, rpm: float | None) -> None:
         self._lib.sil_override_engine_speed(0 if rpm is None else 1, 0.0 if rpm is None else rpm)

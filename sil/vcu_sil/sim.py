@@ -1,4 +1,4 @@
-"""Closed loop: environment model -> VCU parameters -> firmware step -> recorded outputs."""
+"""Closed loop: environment model -> component input parameters -> component step -> outputs."""
 
 from __future__ import annotations
 
@@ -46,12 +46,11 @@ class Simulation:
     """
 
     def __init__(self, vcu: VcuSil, model: EnvironmentModel, outputs: list[str] | None = None,
-                 substeps: int = 6, mark_rx: bool = True) -> None:
+                 substeps: int = 6) -> None:
         self.vcu = vcu
         self.model = model
         self.outputs = outputs or DEFAULT_OUTPUTS
         self.substeps = substeps
-        self.mark_rx = mark_rx
         self.trace = Trace()
 
     def step(self) -> dict:
@@ -60,9 +59,6 @@ class Simulation:
             self.model.step(dt)
         inputs = self.model.vcu_inputs()
         self.vcu.set_many(inputs)
-        if self.mark_rx:
-            for bus, can_id in self.model.RX_MESSAGES:
-                self.vcu.mark_rx(bus, can_id)
         self.vcu.step()
         row = {"t": self.vcu.now_s, "speed_kmh_true": self.model.speed_kmh,
                "mech_power_kw": self.model.s.mech_power_w / 1000.0,

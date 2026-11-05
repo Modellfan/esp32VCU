@@ -1,5 +1,5 @@
-// SIL stub: only the CANMessage type of the ACAN2515 library (same layout as the
-// original ACAN2515_CANMessage.h); no driver.
+// SIL stub: only the CANMessage type, so that the signal headers (which also declare the
+// codec functions) compile. No CAN code is built or run in SIL.
 #ifndef SIL_ACAN2515_H
 #define SIL_ACAN2515_H
 

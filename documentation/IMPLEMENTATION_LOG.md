@@ -4155,3 +4155,21 @@ ew_4e0_bit_booleans_added_to_ui: true
 - Finding: sdu_seldir > 0 is treated as reverse by needleFromPercent(); OpenInverter defines 1 = forward (TC-SIL-02b/c).
 - Finding: MO5 consumption still simulated, rises at standstill (TC-SIL-17, VCU-REQ-006).
 - Model parameters are estimates; SIL does not cover ESP32 timing, drivers or WiFi.
+
+
+## 2026-11-05 19:10:00 +01:00 - SIL reduced to application-level component tests (no CAN layer)
+
+### Changes Made
+- `sil/build.py`: codec modules removed from the build; `sil/shim/params_storage.cpp` instantiates params::ecu/vehicle/tesla_sdu.
+- `sil/shim/sil_api.cpp`: `sil_step(component)` (1 = updateCluster, 2 = appStep); sil_receive, sil_encode_ecu, sil_mark_rx removed.
+- `sil/vcu_sil/vcu.py`: `VcuSil("cluster" | "app")`; `sim.py`/`model.py`: no receive marking.
+- Tests: `test_cluster.py` (component cluster), `test_app.py` (component app, TC-SIL-07, TC-SIL-18); TC-SIL-09/10 (frames) dropped.
+- `sil/README.md`, `sil/architecture.json/.html`, `sil/run_demo.py` updated.
+
+### Automated Tests Run
+- `python sil/build.py --force`: PASS
+- `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)
+- `python sil/run_demo.py`: PASS
+
+### Notes
+- User feedback 2026-11-05: component tests on the application level only, no CAN emulation.

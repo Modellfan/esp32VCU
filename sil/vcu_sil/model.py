@@ -1,8 +1,8 @@
 """Python model of the VCU environment: driver, drive unit, battery, thermal, vehicle.
 
-The model is deliberately simple and independent of the firmware: it only produces the
-signals the VCU receives (inverter and vehicle CAN values, by signal-table name) and
-keeps ground truth (exact speed and power) for the test oracles.
+The model is deliberately simple and independent of the firmware: it produces the input
+parameters of the application components (signal-table names such as sdu_idc) and keeps
+ground truth (exact speed and power) for the test oracles.
 
 Direction convention: OpenInverter `seldir` (-1 reverse, 0 neutral, 1 forward), as in
 the touch UI enum. `direction_sign` lets a test emulate an inverted installation.
@@ -158,7 +158,7 @@ class EnvironmentModel:
         return self.s.speed_mps * 3.6
 
     def vcu_inputs(self) -> dict[str, float]:
-        """Values the VCU would decode from CAN 1 (vehicle) and CAN 2 (inverter)."""
+        """Input parameters of the application components (signal-table names)."""
         s = self.s
         return {
             "sdu_udc": round(s.battery_voltage_v, 1),
@@ -171,5 +171,3 @@ class EnvironmentModel:
             "vehicle_speed_510": round(self.speed_kmh, 2),
         }
 
-    # Messages the inputs above belong to (bus 2 = drive, bus 1 = vehicle).
-    RX_MESSAGES = [(2, 0x500), (2, 0x501), (2, 0x504), (1, 0x510)]

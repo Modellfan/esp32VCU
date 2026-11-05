@@ -13,7 +13,7 @@
 {
  "meta": {
   "title": "SIL-Umgebung – Kombi-Funktion",
-  "subtitle": "Unveränderter Firmware-Code läuft auf dem PC, gekoppelt über die Signaltabelle mit einem Python-Umgebungsmodell · sil/",
+  "subtitle": "Komponententests auf Applikationsebene: unveränderte Komponenten aus src/, Ein-/Ausgänge als Parameter der Signaltabelle, kein CAN · sil/",
   "columns": [
    "Eingänge (Umgebung → VCU)",
    "Kombi-Funktion",
@@ -45,9 +45,7 @@
      "f_app",
      "f_cluster",
      "f_params",
-     "f_codec",
      "s_arduino",
-     "s_acan",
      "s_rtos"
     ]
    },
@@ -106,22 +104,21 @@
    "col": 1,
    "kind": "module",
    "status": "umgesetzt",
-   "summary": "TC-SIL-01…10: Zeiger, Totband, Temperatur, Warnung, Override, CAN-Frames.",
+   "summary": "TC-SIL-01…08: Zeiger, Totband, Temperatur, Warnung, Schalter.",
    "details": {
     "responsibilities": [
-     "Werte direkt über Signalnamen setzen, einen 6-ms-Schritt rechnen, Ausgang prüfen",
-     "0x500-Frame selbst kodieren (Eingangspfad), 0x280 selbst dekodieren (Ausgangspfad)"
+     "Werte direkt über Signalnamen setzen, einen 6-ms-Schritt rechnen, Ausgang prüfen"
     ],
     "files": [
-     "sil/tests/test_cluster_sil.py"
+     "sil/tests/test_cluster.py",
+     "sil/tests/test_app.py"
     ],
     "interfaces": [
-     "VcuSil.set/get/step/receive/encode_ecu"
+     "VcuSil(\"cluster\" | \"app\").set/get/step"
     ],
     "timing": "< 1 s",
     "reqs": [
-     "VCU-REQ-005",
-     "VCU-REQ-010"
+     "VCU-REQ-005"
     ],
     "decs": [
      "VCU-DEC-005"
@@ -143,7 +140,7 @@
      "Sollwerte aus der exakten Modellzeit (Interpolation)"
     ],
     "files": [
-     "sil/tests/test_cluster_sil.py",
+     "sil/tests/test_cluster.py",
      "sil/vcu_sil/sim.py"
     ],
     "interfaces": [
@@ -171,7 +168,7 @@
      "xfail(strict): wird rot, sobald der Befund behoben ist – dann Markierung entfernen"
     ],
     "files": [
-     "sil/tests/test_cluster_sil.py"
+     "sil/tests/test_cluster.py"
     ],
     "interfaces": [],
     "timing": "-",
@@ -367,12 +364,12 @@
    "col": 2,
    "kind": "module",
    "status": "umgesetzt",
-   "summary": "Python-Wrapper; lädt je Instanz eine eigene DLL-Kopie.",
+   "summary": "Python-Wrapper je Komponente: VcuSil(\"cluster\" | \"app\").",
    "details": {
     "responsibilities": [
      "set/get über Signalnamen",
-     "step(), run_for()",
-     "receive(), encode_ecu(), override_engine_speed()"
+     "step() ruft die gewählte Komponente",
+     "override_engine_speed() für die Komponente app"
     ],
     "files": [
      "sil/vcu_sil/vcu.py"
@@ -391,15 +388,17 @@
    "col": 3,
    "kind": "module",
    "status": "umgesetzt",
-   "summary": "C-API: sil_set/get, sil_step, sil_receive, sil_encode_ecu.",
+   "summary": "C-API: sil_set/get, sil_step(component).",
    "details": {
     "responsibilities": [
      "schreibt Werte mit dem C++-Speichertyp der Signaltabelle",
      "simulierte Uhr für millis()/micros()",
-     "sil_step() = appStep() wie im Echtzeit-Task"
+     "sil_step(1) = updateCluster(), sil_step(2) = appStep()",
+     "params_storage.cpp legt die Signalgruppen ohne Codecs an"
     ],
     "files": [
-     "sil/shim/sil_api.cpp"
+     "sil/shim/sil_api.cpp",
+     "sil/shim/params_storage.cpp"
     ],
     "interfaces": [
      "vcu_sil.dll"
@@ -486,35 +485,10 @@
    }
   },
   {
-   "id": "f_codec",
-   "title": "Codecs",
-   "layer": "fw",
-   "col": 1,
-   "kind": "module",
-   "status": "umgesetzt",
-   "summary": "986 ECU/Fahrzeug, Tesla SDU – für Frame-Tests.",
-   "details": {
-    "responsibilities": [],
-    "files": [
-     "src/986_ecu_messages.cpp",
-     "src/986_vehicle_messages.cpp",
-     "src/tesla_sdu_messages.cpp"
-    ],
-    "interfaces": [],
-    "timing": "-",
-    "reqs": [
-     "VCU-REQ-001",
-     "VCU-REQ-004"
-    ],
-    "decs": [],
-    "open": []
-   }
-  },
-  {
    "id": "s_arduino",
    "title": "Arduino.h",
    "layer": "stub",
-   "col": 2,
+   "col": 1,
    "kind": "hardware",
    "status": "umgesetzt",
    "summary": "millis()/micros() aus der Simulation, minimale String-Klasse.",
@@ -531,37 +505,18 @@
    }
   },
   {
-   "id": "s_acan",
-   "title": "ACAN2515.h",
-   "layer": "stub",
-   "col": 1,
-   "kind": "hardware",
-   "status": "umgesetzt",
-   "summary": "nur CANMessage, gleiches Layout wie die Bibliothek.",
-   "details": {
-    "responsibilities": [],
-    "files": [
-     "sil/stubs/ACAN2515.h"
-    ],
-    "interfaces": [],
-    "timing": "-",
-    "reqs": [],
-    "decs": [],
-    "open": []
-   }
-  },
-  {
    "id": "s_rtos",
    "title": "FreeRTOS",
    "layer": "stub",
    "col": 3,
    "kind": "hardware",
    "status": "umgesetzt",
-   "summary": "Mutex ohne Wirkung (ein Thread).",
+   "summary": "Mutex ohne Wirkung (ein Thread); CANMessage nur als Typ für die Header.",
    "details": {
     "responsibilities": [],
     "files": [
-     "sil/stubs/freertos/semphr.h"
+     "sil/stubs/freertos/semphr.h",
+     "sil/stubs/ACAN2515.h"
     ],
     "interfaces": [],
     "timing": "-",
@@ -698,28 +653,10 @@
    "kind": "data"
   },
   {
-   "from": "f_params",
-   "to": "f_codec",
-   "label": "kodieren",
-   "kind": "data"
-  },
-  {
-   "from": "w_shim",
-   "to": "f_codec",
-   "label": "sil_receive / sil_encode_ecu",
-   "kind": "data"
-  },
-  {
    "from": "f_cluster",
    "to": "s_arduino",
    "label": "millis()",
    "kind": "control"
-  },
-  {
-   "from": "f_codec",
-   "to": "s_acan",
-   "label": "CANMessage",
-   "kind": "data"
   },
   {
    "from": "f_params",
@@ -773,6 +710,12 @@
    "from": "x_report",
    "to": "t_run",
    "label": "JUnit",
+   "kind": "control"
+  },
+  {
+   "from": "w_shim",
+   "to": "f_cluster",
+   "label": "sil_step(1)",
    "kind": "control"
   }
  ]

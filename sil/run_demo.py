@@ -90,7 +90,7 @@ def run_tests() -> list[dict]:
 def main() -> None:
     RESULTS.mkdir(exist_ok=True)
     model = EnvironmentModel(DriverProfile(CYCLE), direction_sign=-1)
-    trace = Simulation(VcuSil(), model).run()
+    trace = Simulation(VcuSil("cluster"), model).run()
     t = trace.column("t")
     charts = [
         svg_chart("Geschwindigkeit [km/h]", t, [("Modell", trace.column("speed_kmh_true"), "#0f6e56")], 0),
@@ -125,7 +125,7 @@ tr.xfail td:nth-child(2){{color:#a66300;font-weight:600}} tr.FAILED td:nth-child
 tr.passed td:nth-child(2){{color:#2f7d32}}
 </style></head><body><main>
 <h1>SIL Kombi-Funktion</h1>
-<div class="sub">Erzeugt {datetime.now():%Y-%m-%d %H:%M} · Firmware-Code src/cluster_calc.cpp über vcu_app.cpp · Fahrzyklus {model.profile.duration_s:.0f} s · {acc}</div>
+<div class="sub">Erzeugt {datetime.now():%Y-%m-%d %H:%M} · Komponente updateCluster() (src/cluster_calc.cpp), Applikationsebene · Fahrzyklus {model.profile.duration_s:.0f} s · {acc}</div>
 <div class="card"><b>Tests:</b> {counts["passed"]} bestanden · {counts["xfail"]} bekannte Befunde (xfail) · {counts["FAILED"]} fehlgeschlagen
 <table>{test_rows}</table></div>
 {"".join(f'<div class="card">{c}</div>' for c in charts)}

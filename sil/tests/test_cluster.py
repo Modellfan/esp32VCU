@@ -1,5 +1,6 @@
-"""SIL tests of the Kombi function (src/cluster_calc.cpp, applied by src/vcu_app.cpp).
+"""Component tests of the Kombi calculation updateCluster() (src/cluster_calc.cpp).
 
+Application level only: inputs and outputs are signal-table parameters, no CAN layer.
 Test ids TC-SIL-xx are listed in sil/README.md. Run: python -m pytest sil/tests -q
 """
 
@@ -9,7 +10,6 @@ import pytest
 
 import oracle
 from vcu_sil import DriverProfile, EnvironmentModel, Phase, Simulation, VcuSil
-from vcu_sil.vcu import BUS_DRIVE
 
 # Direction values as the current firmware interprets sdu_seldir (see TC-SIL-02):
 # > 0 is treated as reverse, < 0 as drive. OpenInverter defines -1 reverse / 1 forward.
@@ -19,6 +19,12 @@ FW_REVERSE = 1
 
 OI_FORWARD = 1    # OpenInverter / touch UI enum
 OI_REVERSE = -1
+
+
+@pytest.fixture()
+def vcu() -> VcuSil:
+    """Fresh instance of the component under test."""
+    return VcuSil("cluster")
 
 
 def apply(vcu: VcuSil, cycles: int = 1, **values) -> None:
@@ -99,19 +105,7 @@ def test_tc_sil_06_coolant_warning_thresholds(vcu, heatsink_c, motor_c):
     assert bool(vcu.get("cluster_motor_temp_critical")) == (motor_c >= oracle.MOTOR_CRITICAL_C)
 
 
-# --------------------------------------------------------------------------- overrides, switch, CAN frames
-
-
-def test_tc_sil_07_override_beats_calculation(vcu):
-    """VCU-DEC-005: a UI override wins over the Kombi calculation and is released by 'auto'."""
-    apply(vcu, sdu_udc=348, sdu_idc=150, sdu_seldir=FW_DRIVE)
-    vcu.override_engine_speed(3000)
-    vcu.step(5)
-    assert vcu.get("engine_speed_rpm") == 3000
-    assert oracle.decode_0x280_rpm(vcu.encode_ecu(0x280)) == 3000
-    vcu.override_engine_speed(None)
-    vcu.step()
-    assert vcu.get("engine_speed_rpm") == oracle.needle("drive", 348, 150)
+# --------------------------------------------------------------------------- activation switch
 
 
 def test_tc_sil_08_cluster_switched_off_keeps_ecu_values(vcu):
@@ -121,26 +115,6 @@ def test_tc_sil_08_cluster_switched_off_keeps_ecu_values(vcu):
     assert vcu.get("engine_speed_rpm") == 1234
     assert vcu.get("motor2_coolant_temperature") == 55
     assert vcu.get("mo5_verbrauch_ul") == 0
-
-
-def test_tc_sil_09_needle_reaches_the_bus(vcu):
-    """Output path: the needle value appears as engine speed in Motor_1 (0x280) per DBC."""
-    for idc in (0, 60, 150, 300, -60):
-        apply(vcu, sdu_udc=348, sdu_idc=idc, sdu_seldir=FW_DRIVE)
-        assert oracle.decode_0x280_rpm(vcu.encode_ecu(0x280)) == vcu.get("cluster_needle_position")
-
-
-def test_tc_sil_10_inverter_frame_drives_needle(vcu):
-    """Input path: a 0x500 frame built from the OpenInverter layout moves the needle."""
-    vcu.set("sdu_seldir", FW_DRIVE)
-    assert vcu.receive(BUS_DRIVE, 0x500, oracle.encode_0x500(348.0, 150.0))
-    vcu.step()
-    assert vcu.get("sdu_udc") == pytest.approx(348.0, abs=0.05)
-    assert vcu.get("sdu_idc") == pytest.approx(150.0, abs=0.05)
-    assert vcu.get("cluster_needle_position") == oracle.needle("drive", 348, 150)
-    assert vcu.receive(BUS_DRIVE, 0x500, oracle.encode_0x500(350.0, -40.0))
-    vcu.step()
-    assert vcu.get("cluster_needle_position") == oracle.needle("drive", 350, -40)
 
 
 # --------------------------------------------------------------------------- closed loop with the environment model

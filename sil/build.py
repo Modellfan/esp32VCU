@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the SIL library: unchanged firmware sources + stubs + shim -> build/vcu_sil.dll.
+"""Build the SIL library: unchanged application components + stubs + shim -> build/vcu_sil.dll.
 
 Compiler: Clang from the PyPI package `ziglang` (python -m pip install --user ziglang),
 so no system-wide compiler or Visual Studio is needed.
@@ -16,17 +16,15 @@ REPO = SIL.parent
 BUILD = SIL / "build"
 LIBRARY = BUILD / ("vcu_sil.dll" if sys.platform == "win32" else "libvcu_sil.so")
 
-# Firmware modules under test (not modified for SIL).
+# Application components under test (not modified for SIL). No CAN codecs or drivers:
+# the signal groups they would own are instantiated in sil/shim/params_storage.cpp.
 FIRMWARE_SOURCES = [
     "src/cluster_calc.cpp",
     "src/vcu_app.cpp",
     "src/vcu_params.cpp",
     "src/signal_table.cpp",
-    "src/986_ecu_messages.cpp",
-    "src/986_vehicle_messages.cpp",
-    "src/tesla_sdu_messages.cpp",
 ]
-SHIM_SOURCES = ["sil/shim/sil_api.cpp"]
+SHIM_SOURCES = ["sil/shim/params_storage.cpp", "sil/shim/sil_api.cpp"]
 
 
 def sources() -> list[Path]:

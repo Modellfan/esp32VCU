@@ -53,14 +53,3 @@ def coolant_gauge(motor_temp_c: float) -> float:
 def coolant_warning(heatsink_c: float, motor_c: float) -> bool:
     return heatsink_c >= HEATSINK_CRITICAL_C or motor_c >= MOTOR_CRITICAL_C
 
-
-def decode_0x280_rpm(data: bytes) -> float:
-    """Motor_1 engine speed: bits 16..31 little endian, 0.25 rpm/bit (DBC)."""
-    return (data[2] | (data[3] << 8)) * 0.25
-
-
-def encode_0x500(udc_v: float, idc_a: float) -> bytes:
-    """OpenInverter 0x500: udc 0.1 V/bit bits 0..15, idc signed 0.1 A/bit bits 16..31."""
-    udc = round(udc_v * 10) & 0xFFFF
-    idc = round(idc_a * 10) & 0xFFFF
-    return bytes([udc & 0xFF, udc >> 8, idc & 0xFF, idc >> 8, 0, 0, 0, 0])

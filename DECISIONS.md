@@ -87,7 +87,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-014 – Software-in-the-Loop mit unverändertem Firmware-Code
 - **Status:** accepted (Nutzerauftrag 2026-11-05)
 - **Betroffene Requirements:** VCU-REQ-005, -006, -007 (Demo-Prüfling Kombi-Funktion), künftig alle Anwendungsfunktionen
-- **Optionen:** A: Firmware-Module unverändert als PC-Bibliothek, Stubs für Arduino/ACAN2515/FreeRTOS, C-Shim + Python (ctypes), Kopplung über die Signaltabelle; B: Funktion in Python nachbauen; C: `pio test -e native` (Unity, ohne Umgebungsmodell).
+- **Optionen:** A: einzelne Komponenten unverändert als PC-Bibliothek, Stubs für Arduino/FreeRTOS, C-Shim + Python (ctypes), Kopplung über die Signaltabelle, Tests auf Applikationsebene ohne CAN (Nutzervorgabe 2026-11-05); B: Funktion in Python nachbauen; C: `pio test -e native` (Unity, ohne Umgebungsmodell).
 - **Entscheidung:** A, Ordner `sil/`. Compiler: Clang aus dem PyPI-Paket `ziglang` (kein Visual Studio/MinGW nötig).
 - **Begründung:** Getestet wird der echte Code; die Signaltabelle ist bereits die Datenschnittstelle aller Module; ein Python-Modell erlaubt geschlossene Szenarien (Beschleunigung, Thermik).
-- **Konsequenzen:** Firmware-Module, die in SIL laufen sollen, dürfen nur über `Arduino.h`-Grundfunktionen, `ACAN2515.h` (CANMessage) und FreeRTOS-Mutex von der Plattform abhängen. Zeit- und Treiberverhalten auf dem ESP32 bleiben Prüfstandsthema.
+- **Konsequenzen:** Komponenten, die in SIL laufen sollen, dürfen nur über `Arduino.h`-Grundfunktionen (Zeit) und den FreeRTOS-Mutex von der Plattform abhängen und tauschen Daten nur über `params` aus. CAN-Kodierung wird in SIL nicht geprüft. Zeit- und Treiberverhalten auf dem ESP32 bleiben Prüfstandsthema.
