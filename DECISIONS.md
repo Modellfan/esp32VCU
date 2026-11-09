@@ -67,7 +67,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-010 – GVRET als Beobachter, Log auf eigener Schnittstelle
 - **Status:** accepted (Vorschlag 8, Nutzer 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-012
-- **Entscheidung:** Der CAN-Task legt jeden empfangenen und gesendeten Frame in eine Warteschlange (128 Einträge, bei Überlauf verworfen und gezählt); die Dienst-Task schreibt sie über UART0 an SavvyCAN, sobald GVRET im Binärmodus ist. Textausgaben gingen über den nativen USB-Port; seit 2026-11-09 (CAN0 auf GPIO20 = USB D+) laufen sie über UART0, solange GVRET nicht im Binärmodus ist.
+- **Entscheidung:** Der CAN-Task legt jeden empfangenen und gesendeten Frame in eine Warteschlange (128 Einträge, bei Überlauf verworfen und gezählt); die Dienst-Task schreibt sie über UART0 an SavvyCAN, sobald GVRET im Binärmodus ist. Textausgaben gingen über den nativen USB-Port; seit 2026-11-09 (CAN0 auf GPIO20 = USB D+) laufen sie über UART0, solange GVRET nicht im Binärmodus ist. Ebenso Textbefehle (Version mit Build-Datum, WLAN-Status, Reset) wie in der CANivore-Firmware; Bytes, die GVRET nicht auswertet, gehen an `serial_console`.
 - **Offen:** Welcher der beiden COM-Ports (COM16/COM24) welcher Schnittstelle entspricht, ist nicht geprüft.
 
 ## VCU-DEC-011 – WLAN: Zugangspunkt plus Heimnetz, Zugangsdaten außerhalb von Git

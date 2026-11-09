@@ -497,10 +497,16 @@ void webTask(void *) {
     uint32_t lastLed = 0;
     uint32_t lastDiag = 0;
     bool ledOn = false;
+    bool staWasConnected = false;
     for (;;) {
         server.handleClient();
         gvretBridgeService();
         const uint32_t now = millis();
+        const bool staConnected = WiFi.status() == WL_CONNECTED;
+        if (staConnected != staWasConnected) {  // log home network connect / loss once
+            staWasConnected = staConnected;
+            webinterfaceLogWifiStatus();
+        }
         if (now - lastDiag >= 1000U) {  // one diagnostic line per second on COM10
             lastDiag = now;
             canManagerLogStatus();
@@ -532,6 +538,14 @@ void startWifi() {
 }
 
 }  // namespace
+
+void webinterfaceLogWifiStatus() {
+    const bool staConnected = WiFi.status() == WL_CONNECTED;
+    VCU_LOG("[WIFI] ap=%s ip=%s clients=%u | home=%s %s ip=%s rssi=%d host=eboxster-vcu\n",
+            VCU_WIFI_AP_SSID, ipToString(WiFi.softAPIP()).c_str(), (unsigned)WiFi.softAPgetStationNum(),
+            VCU_WIFI_HOME_SSID, staConnected ? "connected" : "not connected",
+            staConnected ? ipToString(WiFi.localIP()).c_str() : "-", staConnected ? (int)WiFi.RSSI() : 0);
+}
 
 void webinterfaceBegin() {
     startWifi();

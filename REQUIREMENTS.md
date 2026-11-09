@@ -150,7 +150,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über die USB-Schnittstelle das GVRET-Protokoll sprechen, sodass SavvyCAN beide CAN-Busse mitlesen kann; gesendete Frames werden von empfangenen unterscheidbar markiert.
 - **Akzeptanz:** Gegeben SavvyCAN über USB verbunden; wenn die VCU läuft; dann zeigt SavvyCAN die Frames beider Busse und die emulierten Motorsteuergeräte-Frames.
 - **Abhängigkeiten:** VCU-REQ-001
-- **Umsetzung:** umgesetzt 2026-10-28 (`src/services/gvret_bridge.cpp`, VCU-DEC-010): alle empfangenen und gesendeten Frames über eine Warteschlange, sobald SavvyCAN den Binärmodus aktiviert; Textlog auf dem nativen USB-Port. Nicht mit SavvyCAN geprüft.
+- **Umsetzung:** umgesetzt 2026-10-28 (`src/services/gvret_bridge.cpp`, VCU-DEC-010): alle empfangenen und gesendeten Frames über eine Warteschlange, sobald SavvyCAN den Binärmodus aktiviert; Textlog und Textbefehle (`help`, `version`, `wifi-status`, `reset`; `src/services/serial_console.h`) auf demselben UART0, solange GVRET nicht binär ist. Nicht mit SavvyCAN geprüft.
 
 ### VCU-REQ-013 – Gültigkeit und Alter der Werte
 - **Typ:** funktional / Datenqualität

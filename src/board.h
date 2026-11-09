@@ -69,7 +69,7 @@ static_assert(pinsUnique(kAssignedPins, sizeof(kAssignedPins) / sizeof(kAssigned
 
 }  // namespace board
 
-// Diagnostic log on the native USB port; UART0 (Serial) carries only GVRET binary data.
+// Text log and serial commands on UART0 (COM10) while GVRET is not in binary mode (VCU-DEC-010).
 #ifndef VCU_LOG_ENABLED
 #define VCU_LOG_ENABLED 1
 #endif

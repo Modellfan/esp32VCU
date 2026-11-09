@@ -4384,3 +4384,24 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - [DIAG] counts frames, not sequence/CRC; earlier GVRET runs covered sequence/CRC.
 - CAN0 not on the bench (rx 0, as expected).
+
+
+## 2026-11-09 22:45:00 +01:00 - Push, home WiFi SSID, serial commands (version, reset, wifi-status)
+
+### Changes Made
+- Pushed `esp32vcu_986` (d8a9167) and `esp32vcu_986_vor_claude` (new on origin).
+- `src/secrets.h` (not versioned): home SSID `Ueberlingen@Wohnzimmer` -> `Überlingen@Wohnzimmer` (router sends UTF-8 C3 9C); the VCU had not found its home network.
+- `src/services/serial_console.*` (new): text commands on UART0 while GVRET is not binary: `help`, `version`, `wifi-status`, `reset`/`reboot`; same commands and `APP_NAME`/`APP_VERSION`/`PIO_ENV_NAME` build flags as the CANivore firmware (CAN-Grabber). `gvret.h` passes bytes it does not use to the console.
+- `[VERSION]` line at start-up; `[WIFI]` line on every home network connect/loss (`webinterfaceLogWifiStatus()`).
+- `tools/pio_build_info.py` (pre-script): touches `serial_console.cpp` so `__DATE__`/`__TIME__` are fresh in every build.
+- `tools/vcu_cmd.py` (new): send a command, or `--hard-reset` via RTS (boot log).
+
+### Automated Tests Run
+- `platformio.exe run --target upload --upload-port COM10`: PASS (3x: secrets, SSID fix, serial console)
+- `tools/vcu_cmd.py --hard-reset`, `help`, `version`, `wifi-status`, `reset`: PASS (`[VERSION] app=eBoxster-VCU version=0.1.0 build=Nov  9 2026 22:35:46 env=esp32s3`, home connected ip=192.168.0.77 rssi -66)
+- `GET http://192.168.0.77/` 200 (35 kB), `/api/live` 200 (7.3 kB): PASS
+
+### Notes
+- Brownout detector resets the board on power-on reset when WiFi starts (reproduced 2x after RTS reset); the second start runs. Supply over the CH343 USB only; check supply/capacitor.
+- PC is on `Blacknet@Ueberlingen`, also 192.168.0.x; both networks reach each other.
+- Not tested with SavvyCAN after the change; GVRET bytes 0xE7/0xF1 are handled before the console.

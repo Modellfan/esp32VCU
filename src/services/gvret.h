@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <ACAN2515.h>  // For CANMessage definition
 
+#include "serial_console.h"
+
 // GVRET Protocol definitions
 #define CFG_BUILD_NUM 7010
 
@@ -72,6 +74,8 @@ inline void gvret_loop() {
                     gvret_binOutput = true;
                 } else if (c == 0xF1) {
                     gvretState = GET_COMMAND;
+                } else if (!gvret_binOutput) {
+                    serialConsoleByte((uint8_t)c);  // text command (serial_console.h)
                 }
                 break;
                 

@@ -25,6 +25,7 @@
 #include "digipot_control.h"
 #include "gvret_bridge.h"
 #include "params_lock.h"
+#include "serial_console.h"
 #include "status_led.h"
 #include "tesla_sdu_messages.h"
 #include "webinterface.h"
@@ -139,6 +140,7 @@ void setup() {
 #if VCU_LOG_ENABLED
     vcuLogBegin();
 #endif
+    serialConsolePrintBuildInfo();
     paramsLockInit();
     fastledInit();
     digipotBegin();
