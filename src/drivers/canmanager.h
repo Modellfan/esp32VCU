@@ -30,7 +30,7 @@ struct CanBusDiag {
     bool bus_off;
 };
 
-// CAN task only: count one received frame / read the error registers (SPI access).
+// Receive side (loop() in main.cpp): count one received frame / read the error registers (SPI).
 void canCountRx(uint8_t bus);
 void canRefreshErrors();
 // Any task: last known values.
@@ -38,7 +38,7 @@ CanBusDiag canBusDiag(uint8_t bus);
 // Web task: one diagnostic text line per call (uptime, buses, CAN task timing).
 void canManagerLogStatus();
 
-// CAN task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
+// ECU task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
 constexpr uint32_t CAN_TASK_PERIOD_MS = 6;
 
 struct CanTaskStats {

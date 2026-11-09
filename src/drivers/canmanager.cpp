@@ -116,7 +116,7 @@ void canRefreshErrors() {
     }
     portEXIT_CRITICAL(&gStatsMux);
 
-    // MCP2515 registers over SPI: only from the CAN task, which owns the SPI bus.
+    // MCP2515 registers over SPI (Arduino SPI transactions are locked).
     if (gCan1Error == 0) {
         d[1].tec = can1.transmitErrorCounter();
         d[1].rec = can1.receiveErrorCounter();

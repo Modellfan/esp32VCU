@@ -1,12 +1,12 @@
-﻿// eBoxster VCU – the whole sequence in one place (VCU-DEC-015).
+// eBoxster VCU – the whole sequence in one place (VCU-DEC-015).
 //
-// CAN task, core 1, every 6 ms (VCU-REQ-001/002):
-//   pollVehicleCAN, pollTeslaCAN, pollBatteryCAN -> updateCluster -> coolantFanAutoUpdate
-//   -> emulateECUCAN (one ECU frame per cycle) -> outputs (fan relays, fuel gauge)
-// Web task, core 0 (src/services/webinterface.cpp): WiFi, web API, PWA, GVRET, LED.
+// loop() (core 1): pollVehicleCAN, pollTeslaCAN, pollBatteryCAN continuously;
+//                  updateOutputs (fan, fuel gauge) every 100 ms; CAN error counters every 300 ms.
+// ecuTask (core 1, every 6 ms, higher priority): updateCluster -> emulateECUCAN (one ECU frame).
+// Web task (core 0, src/services/webinterface.cpp): WiFi, web API, PWA, GVRET, log, LED.
 //
-// Every module owns its data (params::* in its header). The two tasks share it under
-// the params lock (src/services/params_lock.h).
+// Every module owns its data (params::* in its header). The tasks share it under the
+// params lock (src/services/params_lock.h).
 //
 // Folders: app/ (cluster calculation), comms/ (CAN codecs, receive monitor),
 // drivers/ (CAN controllers, fan, fuel gauge, LED), services/ (web, signal table, lock, GVRET, log).
@@ -32,7 +32,7 @@
 //---------------------------------------------------------------------------
 // CAN receive: decode, mark the reception time, mirror to GVRET.
 //---------------------------------------------------------------------------
-constexpr int RX_BUDGET_PER_BUS = 32;  // frames per bus and cycle; the rest waits for the next cycle
+constexpr int RX_BUDGET_PER_BUS = 32;  // frames per bus and call; the rest waits for the next call
 
 // CAN1: Porsche 986 vehicle messages
 void pollVehicleCAN() {
@@ -89,49 +89,44 @@ void emulateECUCAN(CANMessage &outFrame) {
 }
 
 //---------------------------------------------------------------------------
-// CAN task (core 1)
+// Outputs every 100 ms: fan automatic and relays, fuel gauge potentiometer.
 //---------------------------------------------------------------------------
-void canTask(void *) {
+constexpr uint32_t OUTPUT_PERIOD_MS = 100;
+
+void updateOutputs(uint32_t nowMs) {
+    uint8_t fanLevel;
+    uint8_t fuelGaugePct;
+    {
+        ParamsGuard guard;
+        coolantFanAutoUpdate(nowMs);
+        digipotClampRequest();
+        fanLevel = params::fan.fan_level;
+        fuelGaugePct = params::digipot.digipot_pct;
+    }
+    // Hardware outside the lock (the potentiometer needs about 2 ms per change).
+    coolantFanWrite(fanLevel >= 1U, fanLevel >= 2U);
+    digipotApply(fuelGaugePct);
+    ParamsGuard guard;
+    coolantFanReportState();
+    digipotReportState();
+}
+
+//---------------------------------------------------------------------------
+// ECU task (core 1, every 6 ms): Kombi values, then one ECU frame on CAN1.
+//---------------------------------------------------------------------------
+void ecuTask(void *) {
     TickType_t lastWake = xTaskGetTickCount();
-    uint8_t diagDivider = 0;
     for (;;) {
         const uint32_t startUs = micros();
-        const uint32_t nowMs = millis();
         CANMessage outFrame;
-        uint8_t fanLevel;
-        uint8_t fuelGaugePct;
-
         {
             ParamsGuard guard;
-            pollVehicleCAN();
-            pollTeslaCAN();
-            pollBatteryCAN();
-            updateCluster();               // cluster values, then ECU overrides
-            coolantFanAutoUpdate(nowMs);
-            digipotClampRequest();
+            updateCluster();  // cluster values, then ECU overrides
             emulateECUCAN(outFrame);
-            fanLevel = params::fan.fan_level;
-            fuelGaugePct = params::digipot.digipot_pct;
         }
-
         const bool sent = can1.tryToSend(outFrame);
         gvretBridgeObserve(outFrame, GVRET_BUS_TX);
-
-        // Hardware outputs outside the lock (the potentiometer needs about 2 ms per change).
-        coolantFanWrite(fanLevel >= 1U, fanLevel >= 2U);
-        digipotApply(fuelGaugePct);
-        {
-            ParamsGuard guard;
-            coolantFanReportState();
-            digipotReportState();
-        }
-
-        if (++diagDivider >= 50U) {  // error counters every 300 ms (SPI, outside the lock)
-            diagDivider = 0;
-            canRefreshErrors();
-        }
-
-        canTaskStatsRecord(nowMs, micros() - startUs, sent);
+        canTaskStatsRecord(millis(), micros() - startUs, sent);
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(CAN_TASK_PERIOD_MS));
     }
 }
@@ -140,7 +135,7 @@ void canTask(void *) {
 // Setup and Loop
 //---------------------------------------------------------------------------
 void setup() {
-    Serial.begin(115200);  // UART0: GVRET only
+    Serial.begin(115200);  // UART0: text log, GVRET after 0xE7
 #if VCU_LOG_ENABLED
     vcuLogBegin();
 #endif
@@ -153,12 +148,30 @@ void setup() {
 
     // ECU emulation first: frames go out before WiFi is even started (VCU-REQ-002).
     // Highest application priority on core 1; WiFi and the web server run on core 0.
-    xTaskCreatePinnedToCore(canTask, "vcu_can", 8192, nullptr, configMAX_PRIORITIES - 2, nullptr, 1);
+    xTaskCreatePinnedToCore(ecuTask, "vcu_ecu", 8192, nullptr, configMAX_PRIORITIES - 2, nullptr, 1);
     webinterfaceBegin();
-    VCU_LOG("[VCU] started, CAN task period %u ms\n", (unsigned)CAN_TASK_PERIOD_MS);
+    VCU_LOG("[VCU] started, ECU task period %u ms\n", (unsigned)CAN_TASK_PERIOD_MS);
 }
 
+// Arduino loop task (core 1, below the ECU task): receive continuously, outputs and
+// error counters at a slower rate.
 void loop() {
-    // All work runs in the CAN task (core 1) and the web task (core 0).
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    static uint32_t lastOutputs = 0;
+    static uint32_t lastErrors = 0;
+    const uint32_t nowMs = millis();
+    {
+        ParamsGuard guard;
+        pollVehicleCAN();
+        pollTeslaCAN();
+        pollBatteryCAN();
+    }
+    if (nowMs - lastOutputs >= OUTPUT_PERIOD_MS) {
+        lastOutputs = nowMs;
+        updateOutputs(nowMs);
+    }
+    if (nowMs - lastErrors >= 300U) {  // MCP2515/TWAI error counters (SPI, outside the lock)
+        lastErrors = nowMs;
+        canRefreshErrors();
+    }
+    vTaskDelay(1);  // 1 tick: lets the idle task run; receive latency stays about 1 ms
 }

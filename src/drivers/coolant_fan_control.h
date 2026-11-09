@@ -28,7 +28,7 @@ extern FanSignals fan;
 // fresh == false (no inverter data) returns the fail-safe level 2.
 uint8_t fanAutoLevel(float motorTempC, float heatsinkTempC, bool fresh, uint8_t previousLevel);
 
-// Every CAN cycle, with the params lock held: automatic level and the level to apply.
+// Every 100 ms (updateOutputs in main.cpp), params lock held: automatic and applied level.
 void coolantFanAutoUpdate(uint32_t nowMs);
 
 // Relay outputs. Without a confirmed stage-1 pin both outputs stay disabled (board.h).

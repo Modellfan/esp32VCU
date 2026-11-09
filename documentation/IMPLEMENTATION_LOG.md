@@ -4351,3 +4351,20 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Not the environment (Python 3.14.3, python-can 4.6.1, pyserial 3.5 in both) and not the listener window: the stick intermittently stops transmitting after 25-50 frames since CAN1 transmits. Suspected: adapter error state after bus errors (termination/GND); MCP2515 TEC/REC/EFLG not yet exposed.
+
+
+## 2026-11-09 22:14:15 +01:00 - Receive loop separated from the 6 ms ECU task; bus diagnostics; branch before November
+
+### Changes Made
+- `src/main.cpp`: `loop()` polls CAN0/1/2 continuously (vTaskDelay 1 tick), `updateOutputs()` every 100 ms, `canRefreshErrors()` every 300 ms; `ecuTask` (6 ms) only `updateCluster()` + `emulateECUCAN()` + send.
+- `src/drivers/canmanager.*`: `CanBusDiag` (rx_frames, TEC, REC, EFLG, bus_off) per bus, `canManagerLogStatus()`; `/api/live` `can0..2_*`.
+- `src/services/vcu_log.cpp`: text log on UART0 while GVRET is not binary; `[DIAG]` line every second from the web task; `VCU_LOG_ENABLED=1`.
+- Branch `esp32vcu_986_vor_november` at e82dbbb (state before this VS Code session).
+- PlatformIO env: urllib3 broken again (2.8.0 dist-info present, module missing), reinstalled 1.26.20.
+
+### Automated Tests Run
+- `platformio run -e esp32s3`: PASS (RAM 48948 B, Flash 1103109 B)
+- `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)
+
+### Notes
+- Not flashed yet. Fan automatic now runs every 100 ms instead of 6 ms.

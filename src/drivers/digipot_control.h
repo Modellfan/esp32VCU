@@ -16,7 +16,7 @@ extern DigipotSignals digipot;
 
 }  // namespace params
 
-// Every CAN cycle, with the params lock held: limits the request to 0..100 %.
+// Every 100 ms (updateOutputs in main.cpp), params lock held: limits the request to 0..100 %.
 inline void digipotClampRequest() {
     if (params::digipot.digipot_pct > 100U) {
         params::digipot.digipot_pct = 100U;

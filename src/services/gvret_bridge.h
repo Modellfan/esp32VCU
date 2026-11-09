@@ -1,4 +1,4 @@
-// Service: GVRET (SavvyCAN) over UART0. The CAN task only queues frames;
+// Service: GVRET (SavvyCAN) over UART0. The receive loop and the ECU task only queue frames;
 // the service task writes them to the serial port, so a slow host never blocks CAN timing.
 #ifndef GVRET_BRIDGE_H
 #define GVRET_BRIDGE_H

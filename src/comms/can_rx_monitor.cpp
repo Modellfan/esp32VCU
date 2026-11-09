@@ -17,7 +17,7 @@ constexpr RxEntry kRxTable[] = {
     {BUS_DRIVE, 0x506, RX_SDU_506}, {BUS_DRIVE, 0x507, RX_SDU_507}, {BUS_DRIVE, 0x508, RX_SDU_508},
 };
 
-// 0 = never received. Written by the CAN task only; 32-bit stores are atomic on the S3.
+// 0 = never received. Written by the receive loop only; 32-bit stores are atomic on the S3.
 volatile uint32_t gLastRxMs[RX_COUNT] = {0};
 
 }  // namespace
