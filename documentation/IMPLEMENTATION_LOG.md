@@ -4341,3 +4341,13 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - Cause of the earlier stick stalls unclear (global environment vs. adapter state); not reproduced with the wrapper.
 - CAN0 not connected to the bench; not tested. Log playback still open.
+
+
+## 2026-11-09 22:00:41 +01:00 - Stick stalls: analysis
+
+### Automated Tests Run
+- global Python, tx-pattern 0x611 300 frames, listener 11 s: 282/281 (window too short)
+- global Python, tx-pattern 0x644 300 frames, listener 25 s: FAIL 37/37 on CAN1/CAN2, ECU traffic continuous
+
+### Notes
+- Not the environment (Python 3.14.3, python-can 4.6.1, pyserial 3.5 in both) and not the listener window: the stick intermittently stops transmitting after 25-50 frames since CAN1 transmits. Suspected: adapter error state after bus errors (termination/GND); MCP2515 TEC/REC/EFLG not yet exposed.
