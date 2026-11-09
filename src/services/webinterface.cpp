@@ -525,8 +525,22 @@ void webTask(void *) {
     }
 }
 
+// Last home network disconnect reason (wifi_err_reason_t, e.g. 201 no AP found,
+// 15 handshake timeout / wrong password); set by the WiFi event task.
+volatile uint8_t gStaReason = 0;
+
 void startWifi() {
     WiFi.persistent(false);
+    WiFi.onEvent(
+        [](WiFiEvent_t, WiFiEventInfo_t info) {
+            const uint8_t reason = info.wifi_sta_disconnected.reason;
+            if (reason != gStaReason) {  // log changes only, retries repeat the same reason
+                gStaReason = reason;
+                VCU_LOG("[WIFI] home disconnected, reason %u (%s)\n", reason,
+                        WiFi.disconnectReasonName((wifi_err_reason_t)reason));
+            }
+        },
+        ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.mode(WIFI_AP_STA);
     WiFi.setHostname("eboxster-vcu");
     const bool apOk = WiFi.softAP(VCU_WIFI_AP_SSID, VCU_WIFI_AP_PASSWORD);
@@ -541,10 +555,11 @@ void startWifi() {
 
 void webinterfaceLogWifiStatus() {
     const bool staConnected = WiFi.status() == WL_CONNECTED;
-    VCU_LOG("[WIFI] ap=%s ip=%s clients=%u | home=%s %s ip=%s rssi=%d host=eboxster-vcu\n",
+    VCU_LOG("[WIFI] ap=%s ip=%s clients=%u | home=%s %s ip=%s rssi=%d last_reason=%u host=eboxster-vcu\n",
             VCU_WIFI_AP_SSID, ipToString(WiFi.softAPIP()).c_str(), (unsigned)WiFi.softAPgetStationNum(),
             VCU_WIFI_HOME_SSID, staConnected ? "connected" : "not connected",
-            staConnected ? ipToString(WiFi.localIP()).c_str() : "-", staConnected ? (int)WiFi.RSSI() : 0);
+            staConnected ? ipToString(WiFi.localIP()).c_str() : "-", staConnected ? (int)WiFi.RSSI() : 0,
+            (unsigned)gStaReason);
 }
 
 void webinterfaceBegin() {

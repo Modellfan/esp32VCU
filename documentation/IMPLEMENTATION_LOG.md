@@ -4438,3 +4438,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Web search: GPIO19/20 are USB D-/D+; configuring them as GPIO (TWAI driver) disables USB-JTAG; usb_pad=0 confirms. Waveshare ESP32-S3-Touch-LCD-7 runs TWAI on RX19/TX20 with the standard driver. No low-level change needed.
+
+
+## 2026-11-09 23:40:00 +01:00 - Retest after improved supply; WiFi disconnect reason
+
+### Changes Made
+- `webinterface.cpp`: home network disconnect reason logged on change (`[WIFI] home disconnected, reason N (NAME)`) and shown in `wifi-status` (`last_reason`).
+
+### Automated Tests Run
+- `vcu_cmd.py --hard-reset`: PASS, no brownout (first time after power improvement)
+- Stick test stream 31, 100 frames @ 10 ms: CAN1 +100, CAN2 +99..100 beyond ECU frames, errors 0: PASS; CAN0 rx 0: FAIL
+- `vcu_cmd.py can0-send`: bus-off, TEC 128, bus_err 21, arb_lost 1, RX GPIO19 never low: FAIL (hardware)
+- `platformio.exe run --target upload --upload-port COM10`: PASS
+- Home WiFi: not connected since the power change; reasons alternate 203 ASSOC_FAIL / 4 ASSOC_EXPIRE / 2 AUTH_EXPIRE (network found, router does not answer). AP `eboxster` up.
+
+### Notes
+- Before the power change the board connected (rssi -66). Open: antenna/RF environment of the new supply, router blocking after many attempts, AP channel 1 vs. router channel 11.
