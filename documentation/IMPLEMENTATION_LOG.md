@@ -4368,3 +4368,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Not flashed yet. Fan automatic now runs every 100 ms instead of 6 ms.
+
+
+## 2026-11-09 22:19:17 +01:00 - Flash 7b3c5f8, bus test with [DIAG] counters
+
+### Automated Tests Run
+- `platformio.exe run --target upload --upload-port COM10`: PASS (43.8 s, hashes verified)
+- `tools/vcu_log.py` baseline: all buses up, TEC/REC/EFLG 0, ECU task max 1057 us, ovr 0
+- `tools/can_test.cmd tx-pattern ... --stream-id 25 --tx-count 300 --tx-interval-ms 20` + [DIAG]: PASS (CAN1 +300, CAN2 +300 beyond ECU frames, TEC/REC/EFLG 0, no bus-off)
+- `... --stream-id 26 --tx-count 100 --tx-interval-ms 10` + [DIAG]: PASS (CAN1 +100, CAN2 +100, errors 0, ovr 0, txfail 0)
+
+### Artifacts
+- [tools/vcu_log.py](../tools/vcu_log.py)
+
+### Notes
+- [DIAG] counts frames, not sequence/CRC; earlier GVRET runs covered sequence/CRC.
+- CAN0 not on the bench (rx 0, as expected).
