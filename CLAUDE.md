@@ -24,7 +24,7 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 ## Projektspezifische Grenzen
 - **Fahrzeugsicherheit:** Die VCU sendet auf dem Fahrzeug-CAN anstelle des Motorsteuergeräts. Änderungen an gesendeten Botschaften, Zeitschlitzen oder Standardbits nur mit Bezug auf `can_signals.md`/DBC und mit CAN-Mitschnitt prüfen. Nie ungeprüft auf das Fahrzeug flashen.
 - **Pinbelegung:** Vor neuen Ausgängen alle belegten GPIOs in `src/board.h` prüfen (dort mit `static_assert` gegen Doppelbelegung).
-- **Hardwarezugriff:** Flashen (`platformio run --target upload`, `--target uploadfs`) und serielle Befehle an die angeschlossene Hardware nur auf ausdrückliche Anweisung des Nutzers. Lesen des seriellen Monitors ist erlaubt.
+- **Hardwarezugriff:** Am Prüfstand (COM10) nach Änderungen selbständig flashen (`--target upload`; nach PWA-Änderungen `python pwa/tools/build.py` und `--target uploadfs`) und mit `tools/vcu_cmd.py`/`vcu_log.py` prüfen, ohne vorher zu fragen (Nutzerentscheidung 2026-11-09). Nie ungeprüft auf das Fahrzeug flashen.
 - **Keine Zugangsdaten im Repo:** WLAN-Passwörter und Schlüssel gehören in `src/secrets.h` (nicht versioniert, VCU-REQ-015).
 - **Nur Referenz:** `documentation/touch-ui-reference/` und Bildmaterial von Porsche nur als Gestaltungsreferenz; geschützte Icon-Sätze bleiben außerhalb von Git (`.gitignore`).
 

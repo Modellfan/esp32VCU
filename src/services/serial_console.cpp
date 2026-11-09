@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "canmanager.h"
 #include "webinterface.h"
 
 namespace {
@@ -15,11 +16,13 @@ bool gOverflow = false;
 
 void execute(const char *command) {
     if (strcmp(command, "help") == 0) {
-        VCU_LOG("[serial] Commands: help, version, wifi-status, reset\n");
+        VCU_LOG("[serial] Commands: help, version, wifi-status, can0-status, reset\n");
     } else if (strcmp(command, "version") == 0) {
         serialConsolePrintBuildInfo();
     } else if (strcmp(command, "wifi-status") == 0) {
         webinterfaceLogWifiStatus();
+    } else if (strcmp(command, "can0-status") == 0) {
+        canManagerLogCan0Status();
     } else if (strcmp(command, "reset") == 0 || strcmp(command, "reboot") == 0) {
         VCU_LOG("[serial] Reset requested\n");
         Serial.flush();

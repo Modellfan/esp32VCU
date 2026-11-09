@@ -37,6 +37,8 @@ void canRefreshErrors();
 CanBusDiag canBusDiag(uint8_t bus);
 // Web task: one diagnostic text line per call (uptime, buses, CAN task timing).
 void canManagerLogStatus();
+// Serial command "can0-status": full TWAI status and the TX/RX pin levels.
+void canManagerLogCan0Status();
 
 // ECU task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
 constexpr uint32_t CAN_TASK_PERIOD_MS = 6;

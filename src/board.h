@@ -20,10 +20,10 @@ constexpr int GPIO_CAN2_CS = 7;    // drive CAN (Tesla SDU / OpenInverter), conf
 constexpr int GPIO_CAN2_INT = 8;
 
 // CAN0 for BMS and charger via the ESP32-S3 TWAI controller (transceiver only).
-// Pins as on the main branch (user decision 2026-11-09). GPIO20 is USB D+: the native USB
-// port cannot be used; the text log runs on UART0 (src/services/vcu_log.cpp).
-constexpr int GPIO_CAN0_TX = 21;
-constexpr int GPIO_CAN0_RX = 20;
+// Pins of the built board (user 2026-11-09; main had 21/20, commented out). GPIO19/20 are
+// USB D-/D+: the native USB port cannot be used; the text log runs on UART0 (vcu_log.cpp).
+constexpr int GPIO_CAN0_TX = 20;
+constexpr int GPIO_CAN0_RX = 19;
 
 // X9C103S digital potentiometer (fuel gauge sender emulation).
 constexpr int GPIO_DIGIPOT_CS = 4;

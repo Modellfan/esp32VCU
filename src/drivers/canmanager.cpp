@@ -4,7 +4,9 @@
 
 #include <Arduino.h>
 #include <ESP32-TWAI-CAN.hpp>
+#include <driver/gpio.h>
 #include <driver/twai.h>
+#include <soc/usb_serial_jtag_reg.h>
 
 #include "board.h"
 
@@ -155,6 +157,33 @@ CanBusDiag canBusDiag(uint8_t bus) {
     copy = gDiag[bus];
     portEXIT_CRITICAL(&gStatsMux);
     return copy;
+}
+
+void canManagerLogCan0Status() {
+    twai_status_info_t s;
+    if (!gCan0Active || twai_get_status_info(&s) != ESP_OK) {
+        VCU_LOG("[CAN0] not active\n");
+        return;
+    }
+    static const char *const STATES[] = {"stopped", "running", "bus-off", "recovering"};
+    // Sample the RX pin for 50 ms: with traffic on the bus some samples are dominant (0).
+    uint32_t samples = 0;
+    uint32_t low = 0;
+    const uint32_t start = micros();
+    while (micros() - start < 50000U) {
+        samples++;
+        if (gpio_get_level((gpio_num_t)board::GPIO_CAN0_RX) == 0) {
+            low++;
+        }
+    }
+    const bool usbPad = (READ_PERI_REG(USB_SERIAL_JTAG_CONF0_REG) & USB_SERIAL_JTAG_USB_PAD_ENABLE) != 0;
+    VCU_LOG("[CAN0] state=%s tec=%lu rec=%lu bus_err=%lu arb_lost=%lu rx_missed=%lu rx_overrun=%lu "
+            "tx_failed=%lu queued_rx=%lu | RX GPIO%d low %lu/%lu samples in 50 ms | usb_pad=%d\n",
+            s.state <= TWAI_STATE_RECOVERING ? STATES[s.state] : "?", (unsigned long)s.tx_error_counter,
+            (unsigned long)s.rx_error_counter, (unsigned long)s.bus_error_count, (unsigned long)s.arb_lost_count,
+            (unsigned long)s.rx_missed_count, (unsigned long)s.rx_overrun_count, (unsigned long)s.tx_failed_count,
+            (unsigned long)s.msgs_to_rx, board::GPIO_CAN0_RX, (unsigned long)low, (unsigned long)samples,
+            usbPad ? 1 : 0);
 }
 
 void canManagerLogStatus() {

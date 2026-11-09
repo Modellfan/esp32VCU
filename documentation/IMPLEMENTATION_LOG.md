@@ -4405,3 +4405,22 @@ ew_4e0_bit_booleans_added_to_ui: true
 - Brownout detector resets the board on power-on reset when WiFi starts (reproduced 2x after RTS reset); the second start runs. Supply over the CH343 USB only; check supply/capacitor.
 - PC is on `Blacknet@Ueberlingen`, also 192.168.0.x; both networks reach each other.
 - Not tested with SavvyCAN after the change; GVRET bytes 0xE7/0xF1 are handled before the console.
+
+
+## 2026-11-09 23:20:00 +01:00 - uploadfs (new touch UI), CAN0 pins TX20/RX19, can0-status, README
+
+### Changes Made
+- `uploadfs`: the board still served the old "ESP32 UI" from SPIFFS (removed from the repo in dc9fc4b, uploadfs never run since); now `eBoxster VCU`.
+- `src/board.h`: CAN0 TX GPIO21 -> GPIO20, RX GPIO20 -> GPIO19 (pins of the built board, user). README, VCU-DEC-008 change note, VCU-REQ-018 updated.
+- Serial command `can0-status` (`canManagerLogCan0Status()`): full TWAI status, RX pin sampled 50 ms, USB pad bit.
+- README: flow in main.cpp, tools, uploadfs note, WiFi, UART0 commands (native USB removed), open points. `platformio.ini` monitor_port COM24 -> COM10.
+- CLAUDE.md: flash/uploadfs at the bench without asking (user 2026-11-09).
+
+### Automated Tests Run
+- `platformio.exe run --target uploadfs --upload-port COM10`: PASS; `GET /` title `eBoxster VCU`
+- `platformio.exe run --target upload --upload-port COM10`: PASS (3x)
+- Stick test stream 27/28 (pins 21/20) and 29 (pins 20/19), 100 frames @ 10 ms: CAN1 +100, CAN2 +100 beyond ECU frames: PASS; **CAN0 rx 0: FAIL**
+- `vcu_cmd.py can0-status`: state running, all error counters 0, usb_pad=0, RX GPIO19 low 0/48089 samples in 50 ms with traffic on the bus
+
+### Notes
+- The CAN signal never reaches GPIO19 (the ECU frames of CAN1 are on the bus all the time); not firmware/TWAI. Check CAN0 transceiver wiring, supply, standby pin, RXD -> GPIO19.

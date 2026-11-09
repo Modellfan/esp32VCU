@@ -212,7 +212,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über einen eigenen, dritten CAN-Bus Ladestand (SoC), Batteriespannung, Batteriestrom, Ladestecker verbunden, Ladeart und Ladeleistung von BMS und Ladegerät empfangen und in der Oberfläche anzeigen.
 - **Akzeptanz:** Gegeben BMS und Ladegerät am Bus; wenn geladen wird; dann liefert `/api/live` SoC, Batteriestrom und Steckerstatus mit gültigem Alter, und die Startseite zeigt sie an.
 - **Abhängigkeiten:** VCU-REQ-013
-- **Umsetzung:** Gerüst 2026-10-28 (VCU-DEC-008): TWAI als CAN0 in `src/drivers/canmanager.cpp` (ESP32-TWAI-CAN, GPIO21/20, aktiv seit 2026-11-09), Codec `src/comms/battery_messages.cpp`, Felder `battery_*` in `/api/live` (immer `stale`). Pins fest seit 2026-11-09, Botschaften offen. Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
+- **Umsetzung:** Gerüst 2026-10-28 (VCU-DEC-008): TWAI als CAN0 in `src/drivers/canmanager.cpp` (ESP32-TWAI-CAN, TX GPIO20 / RX GPIO19, aktiv seit 2026-11-09), Codec `src/comms/battery_messages.cpp`, Felder `battery_*` in `/api/live` (immer `stale`). Pins fest seit 2026-11-09, Botschaften offen. Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
 - **Nutzerentscheidung 2026-10-28:** eigener dritter CAN-Bus (zusätzlicher Controller nötig).
 - **Offen:** Botschaften von BMS und Ladegerät, Controller und Pins des dritten Busses; ob die Reichweite in der VCU berechnet wird.
 
