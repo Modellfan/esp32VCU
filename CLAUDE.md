@@ -43,9 +43,9 @@ Eine verhaltensrelevante Änderung ist erst abgeschlossen, wenn Implementierung 
 - Touch-UI-Testserver: `python pwa/tools/serve.py` → http://127.0.0.1:8090/
 
 ## CAN-Hardwaretests
-- Immer mit dem CANivore Py Test Tool (Submodul `tools/canivore_py_test_tool`, vorher `git submodule update --init --recursive`), gestartet über den Wrapper `.\scripts\can_test.cmd <Befehl> [Optionen]` (eigene Python-Umgebung unter `.pio\canivore-py-test-tool-venv`).
+- Immer mit dem CANivore Py Test Tool (Submodul `tools/canivore_py_test_tool`, vorher `git submodule update --init --recursive`), gestartet über den Wrapper `.\tools\can_test.cmd <Befehl> [Optionen]` (eigene Python-Umgebung unter `.pio\canivore-py-test-tool-venv`).
 - Prüfstand: CANable/SLCAN-Stick auf COM22 (`--port 22`, nur die Nummer), 500 000 bit/s; CAN1 und CAN2 der VCU hängen parallel am Stick, CAN0 (TWAI) nicht. Board (GVRET, Upload) auf COM10.
-- Standardtest: `.\scripts\can_test.cmd tx-pattern --port 22 --can-bitrate 500000 --tx-id 611 --stream-id <neu> --tx-count 100 --tx-interval-ms 10`. Für jeden Lauf eine neue Stream-ID.
+- Standardtest: `.\tools\can_test.cmd tx-pattern --port 22 --can-bitrate 500000 --tx-id 611 --stream-id <neu> --tx-count 100 --tx-interval-ms 10`. Für jeden Lauf eine neue Stream-ID.
 - Bestanden ist ein Test erst durch den Empfänger, nicht durch „Sent N frames“: parallel `.\.pio\canivore-py-test-tool-venv\Scripts\python.exe tools\gvret_listen.py --port COM10 --duration <s> --pattern-id <id>` – CAN1 und CAN2 je genau N Frames, Sequenz 0..N−1, keine fehlenden/doppelten, keine CRC-Fehler; CAN0 bleibt 0.
 - CANable-Fehlerregister `0x14`/`0x54` ist bei diesem Adapter oft gelatcht: nur Warnung, `--strict-adapter-errors` nicht verwenden.
 - Logs abspielen: `tools/savvy_csv_to_asc.py` (CSV aus `documentation/can_logs/` → ASC, VCU-Sende-IDs mit `--exclude` entfernen), dann `can_test.cmd playback --playback-log-file …`.

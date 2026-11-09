@@ -15,7 +15,7 @@ ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN1 Fahrzeug, CAN2 Umrichter), TWAI als
 | `src/` | Firmware: `main.cpp` zeigt den Ablauf (CAN-Task, VCU-DEC-015); `app/` Kombi, `comms/` CAN-Codecs, `drivers/` Hardware, `services/` Webserver, Signaltabelle, GVRET, Log |
 | `pwa/` | Touch-UI als PWA, Build und Tests ([pwa/README.md](pwa/README.md)) |
 | `documentation/` | CAN-Signale, DBC-Dateien, Architekturbild, Protokoll |
-| `tools/` | `canivore_py_test_tool/` (Submodul: CAN-Tests über den CANable-Stick, Start mit `scripts\can_test.cmd`), `gvret_listen.py` (mitlesen, was die VCU je Bus empfängt), `savvy_csv_to_asc.py` (SavvyCAN-Log → ASC für die Wiedergabe), `generate_pq_messages_md.py` |
+| `tools/` | `canivore_py_test_tool/` (Submodul: CAN-Tests über den CANable-Stick, Start mit `tools\can_test.cmd`), `gvret_listen.py` (mitlesen, was die VCU je Bus empfängt), `savvy_csv_to_asc.py` (SavvyCAN-Log → ASC für die Wiedergabe), `generate_pq_messages_md.py` |
 | `documentation/can_logs/` | Mitschnitte: Stand am 986 (Fahrzeugbus), Fahrt mit Tesla SDU (SavvyCAN-CSV) |
 
 ## Build und Flashen

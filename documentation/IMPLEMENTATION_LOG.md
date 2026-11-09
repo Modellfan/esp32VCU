@@ -4324,14 +4324,14 @@ ew_4e0_bit_booleans_added_to_ui: true
 ## 2026-11-09 21:57:16 +01:00 - CAN0 firmware flashed, CAN1/CAN2 bench test passed, test wrapper
 
 ### Changes Made
-- Submodule moved to `tools/canivore_py_test_tool`; wrapper `scripts/can_test.cmd` (venv `.pio/canivore-py-test-tool-venv`, editable install).
+- Submodule moved to `tools/canivore_py_test_tool`; wrapper `tools/can_test.cmd` (venv `.pio/canivore-py-test-tool-venv`, editable install).
 - `CLAUDE.md`: section "CAN-Hardwaretests" (wrapper, COM22, new stream ID per run, pass criteria via `tools/gvret_listen.py`, adapter register 0x14 only a warning); upload command `platformio run --target upload --upload-port COM10`.
 - README, pwa/README, TESTPLAN: `platformio` instead of `pio`; README hardware line with CAN0.
 
 ### Automated Tests Run
 - `platformio.exe run --target upload --upload-port COM10` (firmware bf98cba, CAN0 on GPIO21/20): PASS (45.5 s, all hashes verified)
 - tx-pattern via global install (IDs 0x644/0x100, 20/100 ms): FAIL - stick stopped after 24-49 frames, CANable register 0x14/0x54; received frames identical and complete on CAN1 and CAN2
-- `scripts\can_test.cmd tx-pattern --port 22 --tx-id 611 --stream-id 21 --tx-count 100 --tx-interval-ms 10` + gvret_listen: PASS (CAN1 100/100, CAN2 100/100, seq 0..99, 0 missing/duplicates/CRC errors)
+- `tools\can_test.cmd tx-pattern --port 22 --tx-id 611 --stream-id 21 --tx-count 100 --tx-interval-ms 10` + gvret_listen: PASS (CAN1 100/100, CAN2 100/100, seq 0..99, 0 missing/duplicates/CRC errors)
 - same with `--stream-id 22 --tx-count 300 --tx-interval-ms 20`: PASS (CAN1 300/300, CAN2 300/300)
 - CAN1 transmit: CAN2 receives all ECU frames 0x280/289/298/4E0/7A0 (~33/s each): PASS
 

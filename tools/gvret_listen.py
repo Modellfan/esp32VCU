@@ -1,4 +1,4 @@
-"""Read what the VCU receives and sends, via GVRET on UART0, and count frames per bus.
+r"""Read what the VCU receives and sends, via GVRET on UART0, and count frames per bus.
 
     .pio\canivore-py-test-tool-venv\Scripts\python.exe tools\gvret_listen.py --port COM10 --duration 20 [--pattern-id 611]
 
