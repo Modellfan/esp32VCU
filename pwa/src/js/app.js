@@ -38,10 +38,6 @@
   const tabs = Array.from(document.querySelectorAll(".tab"));
   const urlParams = new URLSearchParams(window.location.search);
   const energyFlowEditorEnabled = urlParams.get("energyEditor") === "1";
-  const networkTestEnabled = urlParams.get("networkTest") === "1";
-  const initialNetworkOverride = ["wifi", "lte", "offline"].indexOf(urlParams.get("network") || "") !== -1
-    ? urlParams.get("network")
-    : "";
   let homeBattery = null;
   let coolantStageView = null;
   let batterySettingsModal = null;
@@ -1313,7 +1309,6 @@
     energyFlowEditorSaving: false,
     energyFlowEditorMessage: "",
     networkPopupOpen: false,
-    networkOverride: initialNetworkOverride,
     styleTestPopup: null,
     styleTestScroll: {},
     live: null,
@@ -3634,87 +3629,20 @@
     });
   }
 
+  /* The radio reaches the VCU only over WLAN: either the VCU access point or the home network.
+     The only status that matters here is whether the VCU answers. */
   function resolveNetworkStatus(live) {
     const data = live || {};
-    if (state.networkOverride) {
-      if (state.networkOverride === "wifi") {
-        return {
-          badge: "WiFi",
-          connected: true,
-          ip: data.sta_ip || data.ap_ip || "--",
-          label: "WiFi verbunden",
-          mode: "wifi",
-          signal: data.wifi_signal || data.rssi || null,
-          ssid: data.sta_ssid || data.ap_ssid || "WiFi"
-        };
-      }
-      if (state.networkOverride === "lte") {
-        return {
-          badge: "LTE",
-          connected: true,
-          ip: data.lte_ip || "--",
-          label: "LTE verbunden",
-          mode: "lte",
-          operator: data.lte_operator || "LTE",
-          signal: data.lte_signal == null ? 4 : data.lte_signal
-        };
-      }
-      return {
-        badge: "OFF",
-        connected: false,
-        ip: "--",
-        label: "Offline",
-        mode: "offline",
-        signal: 0
-      };
-    }
-    if (state.error) {
-      return {
-        badge: "OFF",
-        connected: false,
-        ip: "--",
-        label: "API offline",
-        mode: "offline",
-        signal: 0
-      };
-    }
-    if (data.lte_connected) {
-      return {
-        badge: "LTE",
-        connected: true,
-        ip: data.lte_ip || "--",
-        label: "LTE verbunden",
-        mode: "lte",
-        operator: data.lte_operator || "LTE",
-        signal: data.lte_signal == null ? null : data.lte_signal
-      };
-    }
-    if (data.sta_connected) {
-      return {
-        badge: "WiFi",
-        connected: true,
-        ip: data.sta_ip || data.ap_ip || "--",
-        label: "WiFi verbunden",
-        mode: "wifi",
-        signal: data.wifi_signal || data.rssi || null,
-        ssid: data.sta_ssid || data.ap_ssid || "WiFi"
-      };
-    }
+    const host = window.location.hostname || "";
+    const viaAccessPoint = !!data.ap_ip && host === data.ap_ip;
     return {
-      badge: "OFF",
-      connected: false,
-      ip: data.sta_ip || data.ap_ip || "--",
-      label: "Offline",
-      mode: "offline",
-      signal: 0
+      connected: !state.error,
+      label: state.error ? "VCU nicht erreichbar" : "Mit VCU verbunden",
+      address: window.location.host || "--",
+      net: viaAccessPoint
+        ? "Zugangspunkt " + (data.ap_ssid || "")
+        : data.sta_ssid ? "Heimnetz " + data.sta_ssid : "--"
     };
-  }
-
-  function networkSignalText(network) {
-    if (!network || network.signal === null || network.signal === undefined || network.signal === "") {
-      return "--";
-    }
-    return String(network.signal);
   }
 
   /* Offline cache state for the network popover (service worker, see js/pwa.js). */
@@ -3749,34 +3677,29 @@
     if (!state.networkPopupOpen || !network) {
       return "";
     }
-    const testControls = networkTestEnabled
-      ? "<div class=\"network-test-controls\" aria-label=\"Network test mode\">" +
-          ["wifi", "lte", "offline"].map(function (mode) {
-            const label = mode === "wifi" ? "WiFi" : mode === "lte" ? "LTE" : "Off";
-            return "<button type=\"button\" class=\"network-test-button" +
-              (state.networkOverride === mode ? " is-active" : "") +
-              "\" data-network-test=\"" +
-              mode +
-              "\">" +
-              label +
-              "</button>";
-          }).join("") +
-        "</div>"
-      : "";
-    return "<div class=\"network-popover\" role=\"dialog\" aria-label=\"Network status\">" +
+    return "<div class=\"network-popover\" role=\"dialog\" aria-label=\"Verbindungsstatus\">" +
       "<div class=\"network-popover-title\">" +
-        "<strong>" + escapeHtml(network.label) + "</strong>" +
-        "<span class=\"network-mode-pill is-" + escapeHtml(network.mode) + "\">" + escapeHtml(network.badge) + "</span>" +
+        "<strong class=\"" + (network.connected ? "" : "is-offline") + "\">" + escapeHtml(network.label) + "</strong>" +
       "</div>" +
       "<dl>" +
-        "<div><dt>IP</dt><dd>" + escapeHtml(network.ip || "--") + "</dd></div>" +
-        "<div><dt>SSID/Netz</dt><dd>" + escapeHtml(network.ssid || network.operator || "--") + "</dd></div>" +
-        "<div><dt>Signal</dt><dd>" + escapeHtml(networkSignalText(network)) + "</dd></div>" +
+        "<div><dt>Adresse</dt><dd>" + escapeHtml(network.address) + "</dd></div>" +
+        "<div><dt>Netz</dt><dd>" + escapeHtml(network.net.trim() || "--") + "</dd></div>" +
         "<div><dt>Offline</dt><dd data-offline-cache>" + escapeHtml(offlineCacheText()) + "</dd></div>" +
       "</dl>" +
-      (networkTestEnabled ? "<small>Testmodus: Status wird lokal simuliert.</small>" : "<small>Tippen schliesst. Langer Druck: Engineering.</small>") +
-      testControls +
+      "<small>Tippen schliesst. Langer Druck: Engineering.</small>" +
     "</div>";
+  }
+
+  /* Replaces the status popover inside the clock box without rebuilding the blinking icons. */
+  function syncNetworkPopover() {
+    const old = topbarTime.querySelector(".network-popover");
+    if (old) {
+      old.remove();
+    }
+    const markup = networkPopoverMarkup(resolveNetworkStatus(state.live || {}));
+    if (markup) {
+      topbarTime.insertAdjacentHTML("beforeend", markup);
+    }
   }
 
   function updateTopbarTime() {
@@ -3788,13 +3711,6 @@
       hour12: false,
       minute: "2-digit"
     });
-    const network = resolveNetworkStatus(state.live || {});
-    const networkBadge = "<span class=\"topbar-network-badge is-" +
-      escapeHtml(network.mode) +
-      "\">" +
-      escapeHtml(network.badge) +
-      "</span>" +
-      networkPopoverMarkup(network);
     const simulateHostLost = state.section === "styleTest" && state.styleTestControls.simulateHostLost;
     const simulatePlugConnected = state.section === "styleTest" && state.styleTestControls.simulatePlugConnected;
     if (state.error || simulateHostLost) {
@@ -3804,7 +3720,6 @@
       if (!timeValue || !topbarTime.querySelector(".topbar-warning")) {
         topbarTime.innerHTML =
           "<span class=\"topbar-time-value\"></span>" +
-          networkBadge +
           "<span class=\"topbar-warning\" aria-label=\"Live API connection interrupted\">" +
             "<img class=\"topbar-warning-icon\" src=\"a/warning.svg\" alt=\"\">" +
           "</span>";
@@ -3813,6 +3728,7 @@
       if (timeValue) {
         timeValue.textContent = timeText;
       }
+      syncNetworkPopover();
       return;
     }
     if (simulatePlugConnected || resolveChargeCableConnected(state.live || {})) {
@@ -3822,7 +3738,6 @@
       if (!timeValue || !topbarTime.querySelector(".topbar-plug")) {
         topbarTime.innerHTML =
           "<span class=\"topbar-time-value\"></span>" +
-          networkBadge +
           "<span class=\"topbar-plug\" aria-label=\"Charge cable connected\">" +
             "<img class=\"topbar-plug-icon\" src=\"a/plug.svg\" alt=\"\">" +
           "</span>";
@@ -3831,6 +3746,7 @@
       if (timeValue) {
         timeValue.textContent = timeText;
       }
+      syncNetworkPopover();
       return;
     }
     topbarTime.classList.remove("is-api-offline");
@@ -3838,8 +3754,8 @@
     topbarTime.innerHTML =
       "<span class=\"topbar-time-plain\">" +
       escapeHtml(timeText) +
-      "</span>" +
-      networkBadge;
+      "</span>";
+    syncNetworkPopover();
   }
 
   function openBatteryControlModal(controlKey) {
@@ -4191,19 +4107,9 @@
 
   function visibleLiveFields() {
     const keys = [
-      "sta_connected",
       "sta_ssid",
-      "sta_ip",
       "ap_ssid",
-      "ap_ip",
-      "wifi_signal",
-      "rssi",
-      "lte_connected",
-      "lte_operator",
-      "lte_signal",
-      "lte_ip",
-      "network_mode",
-      "network_label"
+      "ap_ip"
     ];
     if (state.section === "home") {
       keys.push(
@@ -4268,9 +4174,6 @@
       if (fields.length) {
         query.push("fields=" + encodeURIComponent(fields.join(",")));
       }
-      if (networkTestEnabled && state.networkOverride) {
-        query.push("network=" + encodeURIComponent(state.networkOverride));
-      }
       const data = await net.getJson("/api/live" + (query.length ? "?" + query.join("&") : ""));
       mergeLive(data);
       syncBatteryControlsFromLive(state.live);
@@ -4329,15 +4232,6 @@
       }
     });
     topbarTime.addEventListener("click", function (event) {
-      const testButton = event.target.closest("[data-network-test]");
-      if (testButton) {
-        event.preventDefault();
-        event.stopPropagation();
-        state.networkOverride = testButton.getAttribute("data-network-test") || "";
-        state.networkPopupOpen = true;
-        updateTopbarTime();
-        return;
-      }
       if (longPressFired) {
         longPressFired = false;
         return;

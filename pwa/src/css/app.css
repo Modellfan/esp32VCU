@@ -250,41 +250,6 @@ body {
   display: none;
 }
 
-.topbar-network-badge {
-  position: absolute;
-  right: 5px;
-  top: 5px;
-  z-index: 3;
-  min-width: 34px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.78);
-  background: rgba(0, 0, 0, 0.62);
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1;
-  letter-spacing: 0;
-}
-
-.topbar-network-badge.is-wifi {
-  color: #18caff;
-  border-color: rgba(24, 202, 255, 0.38);
-}
-
-.topbar-network-badge.is-lte {
-  color: #b6ff00;
-  border-color: rgba(182, 255, 0, 0.48);
-}
-
-.topbar-network-badge.is-offline {
-  color: #ff2d3d;
-  border-color: rgba(255, 45, 61, 0.48);
-}
-
 .network-popover {
   position: absolute;
   right: 0;
@@ -332,30 +297,8 @@ body {
   font-weight: 520;
 }
 
-.network-mode-pill {
-  min-width: 48px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.network-mode-pill.is-wifi {
-  color: #18caff;
-  border-color: rgba(24, 202, 255, 0.44);
-}
-
-.network-mode-pill.is-lte {
-  color: #b6ff00;
-  border-color: rgba(182, 255, 0, 0.52);
-}
-
-.network-mode-pill.is-offline {
+.network-popover-title strong.is-offline {
   color: #ff2d3d;
-  border-color: rgba(255, 45, 61, 0.52);
 }
 
 .network-popover dl {
@@ -393,30 +336,6 @@ body {
   color: rgba(255, 255, 255, 0.46);
   font-size: 14px;
   line-height: 1.2;
-}
-
-.network-test-controls {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.network-test-button {
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.76);
-  background: rgba(0, 0, 0, 0.34);
-  font: inherit;
-  font-size: 16px;
-}
-
-.network-test-button.is-active {
-  color: #000000;
-  background: #18caff;
-  border-color: #18caff;
 }
 
 .topbar-warning-icon,

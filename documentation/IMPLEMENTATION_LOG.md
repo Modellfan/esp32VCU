@@ -4173,3 +4173,34 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - User feedback 2026-11-05: component tests on the application level only, no CAN emulation.
+
+
+## 2026-11-09 00:59:47 +01:00 - Touch UI: network badge (WiFi/LTE/OFF) removed; build env fix
+
+### Planned Steps
+- Remove the WiFi/LTE/OFF badge in the clock box and the LTE/test-mode code (radio is connected to the VCU via WLAN only).
+- Keep the status popover under the clock: VCU reachable yes/no, address, network (access point / home network), offline cache.
+- Rebuild PWA, run PWA tests, screenshot check.
+
+### Changes Made
+- `pwa/src/js/app.js`: badge, `networkOverride`/`?network=`/`?networkTest=1`, LTE branch and test buttons removed; `resolveNetworkStatus()` reports only VCU reachability; new `syncNetworkPopover()` so the popover also opens while the warning/plug icon blinks; polled network fields reduced to `sta_ssid`, `ap_ssid`, `ap_ip`.
+- `pwa/src/css/app.css`: styles for badge, mode pill and test buttons removed; red popover title when offline.
+- PlatformIO Python env (outside repo): broken `urllib3` reinstalled (`pip install --ignore-installed --no-deps urllib3==1.26.20`).
+
+### Automated Tests Run
+- `pio run -e esp32s3`: PASS (before UI change, firmware unchanged)
+- `node --check pwa/src/js/app.js`: PASS
+- `python pwa/tools/build.py`: PASS
+- `python -m pytest pwa/tests -q`: PASS (32 passed)
+
+### Result
+- `pwa_dist_bytes: 493748 (budget 1100000)`
+- `firmware_ram: 14.9 %, firmware_flash: 32.9 %`
+
+### Artifacts
+- [pwa/dist](../pwa/dist)
+
+### Notes
+- Firmware still sends `lte_*` fields in `/api/live` (webinterface.cpp); removing them changes the API and is left open.
+- `tools/touch_ui_test_support.py` still contains `apply_network_mock` (test server only, unused by the UI now).
+- Not checked on the navi display.
