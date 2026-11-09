@@ -4454,3 +4454,14 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Before the power change the board connected (rssi -66). Open: antenna/RF environment of the new supply, router blocking after many attempts, AP channel 1 vs. router channel 11.
+
+
+## 2026-11-09 23:50:00 +01:00 - Retest CAN0 with additional termination
+
+### Automated Tests Run
+- Stick test stream 32, 100 frames @ 10 ms: CAN1 +100, CAN2 +100 beyond ECU frames (1502), errors 0: PASS; CAN0 rx 0: FAIL
+- `vcu_cmd.py can0-status`: RX GPIO19 low 0/47570 samples; `can0-send`: bus-off, TEC 128, bus_err 19: FAIL (unchanged)
+- `vcu_cmd.py reset`: PASS, no brownout
+
+### Notes
+- Termination does not change the result: GPIO19 never sees a dominant level, so the fault is between the pins and the transceiver (supply, standby, RXD/TXD connection), not on the bus side.
