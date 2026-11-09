@@ -203,6 +203,73 @@ void canManagerCan0SendTest() {
     canManagerLogCan0Status();
 }
 
+namespace {
+// Count low samples of a pin over a time window (busy loop, diagnostics only).
+uint32_t countLow(gpio_num_t pin, uint32_t windowUs, uint32_t &samples) {
+    uint32_t low = 0;
+    samples = 0;
+    const uint32_t start = micros();
+    while (micros() - start < windowUs) {
+        samples++;
+        if (gpio_get_level(pin) == 0) {
+            low++;
+        }
+    }
+    return low;
+}
+}  // namespace
+
+void canManagerCan0PinTest() {
+    const gpio_num_t rx = (gpio_num_t)board::GPIO_CAN0_RX;
+    const gpio_num_t tx = (gpio_num_t)board::GPIO_CAN0_TX;
+    const bool wasActive = gCan0Active;
+    gCan0Active = false;  // loop() stops reading CAN0
+    delay(5);             // let a running can0Receive() finish
+    if (wasActive) {
+        ESP32Can.end();
+    }
+    gpio_reset_pin(rx);
+    gpio_reset_pin(tx);
+    gpio_set_direction(rx, GPIO_MODE_INPUT);
+    // TX recessive (high) while RX is sampled with the three pull settings.
+    gpio_set_direction(tx, GPIO_MODE_OUTPUT);
+    gpio_set_level(tx, 1);
+
+    uint32_t n = 0;
+    gpio_set_pull_mode(rx, GPIO_FLOATING);
+    delay(2);
+    const uint32_t lowFloat = countLow(rx, 20000, n);
+    gpio_set_pull_mode(rx, GPIO_PULLUP_ONLY);
+    delay(2);
+    const uint32_t lowUp = countLow(rx, 20000, n);
+    gpio_set_pull_mode(rx, GPIO_PULLDOWN_ONLY);
+    delay(2);
+    const uint32_t lowDown = countLow(rx, 20000, n);
+    VCU_LOG("[PINTEST] TX high: RX GPIO%d low samples float %lu, pull-up %lu, pull-down %lu (of %lu each)\n",
+            board::GPIO_CAN0_RX, (unsigned long)lowFloat, (unsigned long)lowUp, (unsigned long)lowDown,
+            (unsigned long)n);
+
+    // TX dominant for 20 ms: the transceiver echoes it on RXD, the other nodes see errors.
+    gpio_set_pull_mode(rx, GPIO_FLOATING);
+    const uint8_t rec1Before = can1.receiveErrorCounter();
+    const uint8_t rec2Before = can2.receiveErrorCounter();
+    gpio_set_level(tx, 0);
+    delayMicroseconds(200);
+    const uint32_t lowEcho = countLow(rx, 20000, n);
+    gpio_set_level(tx, 1);
+    const uint8_t rec1After = can1.receiveErrorCounter();
+    const uint8_t rec2After = can2.receiveErrorCounter();
+    VCU_LOG("[PINTEST] TX low 20 ms: RX low %lu/%lu (echo) | CAN1 REC %u->%u, CAN2 REC %u->%u\n",
+            (unsigned long)lowEcho, (unsigned long)n, rec1Before, rec1After, rec2Before, rec2After);
+
+    gpio_reset_pin(rx);
+    gpio_reset_pin(tx);
+    if (wasActive) {
+        gCan0Active = ESP32Can.begin(ESP32Can.convertSpeed(500), board::GPIO_CAN0_TX, board::GPIO_CAN0_RX, 8, 32);
+        VCU_LOG("[PINTEST] CAN0 restarted %s\n", gCan0Active ? "ok" : "FAILED");
+    }
+}
+
 void canManagerLogStatus() {
     const CanTaskStats t = canTaskStats();
     char line[320];

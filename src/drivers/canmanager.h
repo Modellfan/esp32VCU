@@ -41,6 +41,10 @@ void canManagerLogStatus();
 void canManagerLogCan0Status();
 // Serial command "can0-send": one test frame 0x6C0 on CAN0 (bench only), then the status.
 void canManagerCan0SendTest();
+// Serial command "can0-pintest": TWAI stopped, RX sampled floating/pull-up/pull-down,
+// TX driven low as plain GPIO for 20 ms (echo on RX, errors on CAN1/CAN2), TWAI restarted.
+// Disturbs the bench bus for 20 ms; never on the vehicle.
+void canManagerCan0PinTest();
 
 // ECU task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
 constexpr uint32_t CAN_TASK_PERIOD_MS = 6;

@@ -4465,3 +4465,17 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Termination does not change the result: GPIO19 never sees a dominant level, so the fault is between the pins and the transceiver (supply, standby, RXD/TXD connection), not on the bus side.
+
+
+## 2026-11-10 00:05:00 +01:00 - CAN0 pin test without TWAI driver (can0-pintest)
+
+### Changes Made
+- Serial command `can0-pintest` (`canManagerCan0PinTest()`): TWAI stopped, RX sampled floating/pull-up/pull-down, TX driven low as plain GPIO for 20 ms, CAN1/CAN2 REC before/after, TWAI restarted.
+
+### Automated Tests Run
+- `platformio.exe run --target upload --upload-port COM10`: PASS
+- `vcu_cmd.py can0-pintest`: RX GPIO19 low 0 samples floating/pull-up/pull-down (transceiver drives RXD high); TX low 20 ms: RX echo low 6101/19339 samples (~6 ms, then TXD dominant timeout), CAN1 REC 0->135, CAN2 REC 0->135; CAN0 restarted ok
+- `vcu_cmd.py can0-status` after restart: running, errors 0
+
+### Notes
+- Transceiver is powered, TXD and RXD are connected (own dominant reaches the bus and is echoed). It never shows the traffic of the other nodes, and TWAI frames end in bus-off: fits swapped CANH/CANL on CAN0 (own signal seen with the right polarity, the bus signal inverted = recessive). To check with the wiring.
