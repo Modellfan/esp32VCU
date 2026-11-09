@@ -15,7 +15,8 @@ ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN 1 Fahrzeug, CAN 2 Umrichter), X9C103
 | `src/` | Firmware: `main.cpp` zeigt den Ablauf (CAN-Task, VCU-DEC-015); `app/` Kombi, `comms/` CAN-Codecs, `drivers/` Hardware, `services/` Webserver, Signaltabelle, GVRET, Log |
 | `pwa/` | Touch-UI als PWA, Build und Tests ([pwa/README.md](pwa/README.md)) |
 | `documentation/` | CAN-Signale, DBC-Dateien, Architekturbild, Protokoll |
-| `tools/` | `generate_pq_messages_md.py`: erzeugt `documentation/PQ_messages.md` aus der VW-DBC |
+| `tools/` | `canivore-py-test-tool/` (Submodul: CAN-Tests über den CANable-Stick), `gvret_listen.py` (mitlesen, was die VCU je Bus empfängt), `savvy_csv_to_asc.py` (SavvyCAN-Log → ASC für die Wiedergabe), `generate_pq_messages_md.py` |
+| `documentation/can_logs/` | Mitschnitte: Stand am 986 (Fahrzeugbus), Fahrt mit Tesla SDU (SavvyCAN-CSV) |
 
 ## Build und Flashen
 ```bash
@@ -39,4 +40,4 @@ pio run -e esp32s3 -t uploadfs              # PWA ins SPIFFS
 - UART0 (115200): GVRET für SavvyCAN · nativer USB-Port: Textlog
 
 ## Offene Punkte
-Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften und CAN-3-Pins, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
+Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.

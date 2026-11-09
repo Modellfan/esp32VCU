@@ -13,7 +13,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-002 – Ebenenmodell nach AUTOSAR-Prinzip
 - **Status:** accepted (Nutzerwunsch 2026-10-28)
 - **Betroffene Requirements:** alle
-- **Entscheidung:** Hardware → Treiber (`canmanager`, `can3_twai`, `coolant_fan_control`, `digipot_control`) → Kommunikation (Codecs `986_*_messages`, `tesla_sdu_messages`, `battery_messages`) → Daten (`params::*`) → Anwendung (`cluster_calc`). Dienste daneben: Webserver (`webinterface`, `signal_table`, `params_lock`), GVRET (`gvret_bridge`), Log (`vcu_log`). Bild: `documentation/architecture.svg`.
+- **Entscheidung:** Hardware → Treiber (`canmanager` mit CAN0/CAN1/CAN2, `coolant_fan_control`, `digipot_control`) → Kommunikation (Codecs `986_*_messages`, `tesla_sdu_messages`, `battery_messages`) → Daten (`params::*`) → Anwendung (`cluster_calc`). Dienste daneben: Webserver (`webinterface`, `signal_table`, `params_lock`), GVRET (`gvret_bridge`), Log (`vcu_log`). Bild: `documentation/architecture.svg`.
 - **Regel:** Anwendung und Webserver lesen und schreiben nur Daten in `params`; nur die Treiberschicht berührt Hardware.
 - **Geändert 2026-11-09 (VCU-DEC-015):** Keine eigene Datenschicht mehr: jedes Modul besitzt seine `params::*`-Gruppe; `vcu_rt`, `vcu_app` und `vcu_params` sind aufgelöst.
 
@@ -52,11 +52,12 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Entscheidung:** `src/services/signal_table.cpp` enthält je Signal Name, Datengruppe, Offset, Speichertyp, Ausgabeformat, Quellbotschaft und Schreibrecht. `/api/live`, `/api/set-ecu` und `/api/signals` (Liste aller Signale) entstehen daraus. Feldnamen sind unverändert zur alten `getLiveJson()`.
 - **Konsequenzen:** Ein neues Signal braucht genau einen Tabelleneintrag; eine neue Datengruppe genau einen Eintrag in `SIGNAL_GROUPS` (`signal_table.h`). Zahlen werden beim Setzen auf Typ und Wertebereich geprüft; ungültige Schlüssel stehen in der Antwort unter `rejected`.
 
-## VCU-DEC-008 – CAN 3 über den TWAI-Controller
+## VCU-DEC-008 – CAN0 über den TWAI-Controller
 - **Status:** accepted im Grundsatz (Vorschlag 6, Nutzer 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-018
 - **Optionen:** A: eingebauter TWAI-Controller des ESP32-S3 mit Transceiver; B: dritter MCP2515 am SPI-Bus.
 - **Entscheidung:** A. Treibergerüst `can3_twai` und Codec `battery_messages` sind vorhanden, aber inaktiv, bis Pins und Botschaften feststehen.
+- **Geändert 2026-11-09 (Nutzer):** Der TWAI-Bus heißt CAN0, die MCP2515 heißen `can1`/`can2`. CAN0 sitzt im `canmanager` (kein eigenes Modul) und nutzt die Bibliothek ESP32-TWAI-CAN wie auf dem Branch `main`, Pins TX = GPIO21, RX = GPIO20. GPIO20 ist USB D+: Der native USB-Port (Textlog) entfällt, `VCU_LOG_ENABLED=0`. Botschaften von BMS/Lader weiter offen.
 
 ## VCU-DEC-009 – Pinbelegung zentral in `board.h`
 - **Status:** accepted (Vorschlag 7, Nutzer 2026-10-28)

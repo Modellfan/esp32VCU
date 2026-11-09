@@ -13,7 +13,6 @@
 
 #include "board.h"
 #include "canmanager.h"
-#include "can3_twai.h"
 #include "gvret_bridge.h"
 #include "signal_table.h"
 #include "status_led.h"
@@ -189,7 +188,7 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
     addUInt("rt_started_ms", rt.started_ms);
     addUInt("can1_error", canManager_error(1));
     addUInt("can2_error", canManager_error(2));
-    addBool("can3_active", can3Active());
+    addBool("can0_active", can0Active());
     addUInt("gvret_dropped", gvretBridgeDropped());
     addUInt("free_heap", ESP.getFreeHeap());
 

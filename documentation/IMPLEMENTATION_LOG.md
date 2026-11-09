@@ -4281,3 +4281,41 @@ ew_4e0_bit_booleans_added_to_ui: true
 - Not tested on hardware: 6 ms timing, start < 1 s and rt_* counters were never measured; CAN capture needed before vehicle use.
 - `documentation/architecture.png` / `sil/architecture.png` are raster images and not regenerated.
 - Task name changed from `vcu_rt` to `vcu_can`; `/api/live` keeps the `rt_*` field names.
+
+
+## 2026-11-09 21:25:06 +01:00 - Flash, bench CAN test, CAN0 (TWAI) in canmanager, can1/can2 naming
+
+### Planned Steps
+- Flash the VCU-DEC-015 firmware (user instruction), test CAN1/CAN2 with the CANable stick.
+- Add canivore-py-test-tool as submodule, CAN logs and helper scripts.
+- Rename can -> can1; move TWAI into canmanager as CAN0 with ESP32-TWAI-CAN (as on branch main), pins 21/20 (user decision).
+
+### Changes Made
+- `tools/canivore-py-test-tool`: git submodule (Modellfan/canivore-py-test-tool @ 442803f).
+- `documentation/can_logs/986_log_stand.csv`, `20260419_fahrt_tesla.csv` (from the user's desktop, 35 MB).
+- `tools/savvy_csv_to_asc.py` (CSV -> ASC, optional exclusion of VCU TX IDs), `tools/gvret_listen.py` (per-bus counts and tx-pattern check via GVRET on UART0).
+- `src/drivers/canmanager.*`: `can1`/`can2`, CAN0 via ESP32-TWAI-CAN (`can0Active()`, `can0Receive()`); `src/drivers/can3_twai.*` deleted.
+- `src/board.h`: `GPIO_CAN0_TX = 21`, `GPIO_CAN0_RX = 20`; `platformio.ini`: lib ESP32-TWAI-CAN, `VCU_LOG_ENABLED=0` (GPIO20 = USB D+).
+- `/api/live`: `can3_active` -> `can0_active`.
+- Docs: DEC-002/008, REQ-018, TESTPLAN, README, architecture map.
+
+### Automated Tests Run
+- `pio run -e esp32s3 -t upload --upload-port COM10` (firmware a0817b7, before the CAN0 change): PASS after setting PYTHONIOENCODING=utf-8 (two earlier attempts hung: pio crashed printing the progress bar in cp1252)
+- `python tools/gvret_listen.py --port COM10 --duration 5`: ECU frames 0x280/289/298/4E0/7A0 period 29.99 ms (27.8-31.1 ms, GVRET timestamps)
+- `canivore-py-test-tool tx-pattern --port 22 ... --tx-id 644 --tx-count 300 --tx-interval-ms 20` + listener: CAN2 300/300, no gaps/duplicates/CRC errors; CAN1 0 frames: FAIL (CAN1 receives nothing, CAN2 never sees the VCU's ECU frames)
+- `pio run -e esp32s3` (CAN0 change): PASS (RAM 48972 B, Flash 1103657 B)
+- `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)
+
+### Result
+- `can2_pattern: 300/300`, `can1_pattern: 0/300`, `ecu_period_ms: 29.99`
+
+### Artifacts
+- [tools/gvret_listen.py](../tools/gvret_listen.py)
+- [tools/savvy_csv_to_asc.py](../tools/savvy_csv_to_asc.py)
+- [documentation/can_logs](can_logs)
+
+### Notes
+- CAN1 open: wiring/transceiver or MCP2515 init (can1_error not readable: PC not on the VCU WiFi, native USB not connected).
+- CAN0 firmware built but not flashed yet; with it the native USB log port no longer works.
+- Stand log contains every frame twice (~60 us apart), probably recorded on two interfaces.
+- Log playback not run yet (waits for CAN1).

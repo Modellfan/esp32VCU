@@ -19,10 +19,11 @@ constexpr int GPIO_CAN1_INT = 9;
 constexpr int GPIO_CAN2_CS = 7;    // drive CAN (Tesla SDU / OpenInverter), confirmed 2026-10-28
 constexpr int GPIO_CAN2_INT = 8;
 
-// CAN 3 for BMS and charger via the ESP32-S3 TWAI controller (transceiver only).
-// Pins not decided yet: the bus stays disabled until both are assigned.
-constexpr int GPIO_CAN3_TX = GPIO_UNASSIGNED;
-constexpr int GPIO_CAN3_RX = GPIO_UNASSIGNED;
+// CAN0 for BMS and charger via the ESP32-S3 TWAI controller (transceiver only).
+// Pins as on the main branch (user decision 2026-11-09). GPIO20 is USB D+: the native USB
+// port (text log) cannot be used, so the log is compiled out (platformio.ini).
+constexpr int GPIO_CAN0_TX = 21;
+constexpr int GPIO_CAN0_RX = 20;
 
 // X9C103S digital potentiometer (fuel gauge sender emulation).
 constexpr int GPIO_DIGIPOT_CS = 4;
@@ -37,13 +38,13 @@ constexpr int GPIO_FAN_STAGE2 = 15;
 // On-board WS2812 RGB LED.
 constexpr int GPIO_RGB_LED = 48;
 
-constexpr bool CAN3_ENABLED = GPIO_CAN3_TX != GPIO_UNASSIGNED && GPIO_CAN3_RX != GPIO_UNASSIGNED;
+constexpr bool CAN0_ENABLED = GPIO_CAN0_TX != GPIO_UNASSIGNED && GPIO_CAN0_RX != GPIO_UNASSIGNED;
 constexpr bool FAN_OUTPUTS_ENABLED = GPIO_FAN_STAGE1 != GPIO_UNASSIGNED && GPIO_FAN_STAGE2 != GPIO_UNASSIGNED;
 
 constexpr int kAssignedPins[] = {
     GPIO_SPI_SCK, GPIO_SPI_MOSI, GPIO_SPI_MISO,
     GPIO_CAN1_CS, GPIO_CAN1_INT, GPIO_CAN2_CS, GPIO_CAN2_INT,
-    GPIO_CAN3_TX, GPIO_CAN3_RX,
+    GPIO_CAN0_TX, GPIO_CAN0_RX,
     GPIO_DIGIPOT_CS, GPIO_DIGIPOT_INC, GPIO_DIGIPOT_UD,
     GPIO_FAN_STAGE1, GPIO_FAN_STAGE2,
     GPIO_RGB_LED,

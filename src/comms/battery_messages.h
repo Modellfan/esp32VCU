@@ -1,4 +1,4 @@
-// Communication layer: BMS / charger codec for CAN 3 (TWAI).
+// Communication layer: BMS / charger codec for CAN0 (TWAI).
 // The message layout is not defined yet (VCU-REQ-018); decodeBattery() accepts nothing.
 #ifndef BATTERY_MESSAGES_H
 #define BATTERY_MESSAGES_H
@@ -8,7 +8,7 @@
 
 namespace params {
 
-// BMS / charger values from CAN 3. Message layout not defined yet.
+// BMS / charger values from CAN0. Message layout not defined yet.
 struct BatterySignals {
     float soc_pct = 0.0f;
     float pack_voltage_v = 0.0f;

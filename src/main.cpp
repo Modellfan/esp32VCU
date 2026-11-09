@@ -18,7 +18,6 @@
 #include "986_vehicle_messages.h"
 #include "battery_messages.h"
 #include "board.h"
-#include "can3_twai.h"
 #include "can_rx_monitor.h"
 #include "canmanager.h"
 #include "cluster_calc.h"
@@ -35,11 +34,11 @@
 //---------------------------------------------------------------------------
 constexpr int RX_BUDGET_PER_BUS = 32;  // frames per bus and cycle; the rest waits for the next cycle
 
-// CAN 1: Porsche 986 vehicle messages
+// CAN1: Porsche 986 vehicle messages
 void pollVehicleCAN() {
     CANMessage frame;
-    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can.available(); budget--) {
-        can.receive(frame);
+    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can1.available(); budget--) {
+        can1.receive(frame);
         if (decode986Vehicle(frame)) {
             rxMark(BUS_VEHICLE, frame.id);
         }
@@ -47,7 +46,7 @@ void pollVehicleCAN() {
     }
 }
 
-// CAN 2: Tesla SDU (OpenInverter)
+// CAN2: Tesla SDU (OpenInverter)
 void pollTeslaCAN() {
     CANMessage frame;
     for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can2.available(); budget--) {
@@ -59,10 +58,10 @@ void pollTeslaCAN() {
     }
 }
 
-// CAN 3: BMS / charger (TWAI, inactive until pins are assigned)
+// CAN0: BMS / charger (TWAI)
 void pollBatteryCAN() {
     CANMessage frame;
-    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can3Receive(frame); budget--) {
+    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can0Receive(frame); budget--) {
         if (decodeBattery(frame)) {
             rxMark(BUS_BATTERY, frame.id);
         }
@@ -71,7 +70,7 @@ void pollBatteryCAN() {
 }
 
 //---------------------------------------------------------------------------
-// CAN 1: Porsche 986 ECU emulation.
+// CAN1: Porsche 986 ECU emulation.
 // 5 ECU frames x 6 ms slot = 30 ms full cycle, evenly distributed.
 //---------------------------------------------------------------------------
 void emulateECUCAN(CANMessage &outFrame) {
@@ -111,7 +110,7 @@ void canTask(void *) {
             fuelGaugePct = params::digipot.digipot_pct;
         }
 
-        const bool sent = can.tryToSend(outFrame);
+        const bool sent = can1.tryToSend(outFrame);
         gvretBridgeObserve(outFrame, GVRET_BUS_TX);
 
         // Hardware outputs outside the lock (the potentiometer needs about 2 ms per change).
@@ -140,8 +139,7 @@ void setup() {
     fastledInit();
     digipotBegin();
     coolantFanBegin();
-    canManager_setup();
-    can3Begin();
+    canManager_setup();  // CAN0 (TWAI), CAN1, CAN2
     gvretBridgeBegin();
 
     // ECU emulation first: frames go out before WiFi is even started (VCU-REQ-002).

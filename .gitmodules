@@ -1,0 +1,3 @@
+[submodule "tools/canivore-py-test-tool"]
+	path = tools/canivore-py-test-tool
+	url = https://github.com/Modellfan/canivore-py-test-tool.git

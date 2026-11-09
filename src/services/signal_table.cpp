@@ -220,7 +220,7 @@ const SignalDef kSignals[] = {
     SIG("coolant_fan_level_auto", G_FAN, params::FanSignals, fan_level_auto, F_UINT, 0, RX_NONE, 0),
     SIG("coolant_fan_outputs_enabled", G_FAN, params::FanSignals, fan_outputs_enabled, F_BOOL, 0, RX_NONE, 0),
     SIG("digital_pot_request_pct", G_DIGIPOT, params::DigipotSignals, digipot_pct, F_UINT, 0, RX_NONE, 0),
-    // BMS / charger on CAN 3 (VCU-REQ-018). Message layout open: these values stay stale.
+    // BMS / charger on CAN0 (VCU-REQ-018). Message layout open: these values stay stale.
     SIG("battery_soc_pct", G_BATTERY, params::BatterySignals, soc_pct, F_NUM, 1, RX_BATTERY, 0),
     SIG("battery_pack_voltage_v", G_BATTERY, params::BatterySignals, pack_voltage_v, F_NUM, 1, RX_BATTERY, 0),
     SIG("battery_pack_current_a", G_BATTERY, params::BatterySignals, pack_current_a, F_NUM, 1, RX_BATTERY, 0),

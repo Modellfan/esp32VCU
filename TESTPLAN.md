@@ -37,7 +37,7 @@ Host-Tests laufen über die SIL-Umgebung (`sil/`, Compiler aus dem PyPI-Paket `z
 | VCU-REQ-015 | TC-SEC-01: `git grep` nach Heim-Passwort leer; frischer Klon baut mit Vorlage | B | `git grep` leer 2026-10-28; Klon-Build offen |
 | VCU-REQ-016 | TC-SEC-02: ohne Passwort keine Verbindung zum AP | P | offen |
 | VCU-REQ-017 | TC-CHG-01: Ladeparameter wirken am Ladegerät | F | blockiert (kein Ladegerät angebunden) |
-| VCU-REQ-018 | TC-BAT-01: BMS/Lader auf CAN 3 → Werte mit gültigem Alter | P | blockiert (Pins, Botschaften offen) |
+| VCU-REQ-018 | TC-BAT-01: BMS/Lader auf CAN0 → Werte mit gültigem Alter | P | blockiert (Pins, Botschaften offen) |
 | VCU-REQ-019 | TC-LED-01: Sichtprüfung 1 Hz grün | P | offen |
 
 ## 3. Abnahmeregeln

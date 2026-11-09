@@ -27,7 +27,7 @@
       {"id": "web", "label": "Web / Radio", "nodes": ["s_web", "s_fs", "sigtab", "h_radio", "x_radio", "p_out", "overrides", "p_meas", "p_ecu", "p_bat", "d_led"]}
     ],
     "subtitle": "Ebenenmodell nach AUTOSAR-Prinzip (VCU-DEC-002) · Stand 2026-10-29 · nicht auf Hardware geprüft",
-    "columns": ["Aktoren", "Kombi / Motorsteuergerät", "Messwerte / CAN 1+2", "Batterie / CAN 3", "Dienste"]
+    "columns": ["Aktoren", "Kombi / Motorsteuergerät", "Messwerte / CAN 1+2", "Batterie / CAN0", "Dienste"]
   },
   "layers": [
     {"id": "app", "title": "Anwendung", "hint": "High Level"},
@@ -124,7 +124,7 @@
        "files": ["src/comms/tesla_sdu_messages.cpp"], "interfaces": ["schreibt params::tesla_sdu"],
        "timing": "bis 32 Frames je Zyklus", "reqs": ["VCU-REQ-004"], "decs": [], "open": []}},
     {"id": "c_bat", "title": "Batterie-Codec", "layer": "comm", "col": 4, "kind": "module", "status": "geplant",
-     "summary": "Platzhalter für BMS- und Ladegerätbotschaften auf CAN 3.",
+     "summary": "Platzhalter für BMS- und Ladegerätbotschaften auf CAN0.",
      "details": {
        "responsibilities": ["decodeBattery() – nimmt noch nichts an"], "files": ["src/comms/battery_messages.cpp"],
        "interfaces": ["schreibt params::battery"], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"],
@@ -154,9 +154,9 @@
        "files": ["src/drivers/canmanager.cpp", "lib: ACAN2515 (Modellfan-Fork)"], "interfaces": ["SPI SCK12 MOSI11 MISO13, CS 10/7, INT 9/8"],
        "timing": "Interrupt-Task der Bibliothek + Abfrage alle 6 ms", "reqs": ["VCU-REQ-001", "VCU-REQ-003", "VCU-REQ-004"], "decs": ["VCU-DEC-001"], "open": []}},
     {"id": "d_twai", "title": "TWAI-Treiber", "layer": "drv", "col": 4, "kind": "module", "status": "geplant",
-     "summary": "CAN 3 über den eingebauten CAN-Controller des ESP32-S3.",
-     "details": {"responsibilities": ["can3Begin(), can3Receive()"], "files": ["src/drivers/can3_twai.cpp"],
-       "interfaces": ["GPIO_CAN3_TX/RX (nicht zugewiesen)"], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"],
+     "summary": "CAN0 über den eingebauten CAN-Controller des ESP32-S3 (im canmanager).",
+     "details": {"responsibilities": ["ESP32Can.begin() in canManager_setup(), can0Receive()"], "files": ["src/drivers/canmanager.cpp"],
+       "interfaces": ["GPIO_CAN0_TX = 21, GPIO_CAN0_RX = 20 (USB D+)"], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"],
        "open": ["Pins und Transceiver"]}},
 
     {"id": "h_relay", "title": "Relais-GPIO", "layer": "hw", "col": 1, "kind": "hardware", "status": "offen",
@@ -168,7 +168,7 @@
     {"id": "h_mcp", "title": "2× MCP2515", "layer": "hw", "col": 3, "kind": "hardware", "status": "umgesetzt",
      "summary": "CAN 1 Fahrzeug, CAN 2 Umrichter.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": ["8-MHz-Quarz, 500 kbit/s"], "timing": "-", "reqs": [], "decs": ["VCU-DEC-001"], "open": []}},
     {"id": "h_twai", "title": "TWAI + Transceiver", "layer": "hw", "col": 4, "kind": "hardware", "status": "geplant",
-     "summary": "CAN 3 für BMS und Ladegerät.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"], "open": ["Pins, Transceiver"]}},
+     "summary": "CAN0 für BMS und Ladegerät.", "details": {"responsibilities": [], "files": ["src/board.h"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": ["VCU-DEC-008"], "open": ["Pins, Transceiver"]}},
     {"id": "h_radio", "title": "WLAN", "layer": "hw", "col": 5, "kind": "hardware", "status": "umgesetzt",
      "summary": "AP eboxster (WPA2) + Heimnetz.", "details": {"responsibilities": [], "files": ["src/services/webinterface.cpp", "src/secrets.example.h"], "interfaces": ["AP 192.168.4.1", "Host eboxster-vcu"], "timing": "-", "reqs": ["VCU-REQ-014", "VCU-REQ-015", "VCU-REQ-016"], "decs": ["VCU-DEC-011"], "open": []}},
     {"id": "h_usb", "title": "UART0 + USB-JTAG", "layer": "hw", "col": 5, "kind": "hardware", "status": "umgesetzt",
@@ -204,7 +204,7 @@
     {"id": "x_fuel", "title": "Tankanzeige", "layer": "ext", "col": 1, "kind": "external", "status": "umgesetzt", "summary": "Im Kombiinstrument, über Poti.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-009"], "decs": [], "open": []}},
     {"id": "x_vcan", "title": "Fahrzeug-CAN", "layer": "ext", "col": 2, "kind": "external", "status": "umgesetzt", "summary": "Kombi, ABS/PSM, Getriebe · 500 kbit/s.", "details": {"responsibilities": [], "files": ["documentation/can_signals.md"], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-001", "VCU-REQ-003"], "decs": [], "open": []}},
     {"id": "x_sdu", "title": "Tesla SDU", "layer": "ext", "col": 3, "kind": "external", "status": "umgesetzt", "summary": "OpenInverter stm32-sine, CAN 2.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-004"], "decs": [], "open": []}},
-    {"id": "x_bms", "title": "BMS / Ladegerät", "layer": "ext", "col": 4, "kind": "external", "status": "geplant", "summary": "Über CAN 3.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": [], "open": ["Botschaften"]}},
+    {"id": "x_bms", "title": "BMS / Ladegerät", "layer": "ext", "col": 4, "kind": "external", "status": "geplant", "summary": "Über CAN0.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-018"], "decs": [], "open": ["Botschaften"]}},
     {"id": "x_radio", "title": "Android-Radio", "layer": "ext", "col": 5, "kind": "external", "status": "umgesetzt", "summary": "Chrome, PWA 1024×600.", "details": {"responsibilities": [], "files": ["pwa/README.md"], "interfaces": ["http://192.168.4.1"], "timing": "-", "reqs": ["VCU-REQ-011"], "decs": ["VCU-DEC-012"], "open": ["Chrome-Flag einrichten"]}},
     {"id": "x_pc", "title": "PC · SavvyCAN", "layer": "ext", "col": 5, "kind": "external", "status": "umgesetzt", "summary": "CAN-Diagnose über USB.", "details": {"responsibilities": [], "files": [], "interfaces": [], "timing": "-", "reqs": ["VCU-REQ-012"], "decs": [], "open": []}}
   ],
@@ -212,13 +212,13 @@
     {"from": "x_vcan", "to": "h_mcp", "label": "CAN 1", "kind": "bus"},
     {"from": "h_mcp", "to": "x_vcan", "label": "ECU-Frames", "kind": "bus"},
     {"from": "x_sdu", "to": "h_mcp", "label": "CAN 2", "kind": "bus"},
-    {"from": "x_bms", "to": "h_twai", "label": "CAN 3", "kind": "planned"},
+    {"from": "x_bms", "to": "h_twai", "label": "CAN0", "kind": "planned"},
     {"from": "h_mcp", "to": "d_mcp", "label": "SPI", "kind": "bus"},
     {"from": "h_twai", "to": "d_twai", "label": "TWAI", "kind": "planned"},
     {"from": "d_mcp", "to": "c_veh", "label": "Frames CAN 1", "kind": "data"},
     {"from": "d_mcp", "to": "c_sdu", "label": "Frames CAN 2", "kind": "data"},
     {"from": "c_ecu", "to": "d_mcp", "label": "tryToSend", "kind": "data"},
-    {"from": "d_twai", "to": "c_bat", "label": "Frames CAN 3", "kind": "planned"},
+    {"from": "d_twai", "to": "c_bat", "label": "Frames CAN0", "kind": "planned"},
     {"from": "c_veh", "to": "p_meas", "label": "params::vehicle + rxMark", "kind": "data"},
     {"from": "c_sdu", "to": "p_meas", "label": "params::tesla_sdu + rxMark", "kind": "data"},
     {"from": "c_bat", "to": "p_bat", "label": "params::battery", "kind": "planned"},
