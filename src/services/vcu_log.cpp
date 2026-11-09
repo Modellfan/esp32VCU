@@ -1,38 +1,28 @@
+// Text log on UART0 (COM10), the same port as GVRET. Text is written only while GVRET is
+// not in binary mode: SavvyCAN (or tools/gvret_listen.py) switches it with 0xE7, and from
+// then on the port carries only GVRET frames until the next reset.
 #include "vcu_log.h"
 
 #include <Arduino.h>
 #include <stdarg.h>
 
-#if SOC_USB_SERIAL_JTAG_SUPPORTED
-#include <HWCDC.h>
-#if ARDUINO_USB_MODE && ARDUINO_USB_CDC_ON_BOOT
-#define VCU_LOG_PORT HWCDCSerial
-#else
-namespace {
-HWCDC gUsbLog;
-}
-#define VCU_LOG_PORT gUsbLog
-#endif
-#endif
+#include "gvret_bridge.h"
 
 void vcuLogBegin() {
-#ifdef VCU_LOG_PORT
-    VCU_LOG_PORT.begin();
-#endif
+    // UART0 is opened in setup() (Serial.begin) for both GVRET and the log.
 }
 
 void vcuLogf(const char *format, ...) {
-#ifdef VCU_LOG_PORT
-    char buffer[192];
+    if (gvretBridgeBinary()) {
+        return;
+    }
+    char buffer[320];
     va_list args;
     va_start(args, format);
     const int length = vsnprintf(buffer, sizeof buffer, format, args);
     va_end(args);
-    if (length > 0 && VCU_LOG_PORT) {  // only when a host has the port open
-        VCU_LOG_PORT.write(reinterpret_cast<const uint8_t *>(buffer),
-                           (size_t)(length < (int)sizeof buffer ? length : (int)sizeof buffer - 1));
+    if (length > 0) {
+        Serial.write(reinterpret_cast<const uint8_t *>(buffer),
+                     (size_t)(length < (int)sizeof buffer ? length : (int)sizeof buffer - 1));
     }
-#else
-    (void)format;
-#endif
 }

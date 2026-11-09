@@ -13,5 +13,7 @@ void gvretBridgeObserve(const CANMessage &frame, int bus);
 // Service side: handle host commands and forward queued frames.
 void gvretBridgeService();
 uint32_t gvretBridgeDropped();
+// true once the host switched GVRET to binary output (0xE7); the text log is silent then.
+bool gvretBridgeBinary();
 
 #endif

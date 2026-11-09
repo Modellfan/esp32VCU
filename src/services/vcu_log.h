@@ -1,5 +1,5 @@
-// Diagnostic log on the native USB port (USB-Serial-JTAG). UART0 (Serial) carries only
-// GVRET binary data, so log text never corrupts the SavvyCAN stream (proposal 8).
+// Diagnostic text log on UART0 (COM10), shared with GVRET: text only while GVRET is not
+// in binary mode (VCU-DEC-010).
 #ifndef VCU_LOG_H
 #define VCU_LOG_H
 

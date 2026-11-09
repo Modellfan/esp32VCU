@@ -187,6 +187,16 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
     addUInt("rt_tx_failed", rt.tx_failed);
     addUInt("rt_started_ms", rt.started_ms);
     addUInt("can1_error", canManager_error(1));
+    for (uint8_t bus = 0; bus < 3; bus++) {
+        static const char *const kPrefix[3] = {"can0_", "can1_", "can2_"};
+        const CanBusDiag d = canBusDiag(bus);
+        const String p = kPrefix[bus];
+        addUInt((p + "rx_frames").c_str(), d.rx_frames);
+        addUInt((p + "tec").c_str(), d.tec);
+        addUInt((p + "rec").c_str(), d.rec);
+        addUInt((p + "eflg").c_str(), d.eflg);
+        addBool((p + "bus_off").c_str(), d.bus_off);
+    }
     addUInt("can2_error", canManager_error(2));
     addBool("can0_active", can0Active());
     addUInt("gvret_dropped", gvretBridgeDropped());
@@ -485,11 +495,16 @@ void handleNotFound() {
 
 void webTask(void *) {
     uint32_t lastLed = 0;
+    uint32_t lastDiag = 0;
     bool ledOn = false;
     for (;;) {
         server.handleClient();
         gvretBridgeService();
         const uint32_t now = millis();
+        if (now - lastDiag >= 1000U) {  // one diagnostic line per second on COM10
+            lastDiag = now;
+            canManagerLogStatus();
+        }
         if (now - lastLed >= 500U) {  // VCU-REQ-019: 1 Hz green blink at 10 %
             lastLed = now;
             ledOn = !ledOn;

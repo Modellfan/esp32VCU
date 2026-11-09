@@ -20,6 +20,24 @@ uint16_t canManager_error(uint8_t bus);
 bool can0Active();
 bool can0Receive(CANMessage &frame);
 
+// Bus diagnostics per controller (bus 0 = CAN0/TWAI, 1 = CAN1, 2 = CAN2).
+// eflg: MCP2515 EFLG register (bit 5 TXBO = bus-off); 0 for CAN0.
+struct CanBusDiag {
+    uint32_t rx_frames;  // frames received since start
+    uint8_t tec;         // transmit error counter
+    uint8_t rec;         // receive error counter
+    uint8_t eflg;
+    bool bus_off;
+};
+
+// CAN task only: count one received frame / read the error registers (SPI access).
+void canCountRx(uint8_t bus);
+void canRefreshErrors();
+// Any task: last known values.
+CanBusDiag canBusDiag(uint8_t bus);
+// Web task: one diagnostic text line per call (uptime, buses, CAN task timing).
+void canManagerLogStatus();
+
 // CAN task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
 constexpr uint32_t CAN_TASK_PERIOD_MS = 6;
 

@@ -50,6 +50,10 @@ void gvretBridgeService() {
     }
 }
 
+bool gvretBridgeBinary() {
+    return gvret_binOutput;
+}
+
 uint32_t gvretBridgeDropped() {
     return gDropped;
 }

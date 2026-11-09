@@ -39,6 +39,7 @@ void pollVehicleCAN() {
     CANMessage frame;
     for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can1.available(); budget--) {
         can1.receive(frame);
+        canCountRx(1);
         if (decode986Vehicle(frame)) {
             rxMark(BUS_VEHICLE, frame.id);
         }
@@ -51,6 +52,7 @@ void pollTeslaCAN() {
     CANMessage frame;
     for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can2.available(); budget--) {
         can2.receive(frame);
+        canCountRx(2);
         if (decodeTeslaSdu(frame)) {
             rxMark(BUS_DRIVE, frame.id);
         }
@@ -62,6 +64,7 @@ void pollTeslaCAN() {
 void pollBatteryCAN() {
     CANMessage frame;
     for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can0Receive(frame); budget--) {
+        canCountRx(0);
         if (decodeBattery(frame)) {
             rxMark(BUS_BATTERY, frame.id);
         }
@@ -90,6 +93,7 @@ void emulateECUCAN(CANMessage &outFrame) {
 //---------------------------------------------------------------------------
 void canTask(void *) {
     TickType_t lastWake = xTaskGetTickCount();
+    uint8_t diagDivider = 0;
     for (;;) {
         const uint32_t startUs = micros();
         const uint32_t nowMs = millis();
@@ -120,6 +124,11 @@ void canTask(void *) {
             ParamsGuard guard;
             coolantFanReportState();
             digipotReportState();
+        }
+
+        if (++diagDivider >= 50U) {  // error counters every 300 ms (SPI, outside the lock)
+            diagDivider = 0;
+            canRefreshErrors();
         }
 
         canTaskStatsRecord(nowMs, micros() - startUs, sent);

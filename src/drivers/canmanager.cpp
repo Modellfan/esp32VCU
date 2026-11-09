@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <ESP32-TWAI-CAN.hpp>
+#include <driver/twai.h>
 
 #include "board.h"
 
@@ -18,6 +19,9 @@ uint16_t gCan2Error = 0xFFFF;
 
 portMUX_TYPE gStatsMux = portMUX_INITIALIZER_UNLOCKED;
 CanTaskStats gStats = {0, 0, 0, 0, 0};
+CanBusDiag gDiag[3] = {};  // index = bus number, guarded by gStatsMux
+
+constexpr uint8_t EFLG_TXBO = 0x20;  // MCP2515: transmitter bus-off
 }  // namespace
 
 ACAN2515 can1(board::GPIO_CAN1_CS, SPI, board::GPIO_CAN1_INT);
@@ -93,4 +97,78 @@ CanTaskStats canTaskStats() {
     const CanTaskStats copy = gStats;
     portEXIT_CRITICAL(&gStatsMux);
     return copy;
+}
+
+void canCountRx(uint8_t bus) {
+    if (bus > 2) {
+        return;
+    }
+    portENTER_CRITICAL(&gStatsMux);
+    gDiag[bus].rx_frames++;
+    portEXIT_CRITICAL(&gStatsMux);
+}
+
+void canRefreshErrors() {
+    CanBusDiag d[3];
+    portENTER_CRITICAL(&gStatsMux);
+    for (int i = 0; i < 3; i++) {
+        d[i] = gDiag[i];
+    }
+    portEXIT_CRITICAL(&gStatsMux);
+
+    // MCP2515 registers over SPI: only from the CAN task, which owns the SPI bus.
+    if (gCan1Error == 0) {
+        d[1].tec = can1.transmitErrorCounter();
+        d[1].rec = can1.receiveErrorCounter();
+        d[1].eflg = can1.errorFlagRegister();
+        d[1].bus_off = (d[1].eflg & EFLG_TXBO) != 0;
+    }
+    if (gCan2Error == 0) {
+        d[2].tec = can2.transmitErrorCounter();
+        d[2].rec = can2.receiveErrorCounter();
+        d[2].eflg = can2.errorFlagRegister();
+        d[2].bus_off = (d[2].eflg & EFLG_TXBO) != 0;
+    }
+    if (gCan0Active) {
+        twai_status_info_t status;
+        if (twai_get_status_info(&status) == ESP_OK) {
+            d[0].tec = (uint8_t)(status.tx_error_counter > 255 ? 255 : status.tx_error_counter);
+            d[0].rec = (uint8_t)(status.rx_error_counter > 255 ? 255 : status.rx_error_counter);
+            d[0].bus_off = status.state == TWAI_STATE_BUS_OFF;
+        }
+    }
+
+    portENTER_CRITICAL(&gStatsMux);
+    for (int i = 0; i < 3; i++) {
+        d[i].rx_frames = gDiag[i].rx_frames;  // keep counts that arrived meanwhile
+        gDiag[i] = d[i];
+    }
+    portEXIT_CRITICAL(&gStatsMux);
+}
+
+CanBusDiag canBusDiag(uint8_t bus) {
+    CanBusDiag copy = {};
+    if (bus > 2) {
+        return copy;
+    }
+    portENTER_CRITICAL(&gStatsMux);
+    copy = gDiag[bus];
+    portEXIT_CRITICAL(&gStatsMux);
+    return copy;
+}
+
+void canManagerLogStatus() {
+    const CanTaskStats t = canTaskStats();
+    char line[320];
+    int n = snprintf(line, sizeof line, "[DIAG] t=%lu ms cyc=%lu ovr=%lu max=%lu us txfail=%lu",
+                     (unsigned long)millis(), (unsigned long)t.cycles, (unsigned long)t.overruns,
+                     (unsigned long)t.max_cycle_us, (unsigned long)t.tx_failed);
+    for (uint8_t bus = 0; bus < 3 && n > 0 && n < (int)sizeof line; bus++) {
+        const CanBusDiag d = canBusDiag(bus);
+        const bool up = bus == 0 ? gCan0Active : canManager_error(bus) == 0;
+        n += snprintf(line + n, sizeof line - n, " | CAN%u %s rx=%lu tec=%u rec=%u eflg=0x%02X%s", bus,
+                      up ? "up" : "DOWN", (unsigned long)d.rx_frames, d.tec, d.rec, d.eflg,
+                      d.bus_off ? " BUS-OFF" : "");
+    }
+    VCU_LOG("%s\n", line);
 }
