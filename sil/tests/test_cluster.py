@@ -1,4 +1,4 @@
-"""Component tests of the Kombi calculation updateCluster() (src/cluster_calc.cpp).
+"""Component tests of the Kombi calculation updateCluster() (src/app/cluster_calc.cpp).
 
 Application level only: inputs and outputs are signal-table parameters, no CAN layer.
 Test ids TC-SIL-xx are listed in sil/README.md. Run: python -m pytest sil/tests -q

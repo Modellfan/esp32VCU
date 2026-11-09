@@ -1,8 +1,8 @@
 """ctypes wrapper around build/vcu_sil.dll (unchanged application components + shim).
 
 A VcuSil instance runs one component on the application level:
-    "cluster"  updateCluster()   Kombi calculation (src/cluster_calc.cpp)
-    "app"      appStep(now)      cluster + ECU overrides + fan logic (src/vcu_app.cpp)
+    "cluster"  updateCluster()   Kombi calculation (src/app/cluster_calc.cpp)
+    "app"      appStep(now)      cluster + ECU overrides + fan logic (src/app/vcu_app.cpp)
 Inputs and outputs are parameters of the signal table, set and read by name.
 
 Each instance loads its own copy of the library, so static state inside the firmware

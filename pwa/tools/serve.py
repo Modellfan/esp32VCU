@@ -6,7 +6,7 @@ Static files behave like the ESP32 WebServer + SPIFFS:
   directory requests -> index.html.
 
 Mock API: /api/live, /api/set, /api/set-ecu, /api/set-cluster (dynamic values from
-tools/touch_ui_test_support.py). Test control endpoints (not on the VCU):
+pwa/tools/mock_api.py). Test control endpoints (not on the VCU):
   GET /__test/fault?mode=<mode>&delay_ms=<n>   modes: ok, down, slow, http500, badjson,
         array, empty, garbage, stale_set, static_down, all_down
   GET /__test/stats    request counters, max concurrent /api/live, recorded sets
@@ -29,10 +29,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 PWA_ROOT = Path(__file__).resolve().parents[1]
-REPO = PWA_ROOT.parent
-sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import touch_ui_test_support as mock  # noqa: E402
+import mock_api as mock  # noqa: E402
 
 MIME = {
     ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
@@ -167,9 +166,6 @@ class Handler(BaseHTTPRequestHandler):
             with mock.MOCK_LOCK:
                 mock.update_dynamic_mock_state()
                 snapshot = dict(mock.MOCK_STATE)
-                network = query.get("network", [""])[0]
-                if network:
-                    mock.apply_network_mock(snapshot, network)
             if mode == "stale_set":
                 with LOCK:
                     snapshot.update(STALE_VALUES)

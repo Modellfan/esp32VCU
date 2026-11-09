@@ -4204,3 +4204,34 @@ ew_4e0_bit_booleans_added_to_ui: true
 - Firmware still sends `lte_*` fields in `/api/live` (webinterface.cpp); removing them changes the API and is left open.
 - `tools/touch_ui_test_support.py` still contains `apply_network_mock` (test server only, unused by the UI now).
 - Not checked on the navi display.
+
+
+## 2026-11-09 18:25:54 +01:00 - Repo cleanup: legacy UI, artifacts, tools, src layer folders, Codex files
+
+### Planned Steps
+- Step-by-step cleanup confirmed by the user (8 steps).
+
+### Changes Made
+- Removed: `tools/__pycache__/*.pyc`, `src/idf_component.yml.orig`, `artifacts/` (141 files, now ignored), legacy UI `data/` (except original images), `pwa/tools/import_touch_ui.py`, PWA test `test_master_ui_untouched`, legacy tools (`touch_ui_local_server_test.py`, `touch_ui_screenshot_validate.py`, `generate_web_icons.py`, `stage_archive.ps1`, upload runbook), `test/`, `lib/README`, `AGENTS.md`, `SUB_AGENTS.md`, `.agents/`.
+- Moved: original images from `data/` and `img/touch-source/` to `pwa/assets-src/`; mock data from `tools/touch_ui_test_support.py` to `pwa/tools/mock_api.py` (network mock dropped).
+- `src/` split into `app/`, `data/`, `can/`, `drivers/`, `services/`; `utils.h` renamed to `drivers/status_led.h`; include paths in `platformio.ini` and `sil/build.py`; paths updated in docs, architecture maps and SIL.
+- `CLAUDE.md`: rules from `AGENTS.md` merged (`/re-refine`, `/re-review`), pin rule points to `src/board.h`, test commands corrected.
+- VCU-DEC-012 / VCU-REQ-011: `data/` no longer kept as template; REQ-011 acceptance uses `pwa/tests` instead of the removed screenshot script.
+- PlatformIO Python env (outside repo): `urllib3` broken again (`packages.six`), removed and reinstalled 1.26.20.
+
+### Automated Tests Run
+- `pio run -e esp32s3`: PASS (after src restructure)
+- `python sil/build.py --force`: PASS
+- `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)
+- `python -m pytest pwa/tests -q`: PASS (31 passed; one legacy test removed)
+
+### Result
+- `firmware_ram: 14.9 % (48964 B), firmware_flash: 32.9 % (1099701 B)`
+
+### Artifacts
+- [CLAUDE.md](../CLAUDE.md)
+- [pwa/assets-src](../pwa/assets-src)
+
+### Notes
+- `sil/architecture.png` and `documentation/architecture.png` are raster images and may still show old flat file names.
+- Removed files remain in git history.

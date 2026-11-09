@@ -1,4 +1,4 @@
-"""Component tests of the application step appStep() (src/vcu_app.cpp).
+"""Component tests of the application step appStep() (src/app/vcu_app.cpp).
 
 appStep() runs the Kombi calculation and then applies the ECU overrides (VCU-DEC-005).
 Application level only: inputs and outputs are signal-table parameters.

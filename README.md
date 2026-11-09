@@ -12,11 +12,10 @@ ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN 1 Fahrzeug, CAN 2 Umrichter), X9C103
 ## Aufbau
 | Ordner | Inhalt |
 |---|---|
-| `src/` | Firmware (Ebenen siehe Kopf von `src/main.cpp`) |
+| `src/` | Firmware nach Ebenen: `app/`, `data/`, `can/`, `drivers/`, `services/` (siehe Kopf von `src/main.cpp`) |
 | `pwa/` | Touch-UI als PWA, Build und Tests ([pwa/README.md](pwa/README.md)) |
-| `data/` | frühere Touch-UI und Bilder in voller Auflösung (Vorlage, wird nicht geflasht) |
 | `documentation/` | CAN-Signale, DBC-Dateien, Architekturbild, Protokoll |
-| `tools/` | Hilfsskripte der alten Touch-UI |
+| `tools/` | `generate_pq_messages_md.py`: erzeugt `documentation/PQ_messages.md` aus der VW-DBC |
 
 ## Build und Flashen
 ```bash

@@ -125,7 +125,7 @@ tr.xfail td:nth-child(2){{color:#a66300;font-weight:600}} tr.FAILED td:nth-child
 tr.passed td:nth-child(2){{color:#2f7d32}}
 </style></head><body><main>
 <h1>SIL Kombi-Funktion</h1>
-<div class="sub">Erzeugt {datetime.now():%Y-%m-%d %H:%M} · Komponente updateCluster() (src/cluster_calc.cpp), Applikationsebene · Fahrzyklus {model.profile.duration_s:.0f} s · {acc}</div>
+<div class="sub">Erzeugt {datetime.now():%Y-%m-%d %H:%M} · Komponente updateCluster() (src/app/cluster_calc.cpp), Applikationsebene · Fahrzyklus {model.profile.duration_s:.0f} s · {acc}</div>
 <div class="card"><b>Tests:</b> {counts["passed"]} bestanden · {counts["xfail"]} bekannte Befunde (xfail) · {counts["FAILED"]} fehlgeschlagen
 <table>{test_rows}</table></div>
 {"".join(f'<div class="card">{c}</div>' for c in charts)}

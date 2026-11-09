@@ -1,5 +1,5 @@
 """Test oracle: expected Kombi values written from the requirement (VCU-REQ-005), not from
-the firmware code. Constants are the documented calibration values of src/cluster_calc.cpp.
+the firmware code. Constants are the documented calibration values of src/app/cluster_calc.cpp.
 """
 
 from __future__ import annotations

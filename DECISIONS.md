@@ -47,7 +47,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-007 – Zentrale Signaltabelle
 - **Status:** accepted (Vorschlag 5, Nutzer 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-010
-- **Entscheidung:** `src/signal_table.cpp` enthält je Signal Name, Datengruppe, Offset, Speichertyp, Ausgabeformat, Quellbotschaft und Schreibrecht. `/api/live`, `/api/set-ecu` und `/api/signals` (Liste aller Signale) entstehen daraus. Feldnamen sind unverändert zur alten `getLiveJson()`.
+- **Entscheidung:** `src/data/signal_table.cpp` enthält je Signal Name, Datengruppe, Offset, Speichertyp, Ausgabeformat, Quellbotschaft und Schreibrecht. `/api/live`, `/api/set-ecu` und `/api/signals` (Liste aller Signale) entstehen daraus. Feldnamen sind unverändert zur alten `getLiveJson()`.
 - **Konsequenzen:** Ein neues Signal braucht genau einen Tabelleneintrag. Zahlen werden beim Setzen auf Typ und Wertebereich geprüft; ungültige Schlüssel stehen in der Antwort unter `rejected`.
 
 ## VCU-DEC-008 – CAN 3 über den TWAI-Controller
@@ -76,7 +76,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-012 – Touch-UI als PWA aus dem SPIFFS
 - **Status:** accepted (Nutzerentscheidung 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-011
-- **Entscheidung:** Die Touch-UI liegt als PWA in `pwa/`, wird mit `pwa/tools/build.py` nach `pwa/dist` gebaut (WebP, gzip, Budget 1,1 MB) und ist das SPIFFS-Image (`data_dir = pwa/dist`). Die Firmware liefert sie unter `/` aus (eigener Handler: `.gz`-Varianten, WebP-MIME-Typ). Die Handy-UI (`data/index.html`) ist entfernt; `data/touch*` bleibt als Vorlage.
+- **Entscheidung:** Die Touch-UI liegt als PWA in `pwa/`, wird mit `pwa/tools/build.py` nach `pwa/dist` gebaut (WebP, gzip, Budget 1,1 MB) und ist das SPIFFS-Image (`data_dir = pwa/dist`). Die Firmware liefert sie unter `/` aus (eigener Handler: `.gz`-Varianten, WebP-MIME-Typ). Die Handy-UI (`data/index.html`) ist entfernt. Die frühere Touch-UI in `data/` ist seit 2026-11-09 entfernt (Nutzerentscheidung); `pwa/src` ist die einzige Quelle, Originalbilder liegen in `pwa/assets-src/`.
 - **Offline-Cache (Nutzerentscheidung 2026-10-29):** Auf dem Android-Radio wird Chrome per Flag „Insecure origins treated as secure“ für `http://192.168.4.1` eingestellt; der Service Worker legt dann alle Dateien einschließlich aller Bilder im Cache ab (nacheinander, mit Wiederholung). Verworfene Alternativen: HTTPS auf der VCU mit eigener CA (TLS-Aufwand, Leistung, Radio-Kompatibilität), eigene Android-App (APK-Build und -Pflege). Zusätzlich tragen alle Dateiverweise einen Inhalts-Hash (`?v=`); die VCU liefert sie mit einem Jahr Cache-Dauer aus.
 - **Konsequenzen:** Ohne das Flag läuft die PWA ohne Offline-Start. Das Flag ist Handarbeit am Radio und kann durch Chrome-Updates verloren gehen; die App zeigt den Zustand im Netzwerk-Fenster. Nach Änderungen an der UI: `build.py`, dann `uploadfs`.
 

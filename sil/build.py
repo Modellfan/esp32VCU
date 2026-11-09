@@ -19,11 +19,12 @@ LIBRARY = BUILD / ("vcu_sil.dll" if sys.platform == "win32" else "libvcu_sil.so"
 # Application components under test (not modified for SIL). No CAN codecs or drivers:
 # the signal groups they would own are instantiated in sil/shim/params_storage.cpp.
 FIRMWARE_SOURCES = [
-    "src/cluster_calc.cpp",
-    "src/vcu_app.cpp",
-    "src/vcu_params.cpp",
-    "src/signal_table.cpp",
+    "src/app/cluster_calc.cpp",
+    "src/app/vcu_app.cpp",
+    "src/data/vcu_params.cpp",
+    "src/data/signal_table.cpp",
 ]
+SRC_LAYERS = ["app", "data", "can", "drivers", "services"]
 SHIM_SOURCES = ["sil/shim/params_storage.cpp", "sil/shim/sil_api.cpp"]
 
 
@@ -35,7 +36,7 @@ def up_to_date() -> bool:
     if not LIBRARY.exists():
         return False
     newest = max(p.stat().st_mtime for p in
-                 sources() + list((REPO / "src").glob("*.h")) + list((SIL / "stubs").rglob("*.h")))
+                 sources() + list((REPO / "src").rglob("*.h")) + list((SIL / "stubs").rglob("*.h")))
     return LIBRARY.stat().st_mtime >= newest
 
 
@@ -48,6 +49,7 @@ def build(force: bool = False) -> Path:
         "-shared", "-std=gnu++17", "-O1", "-g0",
         "-Wall", "-Wno-unused-function", "-Wno-invalid-offsetof",
         "-I", str(SIL / "stubs"), "-I", str(REPO / "src"),
+        *[a for d in SRC_LAYERS for a in ("-I", str(REPO / "src" / d))],
         "-o", str(LIBRARY),
         *[str(p) for p in sources()],
     ]

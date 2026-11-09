@@ -90,7 +90,7 @@
   <text x="290" y="568" class="t" text-anchor="middle">Komponente app</text>
   <text x="290" y="588" class="m" text-anchor="middle">appStep(now)</text>
   <text x="290" y="606" class="s" text-anchor="middle">Overrides, Lüfterlogik</text>
-  <text x="290" y="624" class="s" text-anchor="middle">src/vcu_app.cpp</text>
+  <text x="290" y="624" class="s" text-anchor="middle">src/app/vcu_app.cpp</text>
   <rect x="420" y="548" width="190" height="90" rx="7" class="box" stroke="#2563eb"/>
   <text x="515" y="568" class="t" text-anchor="middle">Komponente cluster</text>
   <text x="515" y="588" class="m" text-anchor="middle">updateCluster()</text>

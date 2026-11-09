@@ -6,8 +6,8 @@ Komponententests auf **Applikationsebene**: einzelne, unveränderte Komponenten 
 
 | Komponente | Aufruf je Schritt | Quelle |
 |---|---|---|
-| `VcuSil("cluster")` | `updateCluster()` | `src/cluster_calc.cpp` |
-| `VcuSil("app")` | `appStep(now)`: Kombi, ECU-Overrides, Lüfterlogik | `src/vcu_app.cpp` |
+| `VcuSil("cluster")` | `updateCluster()` | `src/app/cluster_calc.cpp` |
+| `VcuSil("app")` | `appStep(now)`: Kombi, ECU-Overrides, Lüfterlogik | `src/app/vcu_app.cpp` |
 
 ```text
 pytest / run_demo.py

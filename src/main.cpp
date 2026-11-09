@@ -1,9 +1,9 @@
-﻿// eBoxster VCU – startup only. Layers (documentation/architecture.svg):
-//   application  vcu_app.cpp, cluster_calc.cpp
-//   data (RTE)   params::* in the codec modules and vcu_params.cpp, signal_table.cpp
-//   communication 986_*_messages.cpp, tesla_sdu_messages.cpp, battery_messages.cpp
-//   drivers      canmanager.cpp, can3_twai.cpp, coolant_fan_control.cpp, digipot_control.cpp
-//   services     vcu_rt.cpp (6 ms real-time task, core 1), webinterface.cpp (core 0), gvret_bridge.cpp
+﻿// eBoxster VCU – startup only. Layers = folders in src/ (documentation/architecture.svg):
+//   app/       application: vcu_app.cpp, cluster_calc.cpp
+//   data/      data (RTE): vcu_params.cpp, signal_table.cpp; params::* also in the can/ codecs
+//   can/       communication: 986_*_messages.cpp, tesla_sdu_messages.cpp, battery_messages.cpp
+//   drivers/   canmanager.cpp, can3_twai.cpp, coolant_fan_control.cpp, digipot_control.cpp, status_led.h
+//   services/  vcu_rt.cpp (6 ms real-time task, core 1), webinterface.cpp (core 0), gvret_bridge.cpp, vcu_log.cpp
 #include <Arduino.h>
 
 #include "board.h"
@@ -12,7 +12,7 @@
 #include "coolant_fan_control.h"
 #include "digipot_control.h"
 #include "gvret_bridge.h"
-#include "utils.h"
+#include "status_led.h"
 #include "vcu_params.h"
 #include "vcu_rt.h"
 #include "webinterface.h"

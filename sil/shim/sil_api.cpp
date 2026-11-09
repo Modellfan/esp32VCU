@@ -1,10 +1,10 @@
 // SIL shim: C interface between unchanged application components (src/) and Python (ctypes).
 //
 // Components are tested on the application level: inputs and outputs are parameters of
-// the central signal table (src/signal_table.cpp), written and read by name. No CAN layer.
+// the central signal table (src/data/signal_table.cpp), written and read by name. No CAN layer.
 //
-//   component 1 = cluster   updateCluster()          (src/cluster_calc.cpp)
-//   component 2 = app       appStep(now)             (src/vcu_app.cpp: cluster, overrides, fan)
+//   component 1 = cluster   updateCluster()          (src/app/cluster_calc.cpp)
+//   component 2 = app       appStep(now)             (src/app/vcu_app.cpp: cluster, overrides, fan)
 #include <Arduino.h>
 
 #include "cluster_calc.h"
@@ -16,7 +16,7 @@
 
 namespace {
 uint32_t gNowMs = 0;
-constexpr uint32_t kCycleMs = 6;  // RT_PERIOD_MS in src/vcu_rt.h
+constexpr uint32_t kCycleMs = 6;  // RT_PERIOD_MS in src/services/vcu_rt.h
 
 uint8_t *liveBase(SigGroup group) {
     switch (group) {

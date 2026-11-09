@@ -108,12 +108,6 @@ def test_manifest_and_icons():
     assert {"192x192", "512x512"} <= sizes
 
 
-def test_master_ui_untouched():
-    """The legacy UI in data/ must stay in place (it is the master copy)."""
-    data = PWA.parent / "data"
-    assert (data / "touch.html").is_file()
-    assert (data / "touch" / "js" / "app.js").is_file()
-
 
 # --------------------------------------------------------------------------- serving
 

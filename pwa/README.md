@@ -1,6 +1,6 @@
 # Touch-UI als PWA (`pwa/`)
 
-Die Touch-Oberfläche für das Navi-Display (1024×600) als Progressive Web App. Die VCU liefert sie aus ihrem SPIFFS aus (VCU-REQ-011). Die bisherige UI in `data/touch.html` und `data/touch/` bleibt unverändert; dort liegen auch die Bilder in voller Auflösung.
+Die Touch-Oberfläche für das Navi-Display (1024×600) als Progressive Web App. Die VCU liefert sie aus ihrem SPIFFS aus (VCU-REQ-011). `src/` ist die einzige Quelle; die frühere UI in `data/` wurde am 2026-11-09 entfernt (Git-Historie). Die Bilder in voller Auflösung liegen in `assets-src/`.
 
 ## Aufbau
 
@@ -9,9 +9,10 @@ Die Touch-Oberfläche für das Navi-Display (1024×600) als Progressive Web App.
 | `src/` | Quelltext der PWA (kurze, SPIFFS-taugliche Pfade, Bilder als WebP) |
 | `src/js/net.js` | Netzwerkschicht: Zeitlimit, Antwortprüfung, Setz-Warteschlange, Abfrage mit Backoff |
 | `src/js/pwa.js`, `src/sw.js`, `src/manifest.json` | PWA-Hülle: Registrierung, Service Worker, Manifest |
-| `tools/import_touch_ui.py` | einmalige Übernahme aus `data/touch` (Bilder → WebP, Pfade umschreiben); handgepflegte Dateien werden nur mit `--force` überschrieben |
+| `assets-src/` | Originalbilder in voller Auflösung (PNG/JPG/MP4), Vorlage für die WebP-Dateien in `src/`; wird nicht gebaut |
 | `tools/build.py` | baut `dist/` (Text gzip-komprimiert, Service Worker mit Version und Precache-Liste) und prüft Budget, Dateinamen und Verweise |
 | `tools/serve.py` | Testserver, der sich wie die VCU verhält (gzip-Auslieferung, Mock-API mit Fehlereinspeisung) |
+| `tools/mock_api.py` | Mock-Daten für `/api/live` mit zeitlichem Verlauf (vom Testserver genutzt) |
 | `tests/` | pytest + Playwright (Chromium, 1024×600), u. a. Offline-Szenario des Radios |
 | `dist/` | Build-Ergebnis für das SPIFFS-Image (nicht versioniert) |
 

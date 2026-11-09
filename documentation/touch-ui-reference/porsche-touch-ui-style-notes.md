@@ -1,6 +1,6 @@
 # Porsche Touch UI Reference Notes
 
-These notes summarize the screenshot set used for the fourth left-menu test page in `data/touch.html`.
+These notes summarize the screenshot set used for the fourth left-menu test page (heute in `pwa/src`).
 
 Local comparison captures are stored in `documentation/touch-ui-reference/screenshots/`.
 
