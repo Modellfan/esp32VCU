@@ -7,7 +7,7 @@ Die VCU ersetzt das Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsum
 - Änderungsprotokoll: [documentation/IMPLEMENTATION_LOG.md](documentation/IMPLEMENTATION_LOG.md)
 
 ## Hardware
-ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN 1 Fahrzeug, CAN 2 Umrichter), X9C103S (Tankgeber), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).
+ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN1 Fahrzeug, CAN2 Umrichter), TWAI als CAN0 (BMS/Lader, GPIO21/20), X9C103S (Tankgeber), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).
 
 ## Aufbau
 | Ordner | Inhalt |
@@ -15,18 +15,18 @@ ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN 1 Fahrzeug, CAN 2 Umrichter), X9C103
 | `src/` | Firmware: `main.cpp` zeigt den Ablauf (CAN-Task, VCU-DEC-015); `app/` Kombi, `comms/` CAN-Codecs, `drivers/` Hardware, `services/` Webserver, Signaltabelle, GVRET, Log |
 | `pwa/` | Touch-UI als PWA, Build und Tests ([pwa/README.md](pwa/README.md)) |
 | `documentation/` | CAN-Signale, DBC-Dateien, Architekturbild, Protokoll |
-| `tools/` | `canivore-py-test-tool/` (Submodul: CAN-Tests über den CANable-Stick), `gvret_listen.py` (mitlesen, was die VCU je Bus empfängt), `savvy_csv_to_asc.py` (SavvyCAN-Log → ASC für die Wiedergabe), `generate_pq_messages_md.py` |
+| `tools/` | `canivore_py_test_tool/` (Submodul: CAN-Tests über den CANable-Stick, Start mit `scripts\can_test.cmd`), `gvret_listen.py` (mitlesen, was die VCU je Bus empfängt), `savvy_csv_to_asc.py` (SavvyCAN-Log → ASC für die Wiedergabe), `generate_pq_messages_md.py` |
 | `documentation/can_logs/` | Mitschnitte: Stand am 986 (Fahrzeugbus), Fahrt mit Tesla SDU (SavvyCAN-CSV) |
 
 ## Build und Flashen
 ```bash
 copy src\secrets.example.h src\secrets.h   # einmalig, Zugangsdaten eintragen
 python pwa/tools/build.py                   # PWA nach pwa/dist
-pio run -e esp32s3                          # Firmware
-pio run -e esp32s3 -t upload                # Firmware flashen
-pio run -e esp32s3 -t uploadfs              # PWA ins SPIFFS
+platformio run -e esp32s3                              # Firmware
+platformio run --target upload --upload-port COM10     # Firmware flashen
+platformio run --target uploadfs --upload-port COM10   # PWA ins SPIFFS
 ```
-`pio` liegt unter `%USERPROFILE%\.platformio\penv\Scripts\pio.exe`.
+`platformio` liegt unter `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` (nicht im PATH), z. B. `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run --target upload --upload-port COM10`. COM10 ist UART0 des Boards (CH343).
 
 **Bekanntes Problem (Windows, pioarduino 55.03.37):** Der Compiler `toolchain-xtensa-esp-elf` landet mit einer Ordnerebene zu viel (`xtensa-esp-elf/bin`). Abhilfe am 2026-10-28: Inhalt von `%USERPROFILE%\.platformio\tools\toolchain-xtensa-esp-elf\xtensa-esp-elf\` flach nach `...\packages\toolchain-xtensa-esp-elf\` kopiert, `package.json` und `.piopm` dazu.
 

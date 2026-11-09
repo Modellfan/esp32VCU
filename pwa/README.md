@@ -66,7 +66,7 @@ Hinweise:
 
 ```bash
 python pwa/tools/build.py
-pio run -e esp32s3 -t uploadfs
+platformio run --target uploadfs --upload-port COM10
 ```
 
 Auf echter Hardware noch nicht geprüft.

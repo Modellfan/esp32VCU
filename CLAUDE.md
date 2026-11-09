@@ -24,7 +24,7 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 ## Projektspezifische Grenzen
 - **Fahrzeugsicherheit:** Die VCU sendet auf dem Fahrzeug-CAN anstelle des Motorsteuergeräts. Änderungen an gesendeten Botschaften, Zeitschlitzen oder Standardbits nur mit Bezug auf `can_signals.md`/DBC und mit CAN-Mitschnitt prüfen. Nie ungeprüft auf das Fahrzeug flashen.
 - **Pinbelegung:** Vor neuen Ausgängen alle belegten GPIOs in `src/board.h` prüfen (dort mit `static_assert` gegen Doppelbelegung).
-- **Hardwarezugriff:** Flashen (`pio run -t upload`, `-t uploadfs`) und serielle Befehle an die angeschlossene Hardware nur auf ausdrückliche Anweisung des Nutzers. Lesen des seriellen Monitors ist erlaubt.
+- **Hardwarezugriff:** Flashen (`platformio run --target upload`, `--target uploadfs`) und serielle Befehle an die angeschlossene Hardware nur auf ausdrückliche Anweisung des Nutzers. Lesen des seriellen Monitors ist erlaubt.
 - **Keine Zugangsdaten im Repo:** WLAN-Passwörter und Schlüssel gehören in `src/secrets.h` (nicht versioniert, VCU-REQ-015).
 - **Nur Referenz:** `documentation/touch-ui-reference/` und Bildmaterial von Porsche nur als Gestaltungsreferenz; geschützte Icon-Sätze bleiben außerhalb von Git (`.gitignore`).
 
@@ -37,7 +37,16 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 Eine verhaltensrelevante Änderung ist erst abgeschlossen, wenn Implementierung und betroffene Akzeptanzkriterien überprüft wurden, relevante Dokumente aktuell sind und nicht prüfbare Punkte explizit benannt wurden. `verified` nur bei tatsächlich vorhandener Evidenz setzen.
 
 ## Werkzeuge
-- PlatformIO: `%USERPROFILE%\.platformio\penv\Scripts\pio.exe` (nicht im PATH). Build: `pio run -e esp32s3`.
+- PlatformIO: `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` (nicht im PATH). Build: `platformio run -e esp32s3`; Upload: `platformio run --target upload --upload-port COM10`. Aus der Bash `PYTHONIOENCODING=utf-8` setzen und die Ausgabe nicht filtern (pio stürzt sonst beim Fortschrittsbalken ab).
 - Compiler-Problem der pioarduino-Plattform unter Windows und Abhilfe: README, Abschnitt „Build und Flashen“.
 - Tests auf dem PC: SIL `python -m pytest sil/tests` (Compiler über das PyPI-Paket `ziglang`, siehe `sil/README.md`), PWA `python -m pytest pwa/tests` (Playwright). Eine PlatformIO-Umgebung `native` gibt es nicht.
 - Touch-UI-Testserver: `python pwa/tools/serve.py` → http://127.0.0.1:8090/
+
+## CAN-Hardwaretests
+- Immer mit dem CANivore Py Test Tool (Submodul `tools/canivore_py_test_tool`, vorher `git submodule update --init --recursive`), gestartet über den Wrapper `.\scripts\can_test.cmd <Befehl> [Optionen]` (eigene Python-Umgebung unter `.pio\canivore-py-test-tool-venv`).
+- Prüfstand: CANable/SLCAN-Stick auf COM22 (`--port 22`, nur die Nummer), 500 000 bit/s; CAN1 und CAN2 der VCU hängen parallel am Stick, CAN0 (TWAI) nicht. Board (GVRET, Upload) auf COM10.
+- Standardtest: `.\scripts\can_test.cmd tx-pattern --port 22 --can-bitrate 500000 --tx-id 611 --stream-id <neu> --tx-count 100 --tx-interval-ms 10`. Für jeden Lauf eine neue Stream-ID.
+- Bestanden ist ein Test erst durch den Empfänger, nicht durch „Sent N frames“: parallel `.\.pio\canivore-py-test-tool-venv\Scripts\python.exe tools\gvret_listen.py --port COM10 --duration <s> --pattern-id <id>` – CAN1 und CAN2 je genau N Frames, Sequenz 0..N−1, keine fehlenden/doppelten, keine CRC-Fehler; CAN0 bleibt 0.
+- CANable-Fehlerregister `0x14`/`0x54` ist bei diesem Adapter oft gelatcht: nur Warnung, `--strict-adapter-errors` nicht verwenden.
+- Logs abspielen: `tools/savvy_csv_to_asc.py` (CSV aus `documentation/can_logs/` → ASC, VCU-Sende-IDs mit `--exclude` entfernen), dann `can_test.cmd playback --playback-log-file …`.
+- Änderungen am Tool zuerst im Submodul committen und pushen, danach den Submodul-Zeiger hier committen.

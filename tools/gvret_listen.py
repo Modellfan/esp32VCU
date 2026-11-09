@@ -1,6 +1,6 @@
 """Read what the VCU receives and sends, via GVRET on UART0, and count frames per bus.
 
-    python tools/gvret_listen.py --port COM10 --duration 20 [--pattern-id 644]
+    .pio\canivore-py-test-tool-venv\Scripts\python.exe tools\gvret_listen.py --port COM10 --duration 20 [--pattern-id 611]
 
 Buses as reported by the firmware: 0 = sent by the VCU (ECU emulation), 1 = CAN1 (vehicle,
 MCP2515), 2 = CAN2 (drive, MCP2515), 3 = battery bus (TWAI).
