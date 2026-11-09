@@ -4235,3 +4235,14 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - `sil/architecture.png` and `documentation/architecture.png` are raster images and may still show old flat file names.
 - Removed files remain in git history.
+
+
+## 2026-11-09 20:13:28 +01:00 - src/can renamed to src/comms; duplicate 986_can_codec.h removed
+
+### Changes Made
+- `src/can/` -> `src/comms/` (platformio.ini, sil/build.py, docs).
+- `src/comms/986_can_codec.h` deleted: only an unused copy of `signExtend` from `can_utils.h`; includes removed in 986_ecu/986_vehicle/vw_pq codecs.
+
+### Automated Tests Run
+- `pio run -e esp32s3`: PASS (RAM 48964 B, Flash 1099701 B, unchanged)
+- `python sil/build.py --force` + `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)

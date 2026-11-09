@@ -1,5 +1,4 @@
 ﻿#include "vw_pq_messages.h"
-#include "986_can_codec.h"
 #include "can_utils.h"
 #include <math.h>
 

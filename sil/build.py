@@ -24,7 +24,7 @@ FIRMWARE_SOURCES = [
     "src/data/vcu_params.cpp",
     "src/data/signal_table.cpp",
 ]
-SRC_LAYERS = ["app", "data", "can", "drivers", "services"]
+SRC_LAYERS = ["app", "data", "comms", "drivers", "services"]
 SHIM_SOURCES = ["sil/shim/params_storage.cpp", "sil/shim/sil_api.cpp"]
 
 

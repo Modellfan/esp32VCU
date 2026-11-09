@@ -27,7 +27,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 30 ms gesendet; die Sendezeitpunkte sind gleichmäßig verteilt. Nicht genutzte Bits tragen die in `can_signals.md` dokumentierten Standardwerte.
 - **Akzeptanz:** Gegeben eine laufende VCU am Fahrzeug-CAN; wenn 10 s mitgeschnitten werden; dann erscheint jede der fünf IDs mit 30 ms ± 3 ms Abstand, die Inhalte entsprechen der DBC, und das Kombiinstrument zeigt keine Motorsteuergeräte-Störung.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (Echtzeit-Task `src/services/vcu_rt.cpp`, 6-ms-Zeitschlitze; `src/can/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
+- **Umsetzung:** vorhanden (Echtzeit-Task `src/services/vcu_rt.cpp`, 6-ms-Zeitschlitze; `src/comms/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
 - **Offen:** zulässige Zykluszeittoleranz; ob 0x4F8 (definiert, aber nicht gesendet) benötigt wird.
 
 ### VCU-REQ-002 – Schneller Start der Emulation
@@ -47,7 +47,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss die Fahrzeugbotschaften 0x1A0 (Bremse_1), 0x2A8 (Raddrehzahlen), 0x4A1, 0x510 und 0x520 (Kombiinstrument), 0x560, 0x440 (Getriebe) und 0x0C0 (Lenkwinkel) gemäß `can_signals.md` dekodieren und als Live-Werte bereitstellen.
 - **Akzeptanz:** Gegeben ein CAN-Mitschnitt mit bekannten Werten; wenn er eingespielt wird; dann liefert `/api/live` für jedes dokumentierte Signal den nach DBC erwarteten Wert.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (`src/can/986_vehicle_messages.cpp`).
+- **Umsetzung:** vorhanden (`src/comms/986_vehicle_messages.cpp`).
 
 ### VCU-REQ-004 – Dekodierung des Antriebsumrichters
 - **Typ:** funktional
@@ -56,7 +56,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss auf dem zweiten CAN-Bus (500 kbit/s) die Botschaften 0x500–0x508 des OpenInverter stm32-sine (Tesla SDU) dekodieren: Spannungen, Ströme, Drehzahl, Richtung, Temperaturen, Betriebsart, Fehler, digitale Eingänge und Laufzeit.
 - **Akzeptanz:** Gegeben ein Mitschnitt des Umrichters; wenn er eingespielt wird; dann stimmen die Werte unter `sdu_*` in `/api/live` mit den Parametern des Umrichters (OpenInverter-Weboberfläche) überein.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (`src/can/tesla_sdu_messages.cpp`).
+- **Umsetzung:** vorhanden (`src/comms/tesla_sdu_messages.cpp`).
 
 ### VCU-REQ-005 – Kombiinstrument für den Elektroantrieb
 - **Typ:** funktional
@@ -212,7 +212,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über einen eigenen, dritten CAN-Bus Ladestand (SoC), Batteriespannung, Batteriestrom, Ladestecker verbunden, Ladeart und Ladeleistung von BMS und Ladegerät empfangen und in der Oberfläche anzeigen.
 - **Akzeptanz:** Gegeben BMS und Ladegerät am Bus; wenn geladen wird; dann liefert `/api/live` SoC, Batteriestrom und Steckerstatus mit gültigem Alter, und die Startseite zeigt sie an.
 - **Abhängigkeiten:** VCU-REQ-013
-- **Umsetzung:** Gerüst 2026-10-28 (VCU-DEC-008): TWAI-Treiber `src/drivers/can3_twai.cpp`, Codec `src/can/battery_messages.cpp`, Felder `battery_*` in `/api/live` (immer `stale`). Inaktiv, bis Pins und Botschaften feststehen. Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
+- **Umsetzung:** Gerüst 2026-10-28 (VCU-DEC-008): TWAI-Treiber `src/drivers/can3_twai.cpp`, Codec `src/comms/battery_messages.cpp`, Felder `battery_*` in `/api/live` (immer `stale`). Inaktiv, bis Pins und Botschaften feststehen. Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
 - **Nutzerentscheidung 2026-10-28:** eigener dritter CAN-Bus (zusätzlicher Controller nötig).
 - **Offen:** Botschaften von BMS und Ladegerät, Controller und Pins des dritten Busses; ob die Reichweite in der VCU berechnet wird.
 
