@@ -186,6 +186,23 @@ void canManagerLogCan0Status() {
             usbPad ? 1 : 0);
 }
 
+void canManagerCan0SendTest() {
+    if (!gCan0Active) {
+        VCU_LOG("[CAN0] not active\n");
+        return;
+    }
+    CanFrame frame = {};
+    frame.identifier = 0x6C0;  // bench test ID, not used on the vehicle buses
+    frame.data_length_code = 8;
+    for (uint8_t i = 0; i < 8; i++) {
+        frame.data[i] = (uint8_t)(0xC0 + i);
+    }
+    const bool queued = ESP32Can.writeFrame(frame, 10);
+    delay(20);
+    VCU_LOG("[CAN0] send 0x6C0 %s\n", queued ? "queued" : "FAILED");
+    canManagerLogCan0Status();
+}
+
 void canManagerLogStatus() {
     const CanTaskStats t = canTaskStats();
     char line[320];

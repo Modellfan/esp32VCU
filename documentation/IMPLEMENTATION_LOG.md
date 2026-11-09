@@ -4424,3 +4424,17 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - The CAN signal never reaches GPIO19 (the ECU frames of CAN1 are on the bus all the time); not firmware/TWAI. Check CAN0 transceiver wiring, supply, standby pin, RXD -> GPIO19.
+
+
+## 2026-11-09 23:15:00 +01:00 - CAN0 send test (can0-send)
+
+### Changes Made
+- Serial command `can0-send` (`canManagerCan0SendTest()`): one frame 0x6C0 on CAN0, then `can0-status`.
+
+### Automated Tests Run
+- `platformio.exe run --target upload --upload-port COM10`: PASS
+- `vcu_cmd.py can0-send`: TWAI bus-off after 17 bus errors (TEC 128), RX GPIO19 never low; CAN1/CAN2 received nothing, REC 0: CAN0 reaches the bus in neither direction. FAIL (hardware)
+- `vcu_cmd.py reset`: PASS (board restarted, brownout restart again)
+
+### Notes
+- Web search: GPIO19/20 are USB D-/D+; configuring them as GPIO (TWAI driver) disables USB-JTAG; usb_pad=0 confirms. Waveshare ESP32-S3-Touch-LCD-7 runs TWAI on RX19/TX20 with the standard driver. No low-level change needed.

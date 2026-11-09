@@ -6,6 +6,7 @@
 //   version      app name, firmware version, build date and time, PlatformIO environment
 //   wifi-status  access point and home network (SSID, connected, IP)
 //   can0-status  full TWAI status and TX/RX pin levels
+//   can0-send    one test frame 0x6C0 on CAN0 (bench only), then can0-status
 //   reset        restart the VCU (also: reboot)
 #ifndef SERIAL_CONSOLE_H
 #define SERIAL_CONSOLE_H

@@ -39,6 +39,8 @@ CanBusDiag canBusDiag(uint8_t bus);
 void canManagerLogStatus();
 // Serial command "can0-status": full TWAI status and the TX/RX pin levels.
 void canManagerLogCan0Status();
+// Serial command "can0-send": one test frame 0x6C0 on CAN0 (bench only), then the status.
+void canManagerCan0SendTest();
 
 // ECU task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
 constexpr uint32_t CAN_TASK_PERIOD_MS = 6;
