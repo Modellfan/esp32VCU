@@ -12,6 +12,9 @@ constexpr uint32_t BITRATE = 500UL * 1000UL;
 
 uint16_t gCan1Error = 0xFFFF;
 uint16_t gCan2Error = 0xFFFF;
+
+portMUX_TYPE gStatsMux = portMUX_INITIALIZER_UNLOCKED;
+CanTaskStats gStats = {0, 0, 0, 0, 0};
 }  // namespace
 
 ACAN2515 can(board::GPIO_CAN1_CS, SPI, board::GPIO_CAN1_INT);
@@ -34,4 +37,29 @@ void canManager_setup() {
 
 uint16_t canManager_error(uint8_t bus) {
     return bus == 1 ? gCan1Error : gCan2Error;
+}
+
+void canTaskStatsRecord(uint32_t nowMs, uint32_t cycleUs, bool sent) {
+    portENTER_CRITICAL(&gStatsMux);
+    if (gStats.cycles == 0) {
+        gStats.started_ms = nowMs;
+    }
+    gStats.cycles++;
+    if (!sent) {
+        gStats.tx_failed++;
+    }
+    if (cycleUs > gStats.max_cycle_us) {
+        gStats.max_cycle_us = cycleUs;
+    }
+    if (cycleUs > CAN_TASK_PERIOD_MS * 1000U) {
+        gStats.overruns++;
+    }
+    portEXIT_CRITICAL(&gStatsMux);
+}
+
+CanTaskStats canTaskStats() {
+    portENTER_CRITICAL(&gStatsMux);
+    const CanTaskStats copy = gStats;
+    portEXIT_CRITICAL(&gStatsMux);
+    return copy;
 }

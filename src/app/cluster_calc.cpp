@@ -191,6 +191,23 @@ int needleFromPercent(int8_t dir, float percentSigned) {
     return (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_REGEN_MIN_VALUE, -p));
 }
 
+// Values set through /api/set-ecu win over the calculation above (VCU-DEC-005).
+static void applyEcuOverrides() {
+    const params::EcuOverrides &o = params::ecu_override;
+    if (o.engine_speed_active) {
+        params::ecu.engine_speed_rpm = o.engine_speed_rpm;
+    }
+    if (o.coolant_temp_active) {
+        params::ecu.motor2_coolant_temperature = o.coolant_temp_c;
+    }
+    if (o.coolant_warning_active) {
+        params::ecu.motor2_coolant_temp_not_ok = o.coolant_warning;
+    }
+    if (o.fuel_active) {
+        params::ecu.mo5_verbrauch_ul = o.fuel_ul;
+    }
+}
+
 void updateCluster() {
     const float battVoltage_V = params::tesla_sdu.udc;
     const float motorCurrent_A = params::tesla_sdu.idc;
@@ -228,4 +245,6 @@ void updateCluster() {
         s_fuelTickDivider = 0U;
         resetMo5FuelOverflowState();
     }
+
+    applyEcuOverrides();
 }

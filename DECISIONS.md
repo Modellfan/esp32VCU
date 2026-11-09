@@ -13,8 +13,9 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-002 – Ebenenmodell nach AUTOSAR-Prinzip
 - **Status:** accepted (Nutzerwunsch 2026-10-28)
 - **Betroffene Requirements:** alle
-- **Entscheidung:** Hardware → Treiber (`canmanager`, `can3_twai`, `coolant_fan_control`, `digipot_control`) → Kommunikation (Codecs `986_*_messages`, `tesla_sdu_messages`, `battery_messages`) → Daten (`params::*`, `vcu_params`, `signal_table`) → Anwendung (`vcu_app`, `cluster_calc`). Dienste daneben: Echtzeit-Task (`vcu_rt`), Webserver (`webinterface`), GVRET (`gvret_bridge`), Log (`vcu_log`). Bild: `documentation/architecture.svg`.
+- **Entscheidung:** Hardware → Treiber (`canmanager`, `can3_twai`, `coolant_fan_control`, `digipot_control`) → Kommunikation (Codecs `986_*_messages`, `tesla_sdu_messages`, `battery_messages`) → Daten (`params::*`) → Anwendung (`cluster_calc`). Dienste daneben: Webserver (`webinterface`, `signal_table`, `params_lock`), GVRET (`gvret_bridge`), Log (`vcu_log`). Bild: `documentation/architecture.svg`.
 - **Regel:** Anwendung und Webserver lesen und schreiben nur Daten in `params`; nur die Treiberschicht berührt Hardware.
+- **Geändert 2026-11-09 (VCU-DEC-015):** Keine eigene Datenschicht mehr: jedes Modul besitzt seine `params::*`-Gruppe; `vcu_rt`, `vcu_app` und `vcu_params` sind aufgelöst.
 
 ## VCU-DEC-003 – Echtzeit-Task getrennt von den Diensten
 - **Status:** accepted (Vorschlag 1, Nutzer 2026-10-28)
@@ -22,12 +23,13 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Kontext:** Vorher lief alles in `loop()`. Der WLAN-Start blockierte bis 15 s, und jede Webanfrage verzögerte die Motorsteuergerät-Emulation.
 - **Optionen:** A: FreeRTOS-Task mit festem Takt auf Kern 1, Dienste auf Kern 0; B: alles in `loop()` belassen und blockierende Stellen entfernen.
 - **Entscheidung:** A. `vcu_rt` läuft alle 6 ms (`vTaskDelayUntil`) auf Kern 1 mit hoher Priorität: CAN empfangen, Anwendung rechnen, eine ECU-Botschaft senden, Ausgänge setzen. Webserver, GVRET und LED laufen in einer Task auf Kern 0. Die Task startet vor dem WLAN.
+- **Geändert 2026-11-09 (VCU-DEC-015):** Die Task heißt CAN-Task und steht als `canTask()` in `src/main.cpp`; Takt, Kern, Priorität und Reihenfolge sind unverändert.
 - **Konsequenzen:** `params` werden von zwei Kernen genutzt. Ein Mutex schützt sie; der Webserver kopiert sie in einen Schnappschuss und baut das JSON ohne Sperre. Laufzeitkennzahlen (`rt_cycles`, `rt_overruns`, `rt_max_cycle_us`) stehen in `/api/live`. Auf Hardware noch nicht gemessen.
 
 ## VCU-DEC-004 – Aktor-Sollwerte als Daten, Lüfterautomatik
 - **Status:** accepted im Grundsatz (Vorschlag 2, Nutzer 2026-10-28); Schwellen und Fail-safe `proposed`
 - **Betroffene Requirements:** VCU-REQ-008, VCU-REQ-009
-- **Entscheidung:** Webserver und Anwendung schreiben nur `params::outputs` (Lüfter-Modus, Hand-Stufe, Poti-Sollwert). Die Anwendung berechnet die Automatik-Stufe; der Echtzeit-Task setzt die Ausgänge (Poti nur bei Änderung, ca. 2 ms).
+- **Entscheidung:** Webserver und Anwendung schreiben nur Sollwerte in `params::fan` (Lüfter-Modus, Hand-Stufe) und `params::digipot` (Poti-Sollwert). `coolantFanAutoUpdate()` berechnet die Automatik-Stufe; der CAN-Task setzt die Ausgänge (Poti nur bei Änderung, ca. 2 ms).
 - **Vorschläge (offen):** Schwellen Stufe 1 ab Motor 70 °C / Kühlkörper 50 °C, Stufe 2 ab 110 °C / 65 °C, Hysterese 5 K. Fehlen Umrichterdaten im Automatikbetrieb, gilt Stufe 2. Bis zur Bestätigung startet der Lüfter im Handbetrieb.
 - **Konsequenzen:** Lüfterausgänge bleiben abgeschaltet, bis der Pin für Stufe 1 feststeht (VCU-DEC-009).
 
@@ -47,8 +49,8 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-007 – Zentrale Signaltabelle
 - **Status:** accepted (Vorschlag 5, Nutzer 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-010
-- **Entscheidung:** `src/data/signal_table.cpp` enthält je Signal Name, Datengruppe, Offset, Speichertyp, Ausgabeformat, Quellbotschaft und Schreibrecht. `/api/live`, `/api/set-ecu` und `/api/signals` (Liste aller Signale) entstehen daraus. Feldnamen sind unverändert zur alten `getLiveJson()`.
-- **Konsequenzen:** Ein neues Signal braucht genau einen Tabelleneintrag. Zahlen werden beim Setzen auf Typ und Wertebereich geprüft; ungültige Schlüssel stehen in der Antwort unter `rejected`.
+- **Entscheidung:** `src/services/signal_table.cpp` enthält je Signal Name, Datengruppe, Offset, Speichertyp, Ausgabeformat, Quellbotschaft und Schreibrecht. `/api/live`, `/api/set-ecu` und `/api/signals` (Liste aller Signale) entstehen daraus. Feldnamen sind unverändert zur alten `getLiveJson()`.
+- **Konsequenzen:** Ein neues Signal braucht genau einen Tabelleneintrag; eine neue Datengruppe genau einen Eintrag in `SIGNAL_GROUPS` (`signal_table.h`). Zahlen werden beim Setzen auf Typ und Wertebereich geprüft; ungültige Schlüssel stehen in der Antwort unter `rejected`.
 
 ## VCU-DEC-008 – CAN 3 über den TWAI-Controller
 - **Status:** accepted im Grundsatz (Vorschlag 6, Nutzer 2026-10-28)
@@ -64,7 +66,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 ## VCU-DEC-010 – GVRET als Beobachter, Log auf eigener Schnittstelle
 - **Status:** accepted (Vorschlag 8, Nutzer 2026-10-28)
 - **Betroffene Requirements:** VCU-REQ-012
-- **Entscheidung:** Der Echtzeit-Task legt jeden empfangenen und gesendeten Frame in eine Warteschlange (128 Einträge, bei Überlauf verworfen und gezählt); die Dienst-Task schreibt sie über UART0 an SavvyCAN, sobald GVRET im Binärmodus ist. Textausgaben gehen über den nativen USB-Port (USB-Serial-JTAG).
+- **Entscheidung:** Der CAN-Task legt jeden empfangenen und gesendeten Frame in eine Warteschlange (128 Einträge, bei Überlauf verworfen und gezählt); die Dienst-Task schreibt sie über UART0 an SavvyCAN, sobald GVRET im Binärmodus ist. Textausgaben gehen über den nativen USB-Port (USB-Serial-JTAG).
 - **Offen:** Welcher der beiden COM-Ports (COM16/COM24) welcher Schnittstelle entspricht, ist nicht geprüft.
 
 ## VCU-DEC-011 – WLAN: Zugangspunkt plus Heimnetz, Zugangsdaten außerhalb von Git
@@ -91,3 +93,11 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Entscheidung:** A, Ordner `sil/`. Compiler: Clang aus dem PyPI-Paket `ziglang` (kein Visual Studio/MinGW nötig).
 - **Begründung:** Getestet wird der echte Code; die Signaltabelle ist bereits die Datenschnittstelle aller Module; ein Python-Modell erlaubt geschlossene Szenarien (Beschleunigung, Thermik).
 - **Konsequenzen:** Komponenten, die in SIL laufen sollen, dürfen nur über `Arduino.h`-Grundfunktionen (Zeit) und den FreeRTOS-Mutex von der Plattform abhängen und tauschen Daten nur über `params` aus. CAN-Kodierung wird in SIL nicht geprüft. Zeit- und Treiberverhalten auf dem ESP32 bleiben Prüfstandsthema.
+
+## VCU-DEC-015 – Ursprünglicher Aufbau mit eigener CAN-Task
+- **Status:** accepted (Nutzerentscheidung 2026-11-09)
+- **Betroffene Requirements:** VCU-REQ-001, -002, -008, -009, -010, -013, -014
+- **Kontext:** Seit dem Umbau am 2026-10-28 (VCU-DEC-002/003) verteilte sich der Ablauf auf `vcu_rt`, `vcu_app` und `vcu_params`; Datengruppen lagen teils in den Modulen, teils zentral. Das war schwer zu überblicken und erzeugte Doppelungen.
+- **Optionen:** A: zurück zum ursprünglichen Stil (bis 2026-10-27: `main.cpp` zeigt den Ablauf, Module besitzen ihre Daten), aber die CAN-Schleife bleibt eine eigene Task auf Kern 1; B: ganz zurück zu einem `loop()` mit TaskScheduler (Webanfragen und WLAN-Start könnten den 6-ms-Takt stören); C: Zwei-Task-Aufbau behalten, nur innen aufräumen.
+- **Entscheidung:** A. `src/main.cpp` enthält `pollVehicleCAN()`, `pollTeslaCAN()`, `pollBatteryCAN()`, `emulateECUCAN()` und `canTask()` (6 ms, Kern 1). Jedes Modul definiert seine `params::*`-Gruppe: Overrides im ECU-Codec, Batterie und Ladeparameter im Batterie-Codec, Lüfter (mit Automatik) und Poti in ihren Treibern, Empfangsüberwachung in `comms/can_rx_monitor`. Lock, Snapshot und Signaltabelle gehören zum Webserver (`src/services/`). Ordner: `app/`, `comms/`, `drivers/`, `services/`.
+- **Konsequenzen:** Reihenfolge und Takt je Zyklus sind unverändert (empfangen → Kombi → Overrides → Lüfter → eine ECU-Botschaft → Ausgänge). PC-Vergleich über 20 000 Zyklen: gesendete Frames, Lüfterstufe und Poti-Sollwert bitgleich zum Stand davor. Auf Hardware nicht gemessen; vor dem Einsatz im Fahrzeug CAN-Mitschnitt nötig.

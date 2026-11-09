@@ -88,9 +88,9 @@
   <!-- Komponenten -->
   <rect x="200" y="548" width="180" height="90" rx="7" class="box" stroke="#2563eb"/>
   <text x="290" y="568" class="t" text-anchor="middle">Komponente app</text>
-  <text x="290" y="588" class="m" text-anchor="middle">appStep(now)</text>
+  <text x="290" y="588" class="m" text-anchor="middle">App-Schritt CAN-Task</text>
   <text x="290" y="606" class="s" text-anchor="middle">Overrides, Lüfterlogik</text>
-  <text x="290" y="624" class="s" text-anchor="middle">src/app/vcu_app.cpp</text>
+  <text x="290" y="624" class="s" text-anchor="middle">main.cpp, coolant_fan_control</text>
   <rect x="420" y="548" width="190" height="90" rx="7" class="box" stroke="#2563eb"/>
   <text x="515" y="568" class="t" text-anchor="middle">Komponente cluster</text>
   <text x="515" y="588" class="m" text-anchor="middle">updateCluster()</text>
@@ -161,7 +161,7 @@
   <rect x="936" y="648" width="208" height="98" rx="7" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="5 4"/>
   <text x="1040" y="670" class="t" text-anchor="middle" fill="#64748b">Nicht in der SIL</text>
   <text x="952" y="691" class="s">CAN-Codecs, MCP2515-Treiber</text>
-  <text x="952" y="710" class="s">Echtzeit-Task, WLAN, Web</text>
+  <text x="952" y="710" class="s">CAN-Task, WLAN, Web</text>
   <text x="952" y="729" class="s">→ Prüfstand und Fahrzeug</text>
 
   <!-- Legende -->

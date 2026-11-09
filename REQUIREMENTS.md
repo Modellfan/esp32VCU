@@ -27,7 +27,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 30 ms gesendet; die Sendezeitpunkte sind gleichmäßig verteilt. Nicht genutzte Bits tragen die in `can_signals.md` dokumentierten Standardwerte.
 - **Akzeptanz:** Gegeben eine laufende VCU am Fahrzeug-CAN; wenn 10 s mitgeschnitten werden; dann erscheint jede der fünf IDs mit 30 ms ± 3 ms Abstand, die Inhalte entsprechen der DBC, und das Kombiinstrument zeigt keine Motorsteuergeräte-Störung.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (Echtzeit-Task `src/services/vcu_rt.cpp`, 6-ms-Zeitschlitze; `src/comms/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
+- **Umsetzung:** vorhanden (CAN-Task `canTask()` in `src/main.cpp`, 6-ms-Zeitschlitze; `src/comms/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
 - **Offen:** zulässige Zykluszeittoleranz; ob 0x4F8 (definiert, aber nicht gesendet) benötigt wird.
 
 ### VCU-REQ-002 – Schneller Start der Emulation
@@ -37,7 +37,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Nach dem Einschalten muss die VCU die Botschaften aus VCU-REQ-001 spätestens nach 1 s senden, unabhängig vom Zustand von WLAN, Dateisystem oder Weboberfläche.
 - **Akzeptanz:** Gegeben eine VCU ohne erreichbares Heim-WLAN; wenn sie eingeschaltet wird; dann erscheint die erste 0x280-Botschaft spätestens 1 s nach Anlegen der Versorgung.
 - **Abhängigkeiten:** VCU-REQ-001, VCU-REQ-014
-- **Umsetzung:** umgesetzt 2026-10-28: Echtzeit-Task startet vor dem WLAN, WLAN-Aufbau blockiert nicht (`src/main.cpp`, `src/services/vcu_rt.cpp`, VCU-DEC-003). Startzeit nicht gemessen. Vorher: bis 15 s Blockade.
+- **Umsetzung:** umgesetzt 2026-10-28: CAN-Task startet vor dem WLAN, WLAN-Aufbau blockiert nicht (`src/main.cpp`, VCU-DEC-003). Startzeit nicht gemessen. Vorher: bis 15 s Blockade.
 - **Nutzerentscheidung 2026-10-28:** Grenzwert 1 s bestätigt.
 
 ### VCU-REQ-003 – Dekodierung des Fahrzeug-CAN
@@ -105,7 +105,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss den Kühlmittellüfter in den Stufen Aus, Stufe 1 und Stufe 2 ansteuern. Die Stufe wird automatisch aus Motor- und Kühlkörpertemperatur bestimmt (mit Hysterese). Über die Oberfläche lässt sich die Stufe manuell übersteuern und die Automatik wieder einschalten.
 - **Akzeptanz:** Gegeben eine VCU am Prüfstand; wenn Stufe 0, 1 und 2 manuell gesetzt werden; dann führen die Ausgänge Stufe 1/Stufe 2 die Pegel 0/0, 1/0, 1/1, und der CAN-Bus 2 arbeitet dabei ungestört weiter. Wenn im Automatikbetrieb die Temperatur die Schwelle für Stufe 1 überschreitet; dann schaltet Stufe 1 ein und erst unterhalb der Schwelle minus Hysterese wieder aus.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** Hand- und Automatikbetrieb in `src/app/vcu_app.cpp` (Schwellen als Entwurf, Start im Handbetrieb), Ausgänge über `params::outputs` (VCU-DEC-004). Der frühere Konflikt (Stufe 1 auf GPIO7 = CAN2-CS) ist beseitigt: Stufe 1 ist in `src/board.h` nicht zugewiesen, die Lüfterausgänge bleiben bis zur Klärung abgeschaltet.
+- **Umsetzung:** Hand- und Automatikbetrieb in `src/drivers/coolant_fan_control.cpp` (Schwellen als Entwurf, Start im Handbetrieb), Ausgänge über `params::fan` bzw. `params::digipot` (VCU-DEC-004). Der frühere Konflikt (Stufe 1 auf GPIO7 = CAN2-CS) ist beseitigt: Stufe 1 ist in `src/board.h` nicht zugewiesen, die Lüfterausgänge bleiben bis zur Klärung abgeschaltet.
 - **Nutzerentscheidung 2026-10-28:** automatisch und manuell übersteuerbar. GPIO7 ist der Chip-Select von CAN 2; der Lüfter-Pin ist falsch.
 - **Offen:** tatsächlicher Pin für Stufe 1 (vor dem nächsten Flashen an der Platine prüfen); Schalt- und Hysteresewerte.
 
@@ -116,7 +116,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über ein digitales Potentiometer (X9C103S, 10 kΩ) den Tankgeber des Kombiinstruments nachbilden und in 1-%-Schritten von 0 bis 100 % einstellen. Vorerst wird der Wert manuell über die Oberfläche gesetzt.
 - **Akzeptanz:** Gegeben das Potentiometer am Prüfstand; wenn 0 %, 50 % und 100 % gesetzt werden; dann misst man am Schleifer ca. 0 Ω, 5 kΩ und 10 kΩ gegen das Fußende (± 20 % Bauteiltoleranz).
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (`src/drivers/digipot_control.cpp`, `lib/X9C103S`); Sollwert über `params::outputs`, Ausgabe im Echtzeit-Task nur bei Änderung.
+- **Umsetzung:** vorhanden (`src/drivers/digipot_control.cpp`, `lib/X9C103S`); Sollwert über `params::fan` bzw. `params::digipot`, Ausgabe im CAN-Task nur bei Änderung.
 - **Nutzerentscheidung 2026-10-28:** Tankanzeige, vorerst manuell; Wert wird nicht gespeichert.
 - **Offen:** spätere Kopplung an SoC (VCU-REQ-018); Zuordnung Prozent → Zeigerstellung der Tankanzeige.
 
@@ -129,7 +129,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss alle dekodierten, berechneten und gesetzten Werte als JSON unter `GET /api/live` bereitstellen; mit `fields=` lässt sich die Antwort auf einzelne Felder beschränken. Sollwerte werden über `/api/set`, `/api/set-ecu` und `/api/set-cluster` gesetzt; die Antwort enthält den neuen Live-Stand.
 - **Akzeptanz:** Gegeben eine laufende VCU; wenn `/api/live?fields=sdu_udc,rpm` abgerufen wird; dann enthält die Antwort genau diese Felder als gültiges JSON. Wenn `/api/set?coolant_fan_level=1` aufgerufen wird; dann meldet die Antwort `coolant_fan_level` 1.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
-- **Umsetzung:** aus der zentralen Signaltabelle `src/data/signal_table.cpp` erzeugt (VCU-DEC-007); zusätzlich `/api/signals`, `rejected` für ungültige Setzwerte, `null` statt `nan`.
+- **Umsetzung:** aus der zentralen Signaltabelle `src/services/signal_table.cpp` erzeugt (VCU-DEC-007); zusätzlich `/api/signals`, `rejected` für ungültige Setzwerte, `null` statt `nan`.
 - **Lücke:** Die Touch-UI fordert Felder an, die die Firmware nicht liefert (`soc`, `range_km`, Ladestecker-/Ladezustand, `cluster_trip_distance_km`) und ruft im Editor-Modus `POST /api/energy-flow-layout` auf, das es nur im Python-Testserver gibt.
 
 ### VCU-REQ-011 – Touch-Oberfläche für das Navi-Display

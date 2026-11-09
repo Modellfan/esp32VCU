@@ -393,7 +393,7 @@
     "responsibilities": [
      "schreibt Werte mit dem C++-Speichertyp der Signaltabelle",
      "simulierte Uhr für millis()/micros()",
-     "sil_step(1) = updateCluster(), sil_step(2) = appStep()",
+     "sil_step(1) = updateCluster(), sil_step(2) = App-Schritt des CAN-Tasks",
      "params_storage.cpp legt die Signalgruppen ohne Codecs an"
     ],
     "files": [
@@ -413,16 +413,17 @@
   },
   {
    "id": "f_app",
-   "title": "vcu_app",
+   "title": "App-Schritt",
    "layer": "fw",
    "col": 2,
    "kind": "module",
    "status": "umgesetzt",
-   "summary": "appStep(): Kombi, Overrides, Lüfterlogik.",
+   "summary": "updateCluster() mit Overrides, coolantFanAutoUpdate(), digipotClampRequest().",
    "details": {
     "responsibilities": [],
     "files": [
-     "src/app/vcu_app.cpp"
+     "src/main.cpp",
+     "src/drivers/coolant_fan_control.cpp"
     ],
     "interfaces": [],
     "timing": "je Schritt",
@@ -468,8 +469,8 @@
    "details": {
     "responsibilities": [],
     "files": [
-     "src/data/signal_table.cpp",
-     "src/data/vcu_params.cpp"
+     "src/services/signal_table.cpp",
+     "src/services/params_lock.cpp"
     ],
     "interfaces": [],
     "timing": "-",

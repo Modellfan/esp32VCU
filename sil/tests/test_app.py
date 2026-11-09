@@ -1,6 +1,6 @@
-"""Component tests of the application step appStep() (src/app/vcu_app.cpp).
-
-appStep() runs the Kombi calculation and then applies the ECU overrides (VCU-DEC-005).
+"""Component tests of the application part of the CAN task (src/main.cpp):
+updateCluster() (Kombi calculation, then the ECU overrides, VCU-DEC-005),
+coolantFanAutoUpdate() (src/drivers/coolant_fan_control.cpp) and digipotClampRequest().
 Application level only: inputs and outputs are signal-table parameters.
 """
 

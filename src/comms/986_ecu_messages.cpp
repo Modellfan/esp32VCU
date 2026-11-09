@@ -3,6 +3,7 @@
 
 namespace params {
 EcuSignals ecu;
+EcuOverrides ecu_override;
 }
 
 // 0x280 Engine_1 (ECU) - nominal time slice: 30 ms

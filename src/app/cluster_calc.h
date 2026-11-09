@@ -29,6 +29,7 @@ extern ClusterSignals cluster;
 
 float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode);
 int needleFromPercent(int8_t dir, float percentSigned);
+// Every CAN cycle: power, needle, acceleration timing, fuel; then the ECU overrides.
 void updateCluster();
 
 #endif

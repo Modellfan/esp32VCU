@@ -1,6 +1,6 @@
 // Service layer: WiFi (access point + home network) and HTTP server.
 // Runs in its own task on core 0; reads params only through snapshots and writes
-// them only under the params lock, so it never delays the real-time task noticeably.
+// them only under the params lock, so it never delays the CAN task noticeably.
 #include "webinterface.h"
 
 #include <FS.h>
@@ -17,8 +17,7 @@
 #include "gvret_bridge.h"
 #include "signal_table.h"
 #include "status_led.h"
-#include "vcu_params.h"
-#include "vcu_rt.h"
+#include "params_lock.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -181,7 +180,7 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
     addStr("network_label", staConnected ? "WiFi" : "Offline");
 
     // Diagnostics
-    const RtStats rt = rtStats();
+    const CanTaskStats rt = canTaskStats();
     addUInt("uptime_ms", now);
     addUInt("rt_cycles", rt.cycles);
     addUInt("rt_overruns", rt.overruns);
@@ -327,10 +326,10 @@ void handleSignals() {
     sendJson(200, body);
 }
 
-// Outputs are applied by the next real-time cycle; wait two cycles so the response
+// Outputs are applied by the next CAN task cycle; wait two cycles so the response
 // already reports the new state.
 void waitForOutputs() {
-    vTaskDelay(pdMS_TO_TICKS(2 * RT_PERIOD_MS + 2));
+    vTaskDelay(pdMS_TO_TICKS(2 * CAN_TASK_PERIOD_MS + 2));
 }
 
 // /api/set: charging parameters, actuators and legacy ECU shortcuts.
@@ -350,18 +349,18 @@ void handleSet() {
             } else if (key == "ac_current_limit_a" && parseLevel(value, 6, 32, level)) {
                 params::charging.ac_current_limit_a = (uint8_t)level;
             } else if (key == "digital_pot_pct" && parseLevel(value, 0, 100, level)) {
-                params::outputs.digipot_pct = (uint8_t)level;
+                params::digipot.digipot_pct = (uint8_t)level;
                 outputs = true;
             } else if (key == "coolant_fan_level" && parseLevel(value, 0, 2, level)) {
                 // A manual level switches the fan to manual mode.
-                params::outputs.fan_level_manual = (uint8_t)level;
-                params::outputs.fan_mode = params::FAN_MODE_MANUAL;
+                params::fan.fan_level_manual = (uint8_t)level;
+                params::fan.fan_mode = params::FAN_MODE_MANUAL;
                 outputs = true;
             } else if (key == "coolant_fan_mode" && (value == "auto" || value == "1")) {
-                params::outputs.fan_mode = params::FAN_MODE_AUTO;
+                params::fan.fan_mode = params::FAN_MODE_AUTO;
                 outputs = true;
             } else if (key == "coolant_fan_mode" && (value == "manual" || value == "0")) {
-                params::outputs.fan_mode = params::FAN_MODE_MANUAL;
+                params::fan.fan_mode = params::FAN_MODE_MANUAL;
                 outputs = true;
             } else if (key == "rpm" && setOverride(OVR_ENGINE_SPEED, value)) {
             } else if (key == "coolant" && setOverride(OVR_COOLANT_TEMP, value)) {
@@ -400,10 +399,10 @@ void handleSetEcu() {
                 const bool pot = key == "digital_pot_pct";
                 ok = parseLevel(value, 0, pot ? 100 : 2, level);
                 if (ok && pot) {
-                    params::outputs.digipot_pct = (uint8_t)level;
+                    params::digipot.digipot_pct = (uint8_t)level;
                 } else if (ok) {
-                    params::outputs.fan_level_manual = (uint8_t)level;
-                    params::outputs.fan_mode = params::FAN_MODE_MANUAL;
+                    params::fan.fan_level_manual = (uint8_t)level;
+                    params::fan.fan_mode = params::FAN_MODE_MANUAL;
                 }
                 outputs = outputs || ok;
             }

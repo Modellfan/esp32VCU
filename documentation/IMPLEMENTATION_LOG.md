@@ -4246,3 +4246,38 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Automated Tests Run
 - `pio run -e esp32s3`: PASS (RAM 48964 B, Flash 1099701 B, unchanged)
 - `python sil/build.py --force` + `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)
+
+
+## 2026-11-09 20:39:39 +01:00 - Original structure with a separate CAN task (VCU-DEC-015)
+
+### Planned Steps
+- /re-review of the restructuring (DEC-002/003/004/005/006/007, REQ-001/002/013/014, SIL).
+- Baseline: PC harness runs the application step and ECU encoders for 20 000 cycles and prints every frame plus fan level and fuel gauge set point.
+- Dissolve vcu_rt, vcu_app, vcu_params; main.cpp shows the sequence; modules own their data; compare frames.
+
+### Changes Made
+- `src/main.cpp`: `pollVehicleCAN()`, `pollTeslaCAN()`, `pollBatteryCAN()`, `emulateECUCAN()`, `canTask()` (6 ms, core 1, before WiFi) - same order as before.
+- Data back in the modules: `EcuOverrides` -> `comms/986_ecu_messages`; `BatterySignals`, `ChargingSignals` -> `comms/battery_messages`; `FanSignals` + automatic (`fanAutoLevel`, `coolantFanAutoUpdate`) -> `drivers/coolant_fan_control`; `DigipotSignals` + `digipotApply` -> `drivers/digipot_control`.
+- `applyEcuOverrides()` now at the end of `updateCluster()` (`app/cluster_calc.cpp`), same order as appStep.
+- Receive monitor -> `comms/can_rx_monitor`; lock -> `services/params_lock`; signal table -> `services/` with one group list (`SIGNAL_GROUPS`), groups `G_FAN`/`G_DIGIPOT` replace `G_OUTPUTS` (API names unchanged).
+- Cycle statistics -> `drivers/canmanager` (`canTaskStats()`); `CAN_TASK_PERIOD_MS` replaces `RT_PERIOD_MS`.
+- Deleted: `services/vcu_rt.*`, `app/vcu_app.*`, `data/vcu_params.*`, folder `src/data/`.
+- SIL: build sources, shim (component 2 = CAN-task app step), params storage, GPIO stubs, `-DVCU_LOG_ENABLED=0`.
+- Docs: VCU-DEC-015 new; DEC-002/003/004/007/010, REQ-001/002/008/009/010, README, architecture maps (doc + SIL) updated.
+
+### Automated Tests Run
+- Frame harness old vs. new (scratchpad, 20 000 cycles, varying inputs, overrides, 0x504 gaps): PASS (byte-identical frames, fan level, fuel gauge set point)
+- `pio run -e esp32s3`: PASS
+- `python sil/build.py --force` + `python -m pytest sil/tests -q`: PASS (43 passed, 3 xfailed)
+
+### Result
+- `firmware_ram: 48964 B (unchanged), firmware_flash: 1099809 B (+108 B)`
+
+### Artifacts
+- [src/main.cpp](../src/main.cpp)
+- [DECISIONS.md](../DECISIONS.md) (VCU-DEC-015)
+
+### Notes
+- Not tested on hardware: 6 ms timing, start < 1 s and rt_* counters were never measured; CAN capture needed before vehicle use.
+- `documentation/architecture.png` / `sil/architecture.png` are raster images and not regenerated.
+- Task name changed from `vcu_rt` to `vcu_can`; `/api/live` keeps the `rt_*` field names.

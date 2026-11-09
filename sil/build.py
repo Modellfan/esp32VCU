@@ -16,15 +16,16 @@ REPO = SIL.parent
 BUILD = SIL / "build"
 LIBRARY = BUILD / ("vcu_sil.dll" if sys.platform == "win32" else "libvcu_sil.so")
 
-# Application components under test (not modified for SIL). No CAN codecs or drivers:
-# the signal groups they would own are instantiated in sil/shim/params_storage.cpp.
+# Application components under test (not modified for SIL). No CAN codecs; of the drivers only
+# the fan automatic (GPIO stubbed). Signal groups of modules left out are in sil/shim/params_storage.cpp.
 FIRMWARE_SOURCES = [
     "src/app/cluster_calc.cpp",
-    "src/app/vcu_app.cpp",
-    "src/data/vcu_params.cpp",
-    "src/data/signal_table.cpp",
+    "src/drivers/coolant_fan_control.cpp",
+    "src/comms/can_rx_monitor.cpp",
+    "src/services/signal_table.cpp",
+    "src/services/params_lock.cpp",
 ]
-SRC_LAYERS = ["app", "data", "comms", "drivers", "services"]
+SRC_LAYERS = ["app", "comms", "drivers", "services"]
 SHIM_SOURCES = ["sil/shim/params_storage.cpp", "sil/shim/sil_api.cpp"]
 
 
@@ -47,7 +48,7 @@ def build(force: bool = False) -> Path:
     cmd = [
         sys.executable, "-m", "ziglang", "c++",
         "-shared", "-std=gnu++17", "-O1", "-g0",
-        "-Wall", "-Wno-unused-function", "-Wno-invalid-offsetof",
+        "-Wall", "-Wno-unused-function", "-Wno-invalid-offsetof", "-DVCU_LOG_ENABLED=0",
         "-I", str(SIL / "stubs"), "-I", str(REPO / "src"),
         *[a for d in SRC_LAYERS for a in ("-I", str(REPO / "src" / d))],
         "-o", str(LIBRARY),

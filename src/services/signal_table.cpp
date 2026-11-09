@@ -1,5 +1,7 @@
 #include "signal_table.h"
 
+#include "params_lock.h"
+
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -185,11 +187,11 @@ const SignalDef kSignals[] = {
     SIG("cluster_acceleration_0_100_valid", G_CLUSTER, params::ClusterSignals, acceleration_0_100_valid, F_BOOL, 0, RX_NONE, 0),
     SIG("target_charge_pct", G_CHARGING, params::ChargingSignals, target_charge_pct, F_NUM, 0, RX_NONE, 0),
     SIG("ac_current_limit_a", G_CHARGING, params::ChargingSignals, ac_current_limit_a, F_NUM, 0, RX_NONE, 0),
-    SIG("digital_pot_pct", G_OUTPUTS, params::OutputSignals, digipot_applied_pct, F_UINT, 0, RX_NONE, 0),
-    SIG("digital_pot_wiper", G_OUTPUTS, params::OutputSignals, digipot_wiper, F_UINT, 0, RX_NONE, 0),
-    SIG("coolant_fan_level", G_OUTPUTS, params::OutputSignals, fan_level, F_UINT, 0, RX_NONE, 0),
-    SIG("coolant_fan_low_output", G_OUTPUTS, params::OutputSignals, fan_stage1, F_BOOL, 0, RX_NONE, 0),
-    SIG("coolant_fan_high_output", G_OUTPUTS, params::OutputSignals, fan_stage2, F_BOOL, 0, RX_NONE, 0),
+    SIG("digital_pot_pct", G_DIGIPOT, params::DigipotSignals, digipot_applied_pct, F_UINT, 0, RX_NONE, 0),
+    SIG("digital_pot_wiper", G_DIGIPOT, params::DigipotSignals, digipot_wiper, F_UINT, 0, RX_NONE, 0),
+    SIG("coolant_fan_level", G_FAN, params::FanSignals, fan_level, F_UINT, 0, RX_NONE, 0),
+    SIG("coolant_fan_low_output", G_FAN, params::FanSignals, fan_stage1, F_BOOL, 0, RX_NONE, 0),
+    SIG("coolant_fan_high_output", G_FAN, params::FanSignals, fan_stage2, F_BOOL, 0, RX_NONE, 0),
     SIG("motor2_coolant_temperature", G_ECU, params::EcuSignals, motor2_coolant_temperature, F_NUM, 2, RX_NONE, OVR_COOLANT_TEMP),
     SIG("motor2_brake_light_switch", G_ECU, params::EcuSignals, motor2_brake_light_switch, F_BOOL, 0, RX_NONE, W_ECU),
     SIG("motor2_brake_test_switch", G_ECU, params::EcuSignals, motor2_brake_test_switch, F_BOOL, 0, RX_NONE, W_ECU),
@@ -213,11 +215,11 @@ const SignalDef kSignals[] = {
     SIG("inlet_air_temperature", G_ECU, params::EcuSignals, inlet_air_temperature, F_NUM, 2, RX_NONE, W_ECU),
     SIG("barometric_pressure_mbar", G_ECU, params::EcuSignals, barometric_pressure_mbar, F_NUM, 2, RX_NONE, W_ECU),
     // Fan control (VCU-REQ-008)
-    SIG("coolant_fan_mode", G_OUTPUTS, params::OutputSignals, fan_mode, F_UINT, 0, RX_NONE, 0),
-    SIG("coolant_fan_level_manual", G_OUTPUTS, params::OutputSignals, fan_level_manual, F_UINT, 0, RX_NONE, 0),
-    SIG("coolant_fan_level_auto", G_OUTPUTS, params::OutputSignals, fan_level_auto, F_UINT, 0, RX_NONE, 0),
-    SIG("coolant_fan_outputs_enabled", G_OUTPUTS, params::OutputSignals, fan_outputs_enabled, F_BOOL, 0, RX_NONE, 0),
-    SIG("digital_pot_request_pct", G_OUTPUTS, params::OutputSignals, digipot_pct, F_UINT, 0, RX_NONE, 0),
+    SIG("coolant_fan_mode", G_FAN, params::FanSignals, fan_mode, F_UINT, 0, RX_NONE, 0),
+    SIG("coolant_fan_level_manual", G_FAN, params::FanSignals, fan_level_manual, F_UINT, 0, RX_NONE, 0),
+    SIG("coolant_fan_level_auto", G_FAN, params::FanSignals, fan_level_auto, F_UINT, 0, RX_NONE, 0),
+    SIG("coolant_fan_outputs_enabled", G_FAN, params::FanSignals, fan_outputs_enabled, F_BOOL, 0, RX_NONE, 0),
+    SIG("digital_pot_request_pct", G_DIGIPOT, params::DigipotSignals, digipot_pct, F_UINT, 0, RX_NONE, 0),
     // BMS / charger on CAN 3 (VCU-REQ-018). Message layout open: these values stay stale.
     SIG("battery_soc_pct", G_BATTERY, params::BatterySignals, soc_pct, F_NUM, 1, RX_BATTERY, 0),
     SIG("battery_pack_voltage_v", G_BATTERY, params::BatterySignals, pack_voltage_v, F_NUM, 1, RX_BATTERY, 0),
@@ -240,39 +242,26 @@ const SignalDef *findSignal(const char *name) {
 
 void takeSnapshot(ParamsSnapshot &snap) {
     ParamsGuard guard;
-    snap.vehicle = params::vehicle;
-    snap.ecu = params::ecu;
-    snap.sdu = params::tesla_sdu;
-    snap.cluster = params::cluster;
-    snap.outputs = params::outputs;
-    snap.charging = params::charging;
-    snap.battery = params::battery;
-    snap.ecu_override = params::ecu_override;
+#define SIGNAL_GROUP_COPY(id, Type, name) snap.name = params::name;
+    SIGNAL_GROUPS(SIGNAL_GROUP_COPY)
+#undef SIGNAL_GROUP_COPY
     rxSnapshot(snap.last_rx_ms);
 }
 
 const uint8_t *snapshotGroupBase(const ParamsSnapshot &snap, SigGroup group) {
     switch (group) {
-        case G_VEHICLE: return reinterpret_cast<const uint8_t *>(&snap.vehicle);
-        case G_ECU: return reinterpret_cast<const uint8_t *>(&snap.ecu);
-        case G_SDU: return reinterpret_cast<const uint8_t *>(&snap.sdu);
-        case G_CLUSTER: return reinterpret_cast<const uint8_t *>(&snap.cluster);
-        case G_OUTPUTS: return reinterpret_cast<const uint8_t *>(&snap.outputs);
-        case G_CHARGING: return reinterpret_cast<const uint8_t *>(&snap.charging);
-        case G_BATTERY: return reinterpret_cast<const uint8_t *>(&snap.battery);
+#define SIGNAL_GROUP_CASE(id, Type, name) case id: return reinterpret_cast<const uint8_t *>(&snap.name);
+        SIGNAL_GROUPS(SIGNAL_GROUP_CASE)
+#undef SIGNAL_GROUP_CASE
         default: return nullptr;
     }
 }
 
-static uint8_t *liveGroupBase(SigGroup group) {
+uint8_t *liveGroupBase(SigGroup group) {
     switch (group) {
-        case G_VEHICLE: return reinterpret_cast<uint8_t *>(&params::vehicle);
-        case G_ECU: return reinterpret_cast<uint8_t *>(&params::ecu);
-        case G_SDU: return reinterpret_cast<uint8_t *>(&params::tesla_sdu);
-        case G_CLUSTER: return reinterpret_cast<uint8_t *>(&params::cluster);
-        case G_OUTPUTS: return reinterpret_cast<uint8_t *>(&params::outputs);
-        case G_CHARGING: return reinterpret_cast<uint8_t *>(&params::charging);
-        case G_BATTERY: return reinterpret_cast<uint8_t *>(&params::battery);
+#define SIGNAL_GROUP_CASE(id, Type, name) case id: return reinterpret_cast<uint8_t *>(&params::name);
+        SIGNAL_GROUPS(SIGNAL_GROUP_CASE)
+#undef SIGNAL_GROUP_CASE
         default: return nullptr;
     }
 }

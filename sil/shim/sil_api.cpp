@@ -1,35 +1,23 @@
 // SIL shim: C interface between unchanged application components (src/) and Python (ctypes).
 //
 // Components are tested on the application level: inputs and outputs are parameters of
-// the central signal table (src/data/signal_table.cpp), written and read by name. No CAN layer.
+// the central signal table (src/services/signal_table.cpp), written and read by name. No CAN layer.
 //
-//   component 1 = cluster   updateCluster()          (src/app/cluster_calc.cpp)
-//   component 2 = app       appStep(now)             (src/app/vcu_app.cpp: cluster, overrides, fan)
+//   component 1 = cluster   updateCluster()          (src/app/cluster_calc.cpp, incl. ECU overrides)
+//   component 2 = app       application part of the CAN task in src/main.cpp:
+//                           updateCluster(), coolantFanAutoUpdate(now), digipotClampRequest()
 #include <Arduino.h>
 
 #include "cluster_calc.h"
+#include "coolant_fan_control.h"
+#include "digipot_control.h"
 #include "signal_table.h"
-#include "vcu_app.h"
-#include "vcu_params.h"
 
 #define SIL_API extern "C" __declspec(dllexport)
 
 namespace {
 uint32_t gNowMs = 0;
-constexpr uint32_t kCycleMs = 6;  // RT_PERIOD_MS in src/services/vcu_rt.h
-
-uint8_t *liveBase(SigGroup group) {
-    switch (group) {
-        case G_VEHICLE: return reinterpret_cast<uint8_t *>(&params::vehicle);
-        case G_ECU: return reinterpret_cast<uint8_t *>(&params::ecu);
-        case G_SDU: return reinterpret_cast<uint8_t *>(&params::tesla_sdu);
-        case G_CLUSTER: return reinterpret_cast<uint8_t *>(&params::cluster);
-        case G_OUTPUTS: return reinterpret_cast<uint8_t *>(&params::outputs);
-        case G_CHARGING: return reinterpret_cast<uint8_t *>(&params::charging);
-        case G_BATTERY: return reinterpret_cast<uint8_t *>(&params::battery);
-        default: return nullptr;
-    }
-}
+constexpr uint32_t kCycleMs = 6;  // CAN_TASK_PERIOD_MS in src/drivers/canmanager.h
 
 template <typename T> void storeAs(uint8_t *p, double value) {
     const T v = (T)value;
@@ -51,7 +39,11 @@ SIL_API int sil_step(int component) {
     gNowMs += kCycleMs;
     switch (component) {
         case 1: updateCluster(); return 0;
-        case 2: appStep(gNowMs); return 0;
+        case 2:
+            updateCluster();
+            coolantFanAutoUpdate(gNowMs);
+            digipotClampRequest();
+            return 0;
         default: return -1;
     }
 }
@@ -69,7 +61,7 @@ SIL_API int sil_get(const char *name, double *value) {
     if (def == nullptr) {
         return -1;
     }
-    *value = readSignal(*def, liveBase(def->group));
+    *value = readSignal(*def, liveGroupBase(def->group));
     return 0;
 }
 
@@ -80,7 +72,7 @@ SIL_API int sil_set(const char *name, double value) {
     if (def == nullptr) {
         return -1;
     }
-    uint8_t *p = liveBase(def->group) + def->offset;
+    uint8_t *p = liveGroupBase(def->group) + def->offset;
     switch (def->storage) {
         case S_BOOL: storeAs<bool>(p, value != 0.0); break;
         case S_U8: storeAs<uint8_t>(p, value); break;

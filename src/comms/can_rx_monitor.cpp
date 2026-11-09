@@ -1,14 +1,4 @@
-#include "vcu_params.h"
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
-
-namespace params {
-OutputSignals outputs;
-ChargingSignals charging;
-EcuOverrides ecu_override;
-BatterySignals battery;
-}  // namespace params
+#include "can_rx_monitor.h"
 
 namespace {
 
@@ -27,10 +17,8 @@ constexpr RxEntry kRxTable[] = {
     {BUS_DRIVE, 0x506, RX_SDU_506}, {BUS_DRIVE, 0x507, RX_SDU_507}, {BUS_DRIVE, 0x508, RX_SDU_508},
 };
 
-// 0 = never received. Written by the real-time task only; 32-bit stores are atomic on the S3.
+// 0 = never received. Written by the CAN task only; 32-bit stores are atomic on the S3.
 volatile uint32_t gLastRxMs[RX_COUNT] = {0};
-
-SemaphoreHandle_t gParamsMutex = nullptr;
 
 }  // namespace
 
@@ -58,23 +46,5 @@ bool rxFresh(RxSource source, uint32_t nowMs) {
 void rxSnapshot(uint32_t *lastRxMs) {
     for (int i = 0; i < RX_COUNT; i++) {
         lastRxMs[i] = gLastRxMs[i];
-    }
-}
-
-void paramsLockInit() {
-    if (gParamsMutex == nullptr) {
-        gParamsMutex = xSemaphoreCreateMutex();
-    }
-}
-
-void paramsLock() {
-    if (gParamsMutex != nullptr) {
-        xSemaphoreTake(gParamsMutex, portMAX_DELAY);
-    }
-}
-
-void paramsUnlock() {
-    if (gParamsMutex != nullptr) {
-        xSemaphoreGive(gParamsMutex);
     }
 }

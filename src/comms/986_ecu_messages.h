@@ -77,6 +77,22 @@ struct EcuSignals {
 
 extern EcuSignals ecu;
 
+// Values set through /api/set-ecu that the cluster calculation would otherwise overwrite.
+// Priority: override > calculation > default value (VCU-DEC-005). Applied at the end of
+// updateCluster().
+struct EcuOverrides {
+    bool engine_speed_active = false;
+    float engine_speed_rpm = 0.0f;
+    bool coolant_temp_active = false;
+    float coolant_temp_c = 0.0f;
+    bool coolant_warning_active = false;
+    bool coolant_warning = false;
+    bool fuel_active = false;
+    uint32_t fuel_ul = 0;
+};
+
+extern EcuOverrides ecu_override;
+
 } // namespace params
 
 bool decode986Ecu0x280(const CANMessage &frame);

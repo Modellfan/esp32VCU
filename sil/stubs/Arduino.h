@@ -15,6 +15,13 @@
 uint32_t millis();
 uint32_t micros();
 
+// GPIO: no hardware in the SIL (coolant_fan_control.cpp drives relays through these).
+#define HIGH 1
+#define LOW 0
+#define OUTPUT 1
+inline void pinMode(uint8_t, uint8_t) {}
+inline void digitalWrite(uint8_t, uint8_t) {}
+
 // Minimal String: only what signal_table.cpp uses (parse helpers).
 class String {
 public:

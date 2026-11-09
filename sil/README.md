@@ -7,7 +7,7 @@ Komponententests auf **Applikationsebene**: einzelne, unveränderte Komponenten 
 | Komponente | Aufruf je Schritt | Quelle |
 |---|---|---|
 | `VcuSil("cluster")` | `updateCluster()` | `src/app/cluster_calc.cpp` |
-| `VcuSil("app")` | `appStep(now)`: Kombi, ECU-Overrides, Lüfterlogik | `src/app/vcu_app.cpp` |
+| `VcuSil("app")` | App-Schritt des CAN-Tasks: `updateCluster()` (Kombi, ECU-Overrides), `coolantFanAutoUpdate(now)`, `digipotClampRequest()` | `src/main.cpp`, `src/drivers/coolant_fan_control.cpp` |
 
 ```text
 pytest / run_demo.py
@@ -20,7 +20,7 @@ Kopplung (vcu_sil/sim.py) ─ set(name) / step() / get(name)
    ▼
 Wrapper: VcuSil("cluster" | "app") (ctypes, vcu_sil/vcu.py) → C-Shim (shim/sil_api.cpp)
    ▼
-Komponente: updateCluster() bzw. appStep()  ·  Daten: params + Signaltabelle
+Komponente: updateCluster() bzw. App-Schritt  ·  Daten: params + Signaltabelle
    +  Stubs (Arduino-Zeit, FreeRTOS-Mutex, CANMessage-Typ nur für die Header)
 ```
 
@@ -45,7 +45,7 @@ vcu.get("cluster_needle_position")   # 6055
 
 ## Prinzip
 
-- **Gleicher Code:** `build.py` kompiliert die Komponenten direkt aus `src/` (`cluster_calc`, `vcu_app`, `vcu_params`, `signal_table`). Die Signalgruppen, die in der Firmware in den Codec-Modulen angelegt sind, legt `shim/params_storage.cpp` an. Die Uhr (`millis()`) gibt die Simulation vor.
+- **Gleicher Code:** `build.py` kompiliert die Komponenten direkt aus `src/` (`cluster_calc`, `coolant_fan_control`, `can_rx_monitor`, `signal_table`, `params_lock`). Die Signalgruppen der Module, die nicht mitgebaut werden (Codecs, Poti-Treiber), legt `shim/params_storage.cpp` an. Die Uhr (`millis()`) gibt die Simulation vor.
 - **Kopplung über Parameter:** Jeder Wert der Signaltabelle (196 Signale) lässt sich über seinen Namen setzen und lesen, mit dem C++-Speichertyp des Feldes.
 - **Takt:** `step()` rückt die Uhr um 6 ms vor und ruft die gewählte Komponente einmal auf. Das Modell rechnet je Zyklus 6 Unterschritte.
 - **Unabhängige Sollwerte:** `tests/oracle.py` rechnet aus der Anforderung VCU-REQ-005 nach, nicht aus dem C-Code.
