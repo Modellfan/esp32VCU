@@ -1,5 +1,5 @@
-// Driver layer: all CAN controllers of the VCU. Pins from board.h, settings in params::can
-// (canmanager_params.h).
+// Driver layer: all CAN controllers of the VCU. Pins from board.h. Public interface without
+// hardware (receive monitor, params::can): canmanager_api.h.
 //   can0  TWAI controller of the ESP32-S3 (BMS / charger), library ACAN_ESP32, no termination
 //   can1  MCP2515 #1: vehicle (Porsche 986)
 //   can2  MCP2515 #2: drive (Tesla SDU / OpenInverter)
@@ -11,7 +11,7 @@
 #include <SPI.h>
 #include <ACAN2515.h>
 
-#include "canmanager_params.h"
+#include "canmanager_api.h"
 
 extern ACAN2515 can1;  // CAN1: vehicle (Porsche 986)
 extern ACAN2515 can2;  // CAN2: drive (Tesla SDU / OpenInverter)

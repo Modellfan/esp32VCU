@@ -4619,3 +4619,16 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - Not tested through the web UI (home WiFi of the VCU does not connect; PC not on the VCU access point).
 - Not tested: power loss during a write (should leave the previous record valid).
+
+
+## 2026-11-10 13:10:00 +01:00 - Home WiFi fixed (TX power), wifi-scan; receive monitor into the CAN manager interface
+
+### Changes Made
+- `webinterface.cpp`: `WiFi.setTxPower(WIFI_POWER_8_5dBm)`; serial command `wifi-scan` (`webinterfaceLogWifiScan()`, retries while the STA connect keeps the scan busy).
+- `src/comms/can_rx_monitor.*` merged into `src/drivers/canmanager_api.h/.cpp` (public, hardware-free interface of the CAN manager: receive monitor and `params::can`, replaces `canmanager_params.h`); `canmanager.h` includes it. SIL build, SIL README, architecture.html, DECISIONS (DEC-015/016 notes), README, main.cpp comments updated.
+
+### Automated Tests Run
+- `wifi-scan`: home network `Überlingen@Wohnzimmer` rssi -56 dBm, channel 11, WPA2; with full TX power connects never (reasons 15/4/2/203): FAIL
+- With 8.5 dBm: connected at once, 192.168.0.77, rssi -56; 6/6 `GET /api/live` 200 (0.09-0.42 s), `GET /can` served, CAN fields present in /api/live: PASS
+- After the refactor: build and upload from PowerShell: PASS; `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+- Boot: CAN0..CAN3 ok, persistence defaults, home WiFi connected after one AUTH_EXPIRE: PASS; stick stream 49: CAN0/CAN2/CAN3 +100 beyond ECU frames, CAN1 +100, errors 0: PASS; `/api/live` 200: PASS

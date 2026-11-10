@@ -83,7 +83,7 @@
      "summary": "Dekodierte Fahrzeug- und Umrichterwerte mit Empfangszeit je Botschaft.",
      "details": {
        "responsibilities": ["params::vehicle (0x1A0, 0x2A8, 0x4A1, 0x510, 0x520, 0x560, 0x440, 0x0C0)", "params::tesla_sdu (0x500–0x508)", "Empfangszeit je Botschaft → stale nach 500 ms"],
-       "files": ["src/comms/986_vehicle_messages.h", "src/comms/tesla_sdu_messages.h", "src/comms/can_rx_monitor.cpp"],
+       "files": ["src/comms/986_vehicle_messages.h", "src/comms/tesla_sdu_messages.h", "src/drivers/canmanager_api.cpp"],
        "interfaces": ["rxMark(bus, id), rxFresh(source, now)"],
        "timing": "geschrieben im CAN-Task", "reqs": ["VCU-REQ-003", "VCU-REQ-004", "VCU-REQ-013"], "decs": ["VCU-DEC-006"],
        "open": ["Zeitgrenze 500 ms ist Entwurf", "PWA wertet stale noch nicht aus"]}},

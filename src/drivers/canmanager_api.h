@@ -1,15 +1,40 @@
-// CAN manager parameters (params::can): basic software settings of the CAN controllers and
-// their live status. Own header without SPI/ACAN dependencies so the signal table and the
-// SIL build can include it. Shown in /api/live and on the test page /can.
+// Public interface of the CAN manager, free of hardware dependencies (also used by the
+// signal table and the SIL build). The controllers themselves: canmanager.h.
 //
-// Settings are read once at start-up (canManager_setup, ecuTask); the status block is
-// written by loop() every error_refresh_ms under the params lock.
-#ifndef CANMANAGER_PARAMS_H
-#define CANMANAGER_PARAMS_H
+//   Receive monitor (VCU-REQ-013, VCU-DEC-006): last reception time per known message. The
+//   receive loop marks every decoded frame; the web API and the fan automatic ask whether a
+//   value is fresh.
+//   params::can: settings of the CAN controllers (read once at start-up) and their live status
+//   (written by loop() every error_refresh_ms under the params lock); in /api/live and on /can.
+#ifndef CANMANAGER_API_H
+#define CANMANAGER_API_H
 
+#include <Arduino.h>
 #include <stdint.h>
 
 constexpr uint8_t CAN_BUS_COUNT = 4;  // CAN0 (TWAI), CAN1..CAN3 (MCP2515)
+
+// ---------------------------------------------------------------- receive monitor
+
+enum CanBus : uint8_t { BUS_VEHICLE = 1, BUS_DRIVE = 2, BUS_BATTERY = 3 };
+
+enum RxSource : uint8_t {
+    RX_NONE = 0,  // value is produced by the VCU itself: always valid
+    RX_VEH_1A0, RX_VEH_2A8, RX_VEH_4A1, RX_VEH_510, RX_VEH_520, RX_VEH_560, RX_VEH_440, RX_VEH_0C0,
+    RX_SDU_500, RX_SDU_501, RX_SDU_502, RX_SDU_503, RX_SDU_504, RX_SDU_505, RX_SDU_506, RX_SDU_507, RX_SDU_508,
+    RX_BATTERY,   // placeholder until the CAN0 messages are defined
+    RX_COUNT
+};
+
+// Timeout after which a value counts as stale. Draft: 500 ms for every message
+// (cycle times of the vehicle and inverter messages are not documented yet).
+constexpr uint32_t RX_TIMEOUT_MS = 500;
+
+void rxMark(CanBus bus, uint32_t id);
+bool rxFresh(RxSource source, uint32_t nowMs);
+void rxSnapshot(uint32_t *lastRxMs);  // copies RX_COUNT entries
+
+// ---------------------------------------------------------------- params::can
 
 namespace params {
 
@@ -56,4 +81,4 @@ extern CanManagerSignals can;
 
 }  // namespace params
 
-#endif  // CANMANAGER_PARAMS_H
+#endif  // CANMANAGER_API_H

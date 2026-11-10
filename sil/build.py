@@ -21,7 +21,7 @@ LIBRARY = BUILD / ("vcu_sil.dll" if sys.platform == "win32" else "libvcu_sil.so"
 FIRMWARE_SOURCES = [
     "src/app/cluster_calc.cpp",
     "src/drivers/coolant_fan_control.cpp",
-    "src/comms/can_rx_monitor.cpp",
+    "src/drivers/canmanager_api.cpp",
     "src/services/signal_table.cpp",
     "src/services/params_lock.cpp",
 ]

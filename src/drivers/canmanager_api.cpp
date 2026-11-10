@@ -1,4 +1,9 @@
-#include "can_rx_monitor.h"
+// CAN manager interface without hardware: receive monitor and params::can (canmanager_api.h).
+#include "canmanager_api.h"
+
+namespace params {
+CanManagerSignals can;
+}  // namespace params
 
 namespace {
 

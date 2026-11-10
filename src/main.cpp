@@ -5,13 +5,13 @@
 // ecuTask (core 1, every 6 ms, higher priority): updateCluster -> emulateECUCAN (one ECU frame).
 // Web task (core 0, lowest priority, src/services/webinterface.cpp): WiFi, web API, PWA,
 //                  GVRET, log, LED. It starts WiFi itself, so CAN runs before WiFi is up.
-// Periods, buffers and priorities: params::can (src/drivers/canmanager_params.h).
+// Periods, buffers and priorities: params::can (src/drivers/canmanager_api.h).
 //
 // Every module owns its data (params::* in its header). The tasks share it under the
 // params lock (src/services/params_lock.h).
 //
-// Folders: app/ (cluster calculation), comms/ (CAN codecs, receive monitor),
-// drivers/ (CAN controllers, fan, fuel gauge, LED), services/ (web, signal table, lock, GVRET, log).
+// Folders: app/ (cluster calculation), comms/ (CAN codecs),
+// drivers/ (CAN manager with receive monitor, fan, fuel gauge, EEPROM, LED), services/ (web, signal table, lock, GVRET, log).
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -20,7 +20,7 @@
 #include "986_vehicle_messages.h"
 #include "battery_messages.h"
 #include "board.h"
-#include "can_rx_monitor.h"
+#include "canmanager_api.h"
 #include "canmanager.h"
 #include "cluster_calc.h"
 #include "coolant_fan_control.h"

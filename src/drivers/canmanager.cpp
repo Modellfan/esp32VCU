@@ -1,5 +1,5 @@
 // Driver layer: CAN0 (TWAI) and three MCP2515 CAN controllers (CAN1..CAN3) on one SPI bus.
-// Pins from board.h, settings and status in params::can (canmanager_params.h).
+// Pins from board.h, settings and status in params::can (canmanager_api.h).
 #include "canmanager.h"
 
 #include <Arduino.h>
@@ -9,10 +9,6 @@
 
 #include "board.h"
 #include "params_lock.h"
-
-namespace params {
-CanManagerSignals can;
-}  // namespace params
 
 namespace {
 bool gCan0Active = false;

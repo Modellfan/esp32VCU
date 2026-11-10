@@ -226,7 +226,7 @@ const SignalDef kSignals[] = {
     SIG("battery_pack_current_a", G_BATTERY, params::BatterySignals, pack_current_a, F_NUM, 1, RX_BATTERY, 0),
     SIG("battery_plug_connected", G_BATTERY, params::BatterySignals, plug_connected, F_BOOL, 0, RX_BATTERY, 0),
     SIG("battery_charging_active", G_BATTERY, params::BatterySignals, charging_active, F_BOOL, 0, RX_BATTERY, 0),
-    // CAN manager settings and status (params::can, src/drivers/canmanager_params.h)
+    // CAN manager settings and status (params::can, src/drivers/canmanager_api.h)
     SIG("can_bitrate", G_CAN, params::CanManagerSignals, bitrate, F_UINT, 0, RX_NONE, 0),
     SIG("can_spi_clock_hz", G_CAN, params::CanManagerSignals, spi_clock_hz, F_UINT, 0, RX_NONE, 0),
     SIG("can_mcp2515_quartz_hz", G_CAN, params::CanManagerSignals, mcp2515_quartz_hz, F_UINT, 0, RX_NONE, 0),
