@@ -41,4 +41,4 @@ platformio run --target uploadfs --upload-port COM10   # PWA ins SPIFFS
 - UART0 (COM10, 115200): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `can0-status`, `can0-send`, `can0-pintest`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset. Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
-CAN0-Transceiver der Hauptplatine (COM10) empfängt nichts (Firmware und Pins mit zweitem Board bestätigt, Modul prüfen), Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
+Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
