@@ -25,6 +25,7 @@
 #include "cluster_calc.h"
 #include "coolant_fan_control.h"
 #include "digipot_control.h"
+#include "eeprom_at24c.h"
 #include "gvret_bridge.h"
 #include "params_lock.h"
 #include "serial_console.h"
@@ -160,6 +161,7 @@ void setup() {
     coolantFanBegin();
     canManager_setup();  // CAN0 (TWAI), CAN1..CAN3: receive from here on
     gvretBridgeBegin();
+    eepromBegin();       // AT24C (I2C), after CAN so it does not delay reception
 
     // ECU emulation first: frames go out before WiFi is even started (VCU-REQ-002).
     // Highest application priority on core 1; the web task (WiFi, web server) on core 0 at

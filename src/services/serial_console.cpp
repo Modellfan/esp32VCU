@@ -6,6 +6,7 @@
 
 #include "board.h"
 #include "canmanager.h"
+#include "eeprom_at24c.h"
 #include "webinterface.h"
 
 namespace {
@@ -16,7 +17,7 @@ bool gOverflow = false;
 
 void execute(const char *command) {
     if (strcmp(command, "help") == 0) {
-        VCU_LOG("[serial] Commands: help, version, wifi-status, can0-status, can0-send, can0-pintest, reset\n");
+        VCU_LOG("[serial] Commands: help, version, wifi-status, can0-status, can0-send, can0-pintest, eeprom-test, reset\n");
     } else if (strcmp(command, "version") == 0) {
         serialConsolePrintBuildInfo();
     } else if (strcmp(command, "wifi-status") == 0) {
@@ -27,6 +28,8 @@ void execute(const char *command) {
         canManagerCan0SendTest();
     } else if (strcmp(command, "can0-pintest") == 0) {
         canManagerCan0PinTest();
+    } else if (strcmp(command, "eeprom-test") == 0) {
+        eepromSelfTest();
     } else if (strcmp(command, "reset") == 0 || strcmp(command, "reboot") == 0) {
         VCU_LOG("[serial] Reset requested\n");
         Serial.flush();

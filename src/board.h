@@ -39,6 +39,10 @@ constexpr int GPIO_DIGIPOT_UD = GPIO_UNASSIGNED;
 constexpr int GPIO_FAN_STAGE1 = GPIO_UNASSIGNED;
 constexpr int GPIO_FAN_STAGE2 = 15;
 
+// AT24C I2C EEPROM (persistent data), added 2026-11-10 (user). GPIO37 is free: N8 module without PSRAM.
+constexpr int GPIO_EEPROM_SCL = 39;
+constexpr int GPIO_EEPROM_SDA = 37;
+
 // On-board WS2812 RGB LED.
 constexpr int GPIO_RGB_LED = 48;
 
@@ -52,6 +56,7 @@ constexpr int kAssignedPins[] = {
     GPIO_CAN0_TX, GPIO_CAN0_RX,
     GPIO_DIGIPOT_CS, GPIO_DIGIPOT_INC, GPIO_DIGIPOT_UD,
     GPIO_FAN_STAGE1, GPIO_FAN_STAGE2,
+    GPIO_EEPROM_SCL, GPIO_EEPROM_SDA,
     GPIO_RGB_LED,
 };
 

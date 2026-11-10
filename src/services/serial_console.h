@@ -8,6 +8,7 @@
 //   can0-status  full TWAI status and TX/RX pin levels
 //   can0-send    one test frame 0x6C0 on CAN0 (bench only), then can0-status
 //   can0-pintest CAN0 pins without the TWAI driver (bench only, see canmanager.h)
+//   eeprom-test  AT24C write/read-back of the last 16 bytes, old content restored
 //   reset        restart the VCU (also: reboot)
 #ifndef SERIAL_CONSOLE_H
 #define SERIAL_CONSOLE_H

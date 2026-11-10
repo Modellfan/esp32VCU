@@ -4585,3 +4585,17 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - CAN1 shows REC about 90 right after boot, back to 0 within seconds (start-up of the other controllers on the bench bus).
+
+
+## 2026-11-10 11:45:00 +01:00 - AT24C EEPROM driver and function test
+
+### Changes Made
+- `src/drivers/eeprom_at24c.*`: I2C on SCL GPIO39 / SDA GPIO37 (user; first given as 40), finds the chip at 0x50..0x57, size via `determineSizeNoWrite()`, `eepromRead`/`eepromWrite` (update + 6 ms write-cycle wait + read-back compare), serial command `eeprom-test`. Library `robtillaart/I2C_EEPROM@^1.9.4`. `eepromBegin()` in setup() after the CAN start.
+- board.h: `GPIO_EEPROM_SCL`/`GPIO_EEPROM_SDA` in the duplicate check. README hardware and command list.
+
+### Automated Tests Run
+- With SDA on GPIO40: no device on 0x08..0x77, SDA idle low without pull-up (wrong pin): FAIL, resolved by the pin correction.
+- With SDA on GPIO37: AT24C at 0x50, 32768 bytes (AT24C256), page 64: PASS
+- `eeprom-test` with the library's `verifyBlock()`: data correct but verify FAIL (read during the write cycle, ACK polling reports ready too early); with the 6 ms wait: 4x PASS (write+verify about 7.5 ms), also after a hard reset: PASS
+- Stick stream 48: CAN0/CAN2/CAN3 +100 beyond ECU frames, CAN1 +100, TEC/REC 0: PASS
+- PlatformIO from PowerShell reinstalls framework-arduinoespressif32 3.3.7 on every build; two builds failed with WinError 32 (file in use) during this, the next run passed.
