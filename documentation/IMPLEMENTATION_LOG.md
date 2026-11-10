@@ -4548,3 +4548,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - COM10 CAN0 now drives the bus but its RXD never shows the other nodes, with two different transceivers; COM16 on the same bus works. Suspect board level on COM10 (ground offset, series resistance or wiring between bus and transceiver).
+
+
+## 2026-11-10 11:15:00 +01:00 - CAN0 on COM10 works after resoldering; ACAN2515 PR upstream
+
+### Changes Made
+- Bench: user resoldered CAN0 on the COM10 board (continuity module -> connector checked).
+- ACAN2515 DLC fix offered upstream: branch `fix-dlc-overflow` (on upstream master 9189665, only the clamp) in the fork, PR https://github.com/pierremolinaro/acan2515/pull/56.
+
+### Automated Tests Run
+- COM10 boot: CAN0/CAN1/CAN2 init ok: PASS
+- Stick test stream 45, 100 frames @ 10 ms: COM10 CAN1 +100, CAN2 +1267 = ECU frames + 100, CAN0 +1267 (same as CAN2), tec/rec 0: PASS
+- COM10 `can0-send` 0x6C0: stick `listen` captured 1 frame, tec 0: PASS
+
+### Notes
+- `can0-status` after boot shows flags 0x2 (driver receive buffer overflow, peak 33/32): CAN0 receives from init on, loop() starts polling only after the web/WiFi start-up. Counts match CAN2 afterwards. Open: start CAN0 later or enlarge the buffer if start-up frames from the BMS matter.
+- REQ for CAN0 messages stays open (BMS/charger messages not defined).
