@@ -4530,3 +4530,21 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - CAN0 on the main board (COM10) still sees no bus level on GPIO19 while COM16 on the same bus does: fault is the transceiver module or its wiring on COM10.
+
+
+## 2026-11-10 10:30:00 +01:00 - ACAN2515: DLC 9..15 crashed the VCU (fork fix)
+
+### Changes Made
+- Bench: user replaced both MCP2515 and the CAN0 SN65 on the COM10 board and connected CAN0 to the stick bus.
+- Crash found: `can0-pintest` on COM10 -> "Stack smashing protect failure", backtrace `ACAN2515::handleRXBInterrupt()` (ACAN2515.cpp:734) in the ACAN2515 ISR task. Cause: `message.len = dlc & 0x0F` copies up to 15 bytes into `CANMessage::data[8]`; a DLC of 9..15 is valid on CAN (8 data bytes), e.g. after a bus disturbance or from any node on the vehicle bus.
+- Fork `Modellfan/acan2515` commit 069dfd6 (pushed): DLC clamped to 8. esp32VCU lib_deps unchanged (fork HEAD), libdeps updated with `pio pkg update` (the command rewrote platformio.ini without comments; restored with `git checkout`).
+
+### Automated Tests Run
+- New MCP2515 on COM10: boot CAN1/CAN2/CAN0 init ok; stick streams 42-44: CAN1 +100, CAN2 +100 beyond ECU frames, errors 0: PASS
+- COM10 CAN0 before the fix: rx 0, `can0-send` bus-off, err_code 0xA2 (stuff error, reads only recessive): FAIL
+- `platformio.exe run -e esp32s3` and upload COM10/COM16: PASS
+- After the fix: `can0-pintest` 3x on COM10 without crash (TX low reaches the bus: CAN1/CAN2 REC 0->135): PASS
+- COM10 CAN0 still rx 0, GPIO19 never low except the own echo: FAIL (hardware open)
+
+### Notes
+- COM10 CAN0 now drives the bus but its RXD never shows the other nodes, with two different transceivers; COM16 on the same bus works. Suspect board level on COM10 (ground offset, series resistance or wiring between bus and transceiver).
