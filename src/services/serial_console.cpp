@@ -17,9 +17,11 @@ bool gOverflow = false;
 
 void execute(const char *command) {
     if (strcmp(command, "help") == 0) {
-        VCU_LOG("[serial] Commands: help, version, wifi-status, can0-status, can0-send, can0-pintest, eeprom-test, reset\n");
+        VCU_LOG("[serial] Commands: help, version, wifi-status, wifi-scan, can0-status, can0-send, can0-pintest, eeprom-test, reset\n");
     } else if (strcmp(command, "version") == 0) {
         serialConsolePrintBuildInfo();
+    } else if (strcmp(command, "wifi-scan") == 0) {
+        webinterfaceLogWifiScan();
     } else if (strcmp(command, "wifi-status") == 0) {
         webinterfaceLogWifiStatus();
     } else if (strcmp(command, "can0-status") == 0) {

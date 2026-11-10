@@ -9,5 +9,7 @@
 void webinterfaceBegin(uint8_t priority);
 // One text line with access point and home network state (serial command "wifi-status").
 void webinterfaceLogWifiStatus();
+// Serial command "wifi-scan": visible networks with RSSI, channel and auth mode (* = home).
+void webinterfaceLogWifiScan();
 
 #endif

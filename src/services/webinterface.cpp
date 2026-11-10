@@ -534,6 +534,9 @@ void startWifi() {
         ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.mode(WIFI_AP_STA);
     WiFi.setHostname("eboxster-vcu");
+    // Full TX power (19.5 dBm): home network failed with handshake timeouts (reasons 15/4/2) at
+    // -56 dBm; with 8.5 dBm it connects at once (bench 2026-11-10). Enough for the car.
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);
     const bool apOk = WiFi.softAP(VCU_WIFI_AP_SSID, VCU_WIFI_AP_PASSWORD);
     VCU_LOG("[WEB] AP %s %s ip=%s\n", VCU_WIFI_AP_SSID, apOk ? "up" : "FAILED", ipToString(WiFi.softAPIP()).c_str());
     if (strlen(VCU_WIFI_HOME_SSID) > 0) {
@@ -568,6 +571,21 @@ void webinterfaceLogWifiStatus() {
             VCU_WIFI_HOME_SSID, staConnected ? "connected" : "not connected",
             staConnected ? ipToString(WiFi.localIP()).c_str() : "-", staConnected ? (int)WiFi.RSSI() : 0,
             (unsigned)gStaReason);
+}
+
+void webinterfaceLogWifiScan() {
+    int n = WiFi.scanNetworks(false, true);
+    for (int retry = 0; n < 0 && retry < 10; retry++) {  // busy while the home network connects
+        delay(300);
+        n = WiFi.scanNetworks(false, true);
+    }
+    VCU_LOG("[WIFI] scan: %d networks, AP channel %d\n", n, (int)WiFi.channel());
+    for (int i = 0; i < n; i++) {
+        const bool home = WiFi.SSID(i) == VCU_WIFI_HOME_SSID;
+        VCU_LOG("[WIFI]  %s%-32s rssi %4d ch %2d auth %d bssid %s\n", home ? "* " : "  ", WiFi.SSID(i).c_str(),
+                (int)WiFi.RSSI(i), (int)WiFi.channel(i), (int)WiFi.encryptionType(i), WiFi.BSSIDstr(i).c_str());
+    }
+    WiFi.scanDelete();
 }
 
 void webinterfaceBegin(uint8_t priority) {
