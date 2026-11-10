@@ -28,6 +28,7 @@
   - [CAN ID 0x506 / 1286 - Digital inputs A](#openinverter-0x506)
   - [CAN ID 0x507 / 1287 - Digital inputs B and cruise speed](#openinverter-0x507)
   - [CAN ID 0x508 / 1288 - Turns and uptime](#openinverter-0x508)
+- [CAN0: TeensyBMS, Zombie-Slave, Tesla DC/DC](#can0-bms-zombie)
 
 ## Porsche 986 ECU
 
@@ -470,3 +471,23 @@ DLC: `8`
 | --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- |
 | turns | 0 | 32 | Intel | S32 | 1 | 0 | turns | Motor turns |
 | uptime | 32 | 32 | Intel | U32 | 0.01 | 0 | s | Original raw unit is 10 ms; factor converts to seconds |
+
+<a id="can0-bms-zombie"></a>
+## CAN0: TeensyBMS, Zombie-Slave, Tesla DC/DC
+
+Bit layout, scaling and value tables: [ZombieSlave_teensybms_dcdc_mvcu.dbc](ZombieSlave_teensybms_dcdc_mvcu.dbc) (copy of `Modellfan/Zombie-Slave` 205cc7c, 2026-07-11). Decoder: `src/comms/battery_messages.cpp`. VCU-specific points only:
+
+| ID | Name | Sender | Cycle | Counter/CRC | VCU |
+| --- | --- | --- | --- | --- | --- |
+| 0x41A | TeensyBMS_VoltageCurrent | TeensyBMS | 100 ms | yes | `battery_pack_voltage_v`, `battery_pack_current_a` (+ discharge), cell min/max |
+| 0x41B | TeensyBMS_CellTempPower | TeensyBMS | 100 ms | yes | cell temperatures, delta, `battery_pack_power_kw` |
+| 0x41C | TeensyBMS_LimitsFault | TeensyBMS | 100 ms | yes | current limits, contactor state, DTC flags |
+| 0x41D | TeensyBMS_SocSoh | TeensyBMS | 1 s | yes | `battery_soc_pct`, SoH, BMS state (stale after 2.5 s) |
+| 0x41E | TeensyBMS_Hmi | TeensyBMS | 1 s | yes | average power, remaining time and energy (stale after 2.5 s) |
+| 0x437 | ZombieSlave_VcuStatus | Zombie-Slave | 100 ms | yes | `battery_vehicle_state`; `battery_charging_active` = state 7 (CHARGE) |
+| 0x438 | mVCU_ChargePowerStatus | Zombie-Slave | 100 ms | no | charge power actual / max |
+| 0x439 | mVCU_HeaterStatus | Zombie-Slave | 100 ms | yes | `heater_*` |
+| 0x210 | TeslaDCDC_Status | Tesla DC/DC | ? | no | `dcdc_*` (whether the DC/DC is on this bus is open) |
+| 0x43A | mVCU_HeaterControl | **VCU** | 100 ms | yes | byte 0 bit 0 = `heater_request`; the Zombie-Slave needs consecutive counters and drops the request after 500 ms |
+
+Counter: byte 6, bits 0..3. CRC: byte 7 = low byte of the STM32 CRC-32 (poly 0x04C11DB7, init 0xFFFFFFFF, two little-endian 32-bit words of bytes 0..7 with byte 7 = 0, no reflection, no final XOR), as in TeensyVCU `src/utils/can_crc.h`. The VCU drops received frames with a wrong CRC (`battery_crc_errors`) and does not check the counter.

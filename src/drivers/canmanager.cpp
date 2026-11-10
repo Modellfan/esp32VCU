@@ -110,6 +110,10 @@ bool can0Receive(CANMessage &frame) {
     return ACAN_ESP32::can.receive(frame);
 }
 
+bool can0Send(const CANMessage &frame) {
+    return gCan0Active && ACAN_ESP32::can.tryToSend(frame);
+}
+
 uint32_t canManager_error(uint8_t bus) {
     return bus < CAN_BUS_COUNT ? gError[bus] : 0xFFFFFFFF;
 }

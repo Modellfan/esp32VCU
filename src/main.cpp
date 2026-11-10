@@ -112,16 +112,19 @@ constexpr uint32_t OUTPUT_PERIOD_MS = 100;
 void updateOutputs(uint32_t nowMs) {
     uint8_t fanLevel;
     uint8_t fuelGaugePct;
+    CANMessage heaterFrame;
     {
         ParamsGuard guard;
         coolantFanAutoUpdate(nowMs);
         digipotClampRequest();
         fanLevel = params::fan.fan_level;
         fuelGaugePct = params::digipot.digipot_pct;
+        encodeHeaterControl(heaterFrame);  // 0x43A to the Zombie-Slave (VCU-REQ-021)
     }
     // Hardware outside the lock (the potentiometer needs about 2 ms per change).
     coolantFanWrite(fanLevel >= 1U, fanLevel >= 2U);
     digipotApply(fuelGaugePct);
+    can0Send(heaterFrame);  // every 100 ms; the Zombie-Slave drops the request after 500 ms
     ParamsGuard guard;
     coolantFanReportState();
     digipotReportState();

@@ -29,6 +29,7 @@ void digipotApply(uint8_t percent) {
 }
 
 void digipotReportState() {
+    params::digipot.digipot_enabled = board::DIGIPOT_ENABLED;
     if (!board::DIGIPOT_ENABLED) {
         return;
     }

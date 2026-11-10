@@ -28,6 +28,7 @@
     X(G_DIGIPOT, DigipotSignals, digipot)         \
     X(G_CHARGING, ChargingSignals, charging)      \
     X(G_BATTERY, BatterySignals, battery)         \
+    X(G_HEATER, HeaterSignals, heater)            \
     X(G_CAN, CanManagerSignals, can)
 
 #define SIGNAL_GROUP_ID(id, Type, name) id,

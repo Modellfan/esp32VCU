@@ -10,6 +10,7 @@ struct DigipotSignals {
     uint8_t digipot_pct = 0;          // requested position (web service)
     uint8_t digipot_applied_pct = 0;  // position of the potentiometer
     uint8_t digipot_wiper = 0;
+    bool digipot_enabled = false;     // INC/UD pins assigned in board.h
 };
 
 extern DigipotSignals digipot;

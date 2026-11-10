@@ -20,12 +20,19 @@ constexpr RxEntry kRxTable[] = {
     {BUS_DRIVE, 0x500, RX_SDU_500}, {BUS_DRIVE, 0x501, RX_SDU_501}, {BUS_DRIVE, 0x502, RX_SDU_502},
     {BUS_DRIVE, 0x503, RX_SDU_503}, {BUS_DRIVE, 0x504, RX_SDU_504}, {BUS_DRIVE, 0x505, RX_SDU_505},
     {BUS_DRIVE, 0x506, RX_SDU_506}, {BUS_DRIVE, 0x507, RX_SDU_507}, {BUS_DRIVE, 0x508, RX_SDU_508},
+    {BUS_BATTERY, 0x41A, RX_BMS_41A}, {BUS_BATTERY, 0x41B, RX_BMS_41B}, {BUS_BATTERY, 0x41C, RX_BMS_41C},
+    {BUS_BATTERY, 0x41D, RX_BMS_41D}, {BUS_BATTERY, 0x41E, RX_BMS_41E}, {BUS_BATTERY, 0x437, RX_ZS_437},
+    {BUS_BATTERY, 0x438, RX_ZS_438}, {BUS_BATTERY, 0x439, RX_ZS_439}, {BUS_BATTERY, 0x210, RX_DCDC_210},
 };
 
 // 0 = never received. Written by the receive loop only; 32-bit stores are atomic on the S3.
 volatile uint32_t gLastRxMs[RX_COUNT] = {0};
 
 }  // namespace
+
+uint32_t rxTimeoutMs(RxSource source) {
+    return (source == RX_BMS_41D || source == RX_BMS_41E) ? RX_TIMEOUT_SLOW_MS : RX_TIMEOUT_MS;
+}
 
 void rxMark(CanBus bus, uint32_t id) {
     uint32_t now = millis();
@@ -45,7 +52,7 @@ bool rxFresh(RxSource source, uint32_t nowMs) {
         return true;
     }
     const uint32_t last = gLastRxMs[source];
-    return last != 0 && (uint32_t)(nowMs - last) <= RX_TIMEOUT_MS;
+    return last != 0 && (uint32_t)(nowMs - last) <= rxTimeoutMs(source);
 }
 
 void rxSnapshot(uint32_t *lastRxMs) {

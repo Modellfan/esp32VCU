@@ -15,5 +15,6 @@ VehicleSignals vehicle;
 TeslaSduSignals tesla_sdu;
 BatterySignals battery;
 ChargingSignals charging;
+HeaterSignals heater;
 DigipotSignals digipot;
 }  // namespace params

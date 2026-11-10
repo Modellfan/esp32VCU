@@ -25,6 +25,8 @@ uint32_t canManager_error(uint8_t bus);
 // CAN0 (TWAI). Non-blocking receive: returns true and fills frame when one was waiting.
 bool can0Active();
 bool can0Receive(CANMessage &frame);
+// CAN0 send (loop() only): false when CAN0 is down or the driver buffer is full.
+bool can0Send(const CANMessage &frame);
 
 // Bus diagnostics per controller (bus 0..3).
 struct CanBusDiag {

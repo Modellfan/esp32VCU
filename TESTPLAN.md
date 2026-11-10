@@ -37,8 +37,9 @@ Host-Tests laufen über die SIL-Umgebung (`sil/`, Compiler aus dem PyPI-Paket `z
 | VCU-REQ-015 | TC-SEC-01: `git grep` nach Heim-Passwort leer; frischer Klon baut mit Vorlage | B | `git grep` leer 2026-10-28; Klon-Build offen |
 | VCU-REQ-016 | TC-SEC-02: ohne Passwort keine Verbindung zum AP | P | offen |
 | VCU-REQ-017 | TC-CHG-01: Ladeparameter wirken am Ladegerät | F | blockiert (kein Ladegerät angebunden) |
-| VCU-REQ-018 | TC-BAT-01: BMS/Lader auf CAN0 → Werte mit gültigem Alter | P | blockiert (Pins, Botschaften offen) |
+| VCU-REQ-018 | TC-BAT-01: BMS-/Zombie-Frames mit gültiger CRC über den Stick einspielen → Werte in `/api/live` mit gültigem Alter; Frame mit falscher CRC wird verworfen | P | offen (Stick nicht am Bus) |
 | VCU-REQ-019 | TC-LED-01: Sichtprüfung 1 Hz grün | P | offen |
+| VCU-REQ-021 | TC-HEAT-01: `heater_request` 0/1 → 0x43A alle 100 ms, CRC gültig, Byte 0 folgt; Zombie-Slave meldet die Anforderung in 0x439 | P | teilweise: Senden bestanden 2026-11-10, Zombie-Slave nicht am Prüfstand |
 | VCU-REQ-020 | TC-PERS-01: Werte setzen, Reset, Werte wieder da; 17 Änderungen (Slot-Umlauf), Reset lädt den neuesten Datensatz; 4 s ohne Änderung kein Schreibvorgang | P | bestanden 2026-11-10 (über seriellen Testbefehl, nicht über die Weboberfläche) |
 
 ## 3. Abnahmeregeln

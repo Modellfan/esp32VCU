@@ -13,6 +13,7 @@
 
 #include "board.h"
 #include "can_page.h"
+#include "io_page.h"
 #include "canmanager.h"
 #include "gvret_bridge.h"
 #include "signal_table.h"
@@ -128,7 +129,7 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
         appendSignalValue(payload, def, snapshotGroupBase(gSnap, def.group));
         if (def.rx != RX_NONE) {
             const uint32_t last = gSnap.last_rx_ms[def.rx];
-            if (last == 0 || (uint32_t)(now - last) > RX_TIMEOUT_MS) {
+            if (last == 0 || (uint32_t)(now - last) > rxTimeoutMs(def.rx)) {
                 if (stale.length()) {
                     stale += ',';
                 }
@@ -340,6 +341,8 @@ void handleSet() {
                 params::charging.target_charge_pct = (uint8_t)level;
             } else if (key == "ac_current_limit_a" && parseLevel(value, 6, 32, level)) {
                 params::charging.ac_current_limit_a = (uint8_t)level;
+            } else if (key == "heater_request" && parseLevel(value, 0, 1, level)) {
+                params::heater.heater_request = level != 0;  // sent in 0x43A every 100 ms
             } else if (key == "digital_pot_pct" && parseLevel(value, 0, 100, level)) {
                 params::digipot.digipot_pct = (uint8_t)level;
                 outputs = true;
@@ -557,6 +560,10 @@ void startServer() {
     server.on("/can", HTTP_GET, [] {  // CAN test page (can_page.h), independent of SPIFFS
         server.sendHeader("Cache-Control", "no-cache");
         server.send_P(200, "text/html", kCanPageHtml);
+    });
+    server.on("/io", HTTP_GET, [] {  // output test page (io_page.h)
+        server.sendHeader("Cache-Control", "no-cache");
+        server.send_P(200, "text/html", kIoPageHtml);
     });
     server.onNotFound(handleNotFound);
     server.begin();

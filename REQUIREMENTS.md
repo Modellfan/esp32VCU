@@ -214,9 +214,9 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss über einen eigenen, dritten CAN-Bus Ladestand (SoC), Batteriespannung, Batteriestrom, Ladestecker verbunden, Ladeart und Ladeleistung von BMS und Ladegerät empfangen und in der Oberfläche anzeigen.
 - **Akzeptanz:** Gegeben BMS und Ladegerät am Bus; wenn geladen wird; dann liefert `/api/live` SoC, Batteriestrom und Steckerstatus mit gültigem Alter, und die Startseite zeigt sie an.
 - **Abhängigkeiten:** VCU-REQ-013
-- **Umsetzung:** Gerüst 2026-10-28 (VCU-DEC-008): TWAI als CAN0 in `src/drivers/canmanager.cpp` (ACAN_ESP32 3.0.3, TX GPIO20 / RX GPIO19, aktiv seit 2026-11-09; Senden und Empfangen am Prüfstand bestanden 2026-11-10), Codec `src/comms/battery_messages.cpp`, Felder `battery_*` in `/api/live` (immer `stale`). Pins fest seit 2026-11-09, Botschaften offen. Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
+- **Umsetzung:** CAN0 (TWAI, ACAN_ESP32, TX GPIO20 / RX GPIO19) hängt mitlesend am Bus von TeensyBMS, Zombie-Slave und Tesla-DC/DC (VCU-DEC-018). Codec `src/comms/battery_messages.cpp` nach `documentation/ZombieSlave_teensybms_dcdc_mvcu.dbc` (0x41A–0x41E, 0x437–0x439, 0x210, CRC-Prüfung); Felder `battery_*`, `heater_*`, `dcdc_*` in `/api/live`. Ladestand, Spannung, Strom, Ladeleistung und „lädt“ (Zustand CHARGE) kommen vom Bus; **Ladestecker und Ladeart fehlen** (nur intern im Zombie-Slave, an eBoxster Master gemeldet 2026-11-10). Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
 - **Nutzerentscheidung 2026-10-28:** eigener dritter CAN-Bus (zusätzlicher Controller nötig).
-- **Offen:** Botschaften von BMS und Ladegerät, Controller und Pins des dritten Busses; ob die Reichweite in der VCU berechnet wird.
+- **Offen:** Steckerstatus und Ladeart vom Zombie-Slave; ob die Reichweite in der VCU berechnet wird; Empfang am Prüfstand mit Stick-Frames noch nicht geprüft.
 
 ### Sonstiges
 
@@ -238,3 +238,13 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Abhängigkeiten:** VCU-REQ-008, VCU-REQ-017; VCU-DEC-017
 - **Umsetzung:** `src/services/persistence.cpp` mit `persistent_data_storage.h` (aus TeensyVCU) auf dem AT24C256 (`src/drivers/eeprom_at24c.cpp`). Prüfstand 2026-11-10: Speichern, Laden nach Reset, Umlauf über 16 Slots, kein Schreiben ohne Änderung.
 - **Nutzerentscheidung 2026-11-10:** Inhalt Ladeparameter, Bestzeiten, Lüftermodus.
+
+### VCU-REQ-021 – Heizung per CAN
+- **Typ:** funktional
+- **Priorität:** could
+- **Status:** implemented
+- **Anforderung:** Die VCU muss als mVCU die Heizungsanforderung (0x43A `Heater_CloseRequest`) alle 100 ms mit fortlaufendem Zähler und CRC an den Zombie-Slave senden. Die Anforderung ist nach dem Start aus und wird über `/api/set?heater_request=0|1` (Testseite `/io`) gesetzt; sie wird nicht gespeichert.
+- **Akzeptanz:** Gegeben CAN0 am Bus; wenn `heater_request=1` gesetzt wird; dann sendet die VCU 0x43A mit Byte 0 = 1, gültiger CRC und lückenlosem Zähler alle 100 ms, und der Zombie-Slave meldet `Heater_CanContactorRequest` = 1 in 0x439. Ohne Senden der VCU fällt die Anforderung nach 500 ms weg.
+- **Abhängigkeiten:** VCU-REQ-018; VCU-DEC-018
+- **Umsetzung:** `encodeHeaterControl()` in `src/comms/battery_messages.cpp`, gesendet in `updateOutputs()` (`src/main.cpp`). Prüfstand 2026-11-10: 0x43A von CAN1 empfangen, CRC fehlerfrei, Byte 0 folgt der API; Reaktion des Zombie-Slave nicht geprüft (nicht am Prüfstand).
+- **Nutzerentscheidung 2026-11-10:** Heizung auf einer Testseite per CAN schaltbar.

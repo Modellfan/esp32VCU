@@ -22,13 +22,17 @@ enum RxSource : uint8_t {
     RX_NONE = 0,  // value is produced by the VCU itself: always valid
     RX_VEH_1A0, RX_VEH_2A8, RX_VEH_4A1, RX_VEH_510, RX_VEH_520, RX_VEH_560, RX_VEH_440, RX_VEH_0C0,
     RX_SDU_500, RX_SDU_501, RX_SDU_502, RX_SDU_503, RX_SDU_504, RX_SDU_505, RX_SDU_506, RX_SDU_507, RX_SDU_508,
-    RX_BATTERY,   // placeholder until the CAN0 messages are defined
+    RX_BMS_41A, RX_BMS_41B, RX_BMS_41C, RX_BMS_41D, RX_BMS_41E,  // TeensyBMS (CAN0)
+    RX_ZS_437, RX_ZS_438, RX_ZS_439, RX_DCDC_210,               // Zombie-Slave, Tesla DC/DC (CAN0)
+    RX_BATTERY,   // never marked: values not on CAN yet (plug connected)
     RX_COUNT
 };
 
-// Timeout after which a value counts as stale. Draft: 500 ms for every message
-// (cycle times of the vehicle and inverter messages are not documented yet).
+// Timeout after which a value counts as stale. Draft: 500 ms for every message whose cycle
+// time is not documented; 1 Hz messages (TeensyBMS 0x41D/0x41E) get RX_TIMEOUT_SLOW_MS.
 constexpr uint32_t RX_TIMEOUT_MS = 500;
+constexpr uint32_t RX_TIMEOUT_SLOW_MS = 2500;
+uint32_t rxTimeoutMs(RxSource source);
 
 void rxMark(CanBus bus, uint32_t id);
 bool rxFresh(RxSource source, uint32_t nowMs);

@@ -4632,3 +4632,22 @@ ew_4e0_bit_booleans_added_to_ui: true
 - With 8.5 dBm: connected at once, 192.168.0.77, rssi -56; 6/6 `GET /api/live` 200 (0.09-0.42 s), `GET /can` served, CAN fields present in /api/live: PASS
 - After the refactor: build and upload from PowerShell: PASS; `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
 - Boot: CAN0..CAN3 ok, persistence defaults, home WiFi connected after one AUTH_EXPIRE: PASS; stick stream 49: CAN0/CAN2/CAN3 +100 beyond ECU frames, CAN1 +100, errors 0: PASS; `/api/live` 200: PASS
+
+
+## 2026-11-10 15:45:00 +01:00 - CAN0 codec for TeensyBMS / Zombie-Slave, heater request 0x43A, test page /io
+
+### Changes Made
+- `documentation/ZombieSlave_teensybms_dcdc_mvcu.dbc` copied from Modellfan/Zombie-Slave 205cc7c; cross-checked with TeensyVCU `documentation/CAN_Message_Packing.md` and `src/utils/can_crc.h`.
+- `src/comms/battery_messages.*`: decodes 0x41A-0x41E (TeensyBMS), 0x437-0x439 (Zombie-Slave), 0x210 (Tesla DC/DC); STM32 CRC check (wrong CRC dropped, `battery_crc_errors`); `encodeHeaterControl()` builds 0x43A with counter and CRC; `params::heater.heater_request`.
+- Receive monitor: CAN0 sources, per-message timeout `rxTimeoutMs()` (2.5 s for the 1 Hz messages 0x41D/0x41E). Signal table: `battery_*`, `heater_*`, `dcdc_*`, `heater_request`, `digital_pot_enabled`.
+- `can0Send()`; 0x43A sent every 100 ms in `updateOutputs()`; `/api/set?heater_request=0|1`.
+- Test page `GET /io` (`src/services/io_page.h`): fan levels 0/1/2/auto, potentiometer, heater on/off with status.
+- Missing signals (plug, charge mode, charge parameters to the Zombie-Slave, 12 V) sent to the session "eBoxster Master" for an issue (queued, session offline).
+- REQUIREMENTS (REQ-018 update, new REQ-021), DECISIONS (DEC-018), TESTPLAN, can_signals.md, README.
+
+### Automated Tests Run
+- Build and upload from PowerShell: PASS; `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+- 0x43A: CAN1 rx +10/s (only the VCU's own 0x43A on the bench bus); GVRET capture over 6 s with heater_request 0 -> 1 via /api/set: 0 CRC errors (checked with the TeensyVCU algorithm in Python), byte 0 follows the API: PASS. Counter gaps in the capture come from GVRET queue drops (48 of 60 frames), not from the sender.
+- `/io` on the board (Playwright, 390 px): fan level 2 and heater on applied and shown, pin warnings for fan stage 1 and potentiometer shown, no JS errors; reset to off afterwards: PASS
+- Receive of BMS/Zombie frames: NOT RUN. The CANable no longer shows up as COM22; COM27 opens but captures 0 frames (not on the bench bus). Test ASC generator ready (scratchpad `can0_check.py asc`).
+- Reaction of a real Zombie-Slave to 0x43A: NOT RUN (no Zombie-Slave on the bench).
