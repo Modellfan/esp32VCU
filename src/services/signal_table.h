@@ -12,6 +12,7 @@
 #include "986_vehicle_messages.h"
 #include "battery_messages.h"
 #include "can_rx_monitor.h"
+#include "canmanager_params.h"
 #include "cluster_calc.h"
 #include "coolant_fan_control.h"
 #include "digipot_control.h"
@@ -27,7 +28,8 @@
     X(G_FAN, FanSignals, fan)                     \
     X(G_DIGIPOT, DigipotSignals, digipot)         \
     X(G_CHARGING, ChargingSignals, charging)      \
-    X(G_BATTERY, BatterySignals, battery)
+    X(G_BATTERY, BatterySignals, battery)         \
+    X(G_CAN, CanManagerSignals, can)
 
 #define SIGNAL_GROUP_ID(id, Type, name) id,
 enum SigGroup : uint8_t { SIGNAL_GROUPS(SIGNAL_GROUP_ID) G_GROUP_COUNT };

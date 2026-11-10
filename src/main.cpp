@@ -1,9 +1,11 @@
 // eBoxster VCU – the whole sequence in one place (VCU-DEC-015).
 //
-// loop() (core 1): pollVehicleCAN, pollTeslaCAN, pollBatteryCAN continuously;
+// loop() (core 1): pollVehicleCAN, pollTeslaCAN, pollBatteryCAN, pollSpareCAN continuously;
 //                  updateOutputs (fan, fuel gauge) every 100 ms; CAN error counters every 300 ms.
 // ecuTask (core 1, every 6 ms, higher priority): updateCluster -> emulateECUCAN (one ECU frame).
-// Web task (core 0, src/services/webinterface.cpp): WiFi, web API, PWA, GVRET, log, LED.
+// Web task (core 0, lowest priority, src/services/webinterface.cpp): WiFi, web API, PWA,
+//                  GVRET, log, LED. It starts WiFi itself, so CAN runs before WiFi is up.
+// Periods, buffers and priorities: params::can (src/drivers/canmanager_params.h).
 //
 // Every module owns its data (params::* in its header). The tasks share it under the
 // params lock (src/services/params_lock.h).
@@ -33,12 +35,13 @@
 //---------------------------------------------------------------------------
 // CAN receive: decode, mark the reception time, mirror to GVRET.
 //---------------------------------------------------------------------------
-constexpr int RX_BUDGET_PER_BUS = 32;  // frames per bus and call; the rest waits for the next call
+// Frames per bus and call: params::can.rx_budget_per_bus; the rest waits for the next call.
+constexpr int GVRET_BUS_SPARE = 4;  // CAN3 in SavvyCAN (no decoder, no receive monitor)
 
 // CAN1: Porsche 986 vehicle messages
 void pollVehicleCAN() {
     CANMessage frame;
-    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can1.available(); budget--) {
+    for (int budget = params::can.rx_budget_per_bus; budget > 0 && can1.available(); budget--) {
         can1.receive(frame);
         canCountRx(1);
         if (decode986Vehicle(frame)) {
@@ -51,7 +54,7 @@ void pollVehicleCAN() {
 // CAN2: Tesla SDU (OpenInverter)
 void pollTeslaCAN() {
     CANMessage frame;
-    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can2.available(); budget--) {
+    for (int budget = params::can.rx_budget_per_bus; budget > 0 && can2.available(); budget--) {
         can2.receive(frame);
         canCountRx(2);
         if (decodeTeslaSdu(frame)) {
@@ -64,12 +67,22 @@ void pollTeslaCAN() {
 // CAN0: BMS / charger (TWAI)
 void pollBatteryCAN() {
     CANMessage frame;
-    for (int budget = RX_BUDGET_PER_BUS; budget > 0 && can0Receive(frame); budget--) {
+    for (int budget = params::can.rx_budget_per_bus; budget > 0 && can0Receive(frame); budget--) {
         canCountRx(0);
         if (decodeBattery(frame)) {
             rxMark(BUS_BATTERY, frame.id);
         }
         gvretBridgeObserve(frame, BUS_BATTERY);
+    }
+}
+
+// CAN3: spare bus, counted and mirrored to GVRET only
+void pollSpareCAN() {
+    CANMessage frame;
+    for (int budget = params::can.rx_budget_per_bus; budget > 0 && can3.available(); budget--) {
+        can3.receive(frame);
+        canCountRx(3);
+        gvretBridgeObserve(frame, GVRET_BUS_SPARE);
     }
 }
 
@@ -128,7 +141,7 @@ void ecuTask(void *) {
         const bool sent = can1.tryToSend(outFrame);
         gvretBridgeObserve(outFrame, GVRET_BUS_TX);
         canTaskStatsRecord(millis(), micros() - startUs, sent);
-        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(CAN_TASK_PERIOD_MS));
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(params::can.ecu_period_ms));
     }
 }
 
@@ -145,14 +158,15 @@ void setup() {
     fastledInit();
     digipotBegin();
     coolantFanBegin();
-    canManager_setup();  // CAN0 (TWAI), CAN1, CAN2
+    canManager_setup();  // CAN0 (TWAI), CAN1..CAN3: receive from here on
     gvretBridgeBegin();
 
     // ECU emulation first: frames go out before WiFi is even started (VCU-REQ-002).
-    // Highest application priority on core 1; WiFi and the web server run on core 0.
-    xTaskCreatePinnedToCore(ecuTask, "vcu_ecu", 8192, nullptr, configMAX_PRIORITIES - 2, nullptr, 1);
-    webinterfaceBegin();
-    VCU_LOG("[VCU] started, ECU task period %u ms\n", (unsigned)CAN_TASK_PERIOD_MS);
+    // Highest application priority on core 1; the web task (WiFi, web server) on core 0 at
+    // the lowest priority. setup() returns at once, so loop() polls CAN without delay.
+    xTaskCreatePinnedToCore(ecuTask, "vcu_ecu", 8192, nullptr, params::can.ecu_task_priority, nullptr, 1);
+    webinterfaceBegin(params::can.web_task_priority);
+    VCU_LOG("[VCU] started, ECU task period %u ms\n", (unsigned)params::can.ecu_period_ms);
 }
 
 // Arduino loop task (core 1, below the ECU task): receive continuously, outputs and
@@ -166,12 +180,13 @@ void loop() {
         pollVehicleCAN();
         pollTeslaCAN();
         pollBatteryCAN();
+        pollSpareCAN();
     }
     if (nowMs - lastOutputs >= OUTPUT_PERIOD_MS) {
         lastOutputs = nowMs;
         updateOutputs(nowMs);
     }
-    if (nowMs - lastErrors >= 300U) {  // MCP2515/TWAI error counters (SPI, outside the lock)
+    if (nowMs - lastErrors >= params::can.error_refresh_ms) {  // error counters (SPI, outside the lock)
         lastErrors = nowMs;
         canRefreshErrors();
     }

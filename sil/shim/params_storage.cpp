@@ -7,6 +7,7 @@
 #include "tesla_sdu_messages.h"
 #include "battery_messages.h"
 #include "digipot_control.h"
+#include "canmanager_params.h"
 
 namespace params {
 EcuSignals ecu;
@@ -16,4 +17,5 @@ TeslaSduSignals tesla_sdu;
 BatterySignals battery;
 ChargingSignals charging;
 DigipotSignals digipot;
+CanManagerSignals can;
 }  // namespace params

@@ -37,7 +37,7 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 Eine verhaltensrelevante Änderung ist erst abgeschlossen, wenn Implementierung und betroffene Akzeptanzkriterien überprüft wurden, relevante Dokumente aktuell sind und nicht prüfbare Punkte explizit benannt wurden. `verified` nur bei tatsächlich vorhandener Evidenz setzen.
 
 ## Werkzeuge
-- PlatformIO: `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` (nicht im PATH). Build: `platformio run -e esp32s3`; Upload: `platformio run --target upload --upload-port COM10`. Aus der Bash `PYTHONIOENCODING=utf-8` setzen und die Ausgabe nicht filtern (pio stürzt sonst beim Fortschrittsbalken ab).
+- PlatformIO: `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` (nicht im PATH). Build: `platformio run -e esp32s3`; Upload: `platformio run --target upload --upload-port COM10`. Aus PowerShell starten, nicht aus Git Bash (`idf_tools.py` der Plattform bricht unter MSYS ab, danach fehlt esptool); `PYTHONIOENCODING=utf-8` setzen und die Ausgabe nicht filtern (pio stürzt sonst beim Fortschrittsbalken ab).
 - Compiler-Problem der pioarduino-Plattform unter Windows und Abhilfe: README, Abschnitt „Build und Flashen“.
 - Tests auf dem PC: SIL `python -m pytest sil/tests` (Compiler über das PyPI-Paket `ziglang`, siehe `sil/README.md`), PWA `python -m pytest pwa/tests` (Playwright). Eine PlatformIO-Umgebung `native` gibt es nicht.
 - Touch-UI-Testserver: `python pwa/tools/serve.py` → http://127.0.0.1:8090/

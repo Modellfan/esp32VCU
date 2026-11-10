@@ -12,6 +12,7 @@
 #include <math.h>
 
 #include "board.h"
+#include "can_page.h"
 #include "canmanager.h"
 #include "gvret_bridge.h"
 #include "signal_table.h"
@@ -113,7 +114,7 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
     takeSnapshot(gSnap);
     const uint32_t now = millis();
     String payload;
-    payload.reserve(9000);
+    payload.reserve(11000);
     payload += '{';
 
     String stale;
@@ -178,27 +179,8 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
     addStr("network_mode", staConnected ? "wifi" : "offline");
     addStr("network_label", staConnected ? "WiFi" : "Offline");
 
-    // Diagnostics
-    const CanTaskStats rt = canTaskStats();
+    // Diagnostics (CAN manager settings and status: params::can in the signal table)
     addUInt("uptime_ms", now);
-    addUInt("rt_cycles", rt.cycles);
-    addUInt("rt_overruns", rt.overruns);
-    addUInt("rt_max_cycle_us", rt.max_cycle_us);
-    addUInt("rt_tx_failed", rt.tx_failed);
-    addUInt("rt_started_ms", rt.started_ms);
-    addUInt("can1_error", canManager_error(1));
-    for (uint8_t bus = 0; bus < 3; bus++) {
-        static const char *const kPrefix[3] = {"can0_", "can1_", "can2_"};
-        const CanBusDiag d = canBusDiag(bus);
-        const String p = kPrefix[bus];
-        addUInt((p + "rx_frames").c_str(), d.rx_frames);
-        addUInt((p + "tec").c_str(), d.tec);
-        addUInt((p + "rec").c_str(), d.rec);
-        addUInt((p + "eflg").c_str(), d.eflg);
-        addBool((p + "bus_off").c_str(), d.bus_off);
-    }
-    addUInt("can2_error", canManager_error(2));
-    addBool("can0_active", can0Active());
     addUInt("gvret_dropped", gvretBridgeDropped());
     addUInt("free_heap", ESP.getFreeHeap());
 
@@ -493,7 +475,14 @@ void handleNotFound() {
 
 // ---------------------------------------------------------------- task
 
+void startWifi();
+void startServer();
+
 void webTask(void *) {
+    // WiFi, file system and server start here, not in setup(): CAN reception and the ECU
+    // emulation run while WiFi is still coming up.
+    startWifi();
+    startServer();
     uint32_t lastLed = 0;
     uint32_t lastDiag = 0;
     bool ledOn = false;
@@ -551,6 +540,23 @@ void startWifi() {
     }
 }
 
+void startServer() {
+    gFsOk = SPIFFS.begin(false);
+    VCU_LOG("[WEB] SPIFFS %s\n", gFsOk ? "ok" : "FAILED (run uploadfs)");
+
+    server.on("/api/live", HTTP_GET, handleLive);
+    server.on("/api/signals", HTTP_GET, handleSignals);
+    server.on("/api/set", HTTP_GET, handleSet);
+    server.on("/api/set-ecu", HTTP_GET, handleSetEcu);
+    server.on("/api/set-cluster", HTTP_GET, handleSetCluster);
+    server.on("/can", HTTP_GET, [] {  // CAN test page (can_page.h), independent of SPIFFS
+        server.sendHeader("Cache-Control", "no-cache");
+        server.send_P(200, "text/html", kCanPageHtml);
+    });
+    server.onNotFound(handleNotFound);
+    server.begin();
+}
+
 }  // namespace
 
 void webinterfaceLogWifiStatus() {
@@ -562,18 +568,6 @@ void webinterfaceLogWifiStatus() {
             (unsigned)gStaReason);
 }
 
-void webinterfaceBegin() {
-    startWifi();
-    gFsOk = SPIFFS.begin(false);
-    VCU_LOG("[WEB] SPIFFS %s\n", gFsOk ? "ok" : "FAILED (run uploadfs)");
-
-    server.on("/api/live", HTTP_GET, handleLive);
-    server.on("/api/signals", HTTP_GET, handleSignals);
-    server.on("/api/set", HTTP_GET, handleSet);
-    server.on("/api/set-ecu", HTTP_GET, handleSetEcu);
-    server.on("/api/set-cluster", HTTP_GET, handleSetCluster);
-    server.onNotFound(handleNotFound);
-    server.begin();
-
-    xTaskCreatePinnedToCore(webTask, "vcu_web", 12288, nullptr, 2, nullptr, 0);
+void webinterfaceBegin(uint8_t priority) {
+    xTaskCreatePinnedToCore(webTask, "vcu_web", 12288, nullptr, priority, nullptr, 0);
 }

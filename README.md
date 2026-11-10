@@ -7,7 +7,9 @@ Die VCU ersetzt das Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsum
 - Änderungsprotokoll: [documentation/IMPLEMENTATION_LOG.md](documentation/IMPLEMENTATION_LOG.md)
 
 ## Hardware
-ESP32-S3-DevKitC-1 (8 MB), 2× MCP2515 (CAN1 Fahrzeug, CAN2 Umrichter), TWAI als CAN0 (BMS/Lader, TX GPIO20, RX GPIO19), X9C103S (Tankgeber), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).
+ESP32-S3-DevKitC-1 (8 MB), 3× MCP2515 an einem SPI-Bus (CAN1 Fahrzeug, CAN2 Umrichter, CAN3 Reserve), TWAI als CAN0 (BMS/Lader, TX GPIO20, RX GPIO19), X9C103S (Tankgeber, zurzeit ohne Pins), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).
+
+Terminierung: CAN0 hat **keinen** 120-Ω-Abschlusswiderstand auf der Platine; CAN1 bis CAN3 sind je per Jumper zuschaltbar.
 
 ## Aufbau
 | Ordner | Inhalt |
@@ -28,12 +30,15 @@ platformio run --target uploadfs --upload-port COM10   # PWA ins SPIFFS
 ```
 `platformio` liegt unter `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` (nicht im PATH), z. B. `C:\Users\Win11 Pro\.platformio\penv\Scripts\platformio.exe run --target upload --upload-port COM10`. COM10 ist UART0 des Boards (CH343). Der Firmware-Upload schreibt das SPIFFS nicht: Nach Änderungen an `pwa/src` sind `build.py` und `uploadfs` nötig, sonst liefert das Board die alte Oberfläche aus. Firmware-Version: `APP_VERSION` in `platformio.ini`.
 
+PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Setup der Plattform (`idf_tools.py`) bricht unter MSYS mit „MSys/Mingw is not supported“ ab, danach fehlt esptool.
+
 **Bekanntes Problem (Windows, pioarduino 55.03.37):** Der Compiler `toolchain-xtensa-esp-elf` landet mit einer Ordnerebene zu viel (`xtensa-esp-elf/bin`). Abhilfe am 2026-10-28: Inhalt von `%USERPROFILE%\.platformio\tools\toolchain-xtensa-esp-elf\xtensa-esp-elf\` flach nach `...\packages\toolchain-xtensa-esp-elf\` kopiert, `package.json` und `.piopm` dazu.
 
 ## Schnittstellen
 - `GET /` – Touch-UI (PWA)
 - `GET /api/live[?fields=a,b]` – alle Werte; `stale` listet veraltete Felder
 - `GET /api/signals` – Signalliste mit Typ, Quelle, Schreibrecht
+- `GET /can` – schlanke Testseite: Status, Zähler und Einstellungen aller CAN-Busse und der ECU-Task (`params::can`, Felder `can_*`, `can0_…can3_*`, `ecu_*` in `/api/live`)
 - `GET /api/set?…` – Ladeparameter, Lüfter (`coolant_fan_level`, `coolant_fan_mode=auto|manual`), Poti, `rpm`/`coolant`/`oil` (Overrides)
 - `GET /api/set-ecu?…` – schreibbare Motorsteuergerät-Signale; `auto` hebt einen Override auf
 - `GET /api/set-cluster?activated=0|1`
@@ -41,4 +46,4 @@ platformio run --target uploadfs --upload-port COM10   # PWA ins SPIFFS
 - UART0 (COM10, 115200): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `can0-status`, `can0-send`, `can0-pintest`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset. Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
-Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
+Pins Tankanzeige (X9C103S INC/UD, GPIO5/6 jetzt CAN3), Pin Lüfter Stufe 1, Rolle von CAN3, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.

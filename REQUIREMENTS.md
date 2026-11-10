@@ -119,6 +119,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Umsetzung:** vorhanden (`src/drivers/digipot_control.cpp`, `lib/X9C103S`); Sollwert über `params::fan` bzw. `params::digipot`, Ausgabe im CAN-Task nur bei Änderung.
 - **Nutzerentscheidung 2026-10-28:** Tankanzeige, vorerst manuell; Wert wird nicht gespeichert.
 - **Offen:** spätere Kopplung an SoC (VCU-REQ-018); Zuordnung Prozent → Zeigerstellung der Tankanzeige.
+- **Geändert 2026-11-10 (Nutzer):** GPIO5/6 (INC/UD) belegt jetzt CAN3; die Ansteuerung ist abgeschaltet (`board::DIGIPOT_ENABLED`), bis neue Pins feststehen (VCU-DEC-016).
 
 ### Oberfläche und Schnittstellen
 

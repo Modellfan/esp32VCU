@@ -4564,3 +4564,24 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - `can0-status` after boot shows flags 0x2 (driver receive buffer overflow, peak 33/32): CAN0 receives from init on, loop() starts polling only after the web/WiFi start-up. Counts match CAN2 afterwards. Open: start CAN0 later or enlarge the buffer if start-up frames from the BMS matter.
 - REQ for CAN0 messages stays open (BMS/charger messages not defined).
+
+
+## 2026-11-10 11:10:00 +01:00 - CAN3, CAN start before WiFi, params::can, test page /can
+
+### Changes Made
+- CAN3 (third MCP2515, CS GPIO5, INT GPIO6, shared SPI): started, counted, mirrored to GVRET bus 4 (`pollSpareCAN` in main.cpp). X9C103S INC/UD (were GPIO5/6) set unassigned, fuel gauge disabled (`board::DIGIPOT_ENABLED`, user 2026-11-10).
+- All CAN buses start in `setup()`; WiFi, SPIFFS and the web server are started by the web task itself (core 0, priority 1). setup() returns at once, so loop() polls CAN before WiFi is up (CAN0 start-up overflow gone).
+- `params::can` (`src/drivers/canmanager_params.h`): settings (bitrate, SPI clock, quartz, buffers, rx budget, ECU period, refresh period, task priorities) and status per bus (up, init error, rx, TEC, REC, EFLG, bus-off) plus ECU task stats; in the signal table (`can_*`, `can0_..can3_*`, `ecu_*`), so in `/api/live`. Old JSON fields `rt_*`, `can0_active`, `can1_error`, `can2_error` removed (no consumer). CAN0 rx buffer 64.
+- Test page `GET /can` embedded in the firmware (`src/services/can_page.h`).
+- Docs: README (hardware, termination CAN0 none / CAN1-3 jumper, /can, PowerShell build note, open points), REQ-009 note, VCU-DEC-016, CLAUDE.md build note.
+
+### Automated Tests Run
+- `platformio.exe run -e esp32s3` from Git Bash: FAIL (`idf_tools.py`: "MSys/Mingw is not supported", tool-esptoolpy left empty); from PowerShell build and `--target upload --upload-port COM10`: PASS (in between one app-only flash with `python -m esptool ... write_flash 0x10000`: PASS)
+- Boot COM10: CAN1/CAN2/CAN3/CAN0 init ok, `[VCU] started` before `[WEB] AP`: PASS
+- Stick stream 46: CAN0/CAN2 +100 beyond ECU frames, CAN1 +100, CAN0 rx peak 2, no overflow: PASS; CAN3 rx 0: FAIL (wiring, CANH/CANL)
+- Stick stream 47 after the user's wiring fix: CAN0 +1267, CAN2 +1266, CAN3 +1267 (= ECU frames + 100), CAN1 +100, all TEC/REC 0: PASS
+- `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+- Test page against a fake /api/live with the 47 signal-table names (Playwright, 390 px): renders, RX/s computed, no JS errors: PASS. Not checked on the board (home WiFi does not connect, PC not on the VCU access point).
+
+### Notes
+- CAN1 shows REC about 90 right after boot, back to 0 within seconds (start-up of the other controllers on the bench bus).
