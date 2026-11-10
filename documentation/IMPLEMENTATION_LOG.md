@@ -4479,3 +4479,21 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Transceiver is powered, TXD and RXD are connected (own dominant reaches the bus and is echoed). It never shows the traffic of the other nodes, and TWAI frames end in bus-off: fits swapped CANH/CANL on CAN0 (own signal seen with the right polarity, the bus signal inverted = recessive). To check with the wiring.
+
+
+## 2026-11-10 10:30:00 +01:00 - CAN0 bench test on a second ESP32-S3 (COM16)
+
+### Changes Made
+- No code change. CANH/CANL of CAN0 swapped on the first board (COM10) by the user; firmware of the branch flashed onto a second ESP32-S3 with the same TWAI transceiver (COM16, no MCP2515).
+
+### Automated Tests Run
+- After the swap, COM10: stick test stream 33: CAN1 +100, CAN2 +100 beyond ECU frames: PASS; CAN0 rx 0: FAIL. `can0-pintest`: RX low 0 with all pulls; TX low echo 5899/19276; CAN1/CAN2 REC 0->0 (before the swap 0->135, so the original orientation was right)
+- `platformio.exe run -e esp32s3 --target upload --upload-port COM16`: PASS
+- COM16 boot: CAN0 init ok, CAN1/CAN2 init FAILED 0x1 (no MCP2515), SPIFFS not flashed: as expected
+- COM16 stick test stream 35, 100 frames @ 10 ms: CAN0 rx 0, tec/rec 0: FAIL
+- COM16 `can0-send`: bus-off, TEC 128, bus_err 51: FAIL
+- COM16 `can0-pintest`: RX low 0 with all pulls; TX low echo 16511/19344; restart after bus-off FAILED (reset needed)
+
+### Notes
+- Same fault on two boards with the same transceiver type: the ESP32-S3, the TWAI driver and the firmware are ruled out as the cause. Remaining causes: transceiver type/supply (e.g. 5 V part at 3.3 V) or the bus connection of the transceiver modules.
+- `can0-pintest` cannot restart TWAI after a preceding bus-off (minor, bench command only).
