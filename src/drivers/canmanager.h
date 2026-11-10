@@ -1,5 +1,5 @@
 // Driver layer: all CAN controllers of the VCU. Pins from board.h.
-//   can0  TWAI controller of the ESP32-S3 (BMS / charger), library ESP32-TWAI-CAN
+//   can0  TWAI controller of the ESP32-S3 (BMS / charger), library ACAN_ESP32
 //   can1  MCP2515 #1: vehicle (Porsche 986)
 //   can2  MCP2515 #2: drive (Tesla SDU / OpenInverter)
 #ifndef CANMANAGER_H

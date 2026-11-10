@@ -57,7 +57,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Betroffene Requirements:** VCU-REQ-018
 - **Optionen:** A: eingebauter TWAI-Controller des ESP32-S3 mit Transceiver; B: dritter MCP2515 am SPI-Bus.
 - **Entscheidung:** A. Treibergerüst `can3_twai` und Codec `battery_messages` sind vorhanden, aber inaktiv, bis Pins und Botschaften feststehen.
-- **Geändert 2026-11-09 (Nutzer):** Der TWAI-Bus heißt CAN0, die MCP2515 heißen `can1`/`can2`. CAN0 sitzt im `canmanager` (kein eigenes Modul) und nutzt die Bibliothek ESP32-TWAI-CAN wie auf dem Branch `main`, Pins laut gebauter Platine TX = GPIO20, RX = GPIO19 (korrigiert 2026-11-09; `main` hatte auskommentiert 21/20). GPIO19/20 sind USB D-/D+: Der native USB-Port entfällt, das Textlog läuft über UART0. Botschaften von BMS/Lader weiter offen.
+- **Geändert 2026-11-09 (Nutzer):** Der TWAI-Bus heißt CAN0, die MCP2515 heißen `can1`/`can2`. CAN0 sitzt im `canmanager` (kein eigenes Modul) und nutzt die Bibliothek ACAN_ESP32 (pierremolinaro, ab 3.0.3; seit 2026-11-10, vorher ESP32-TWAI-CAN wie auf `main`), Pins laut gebauter Platine TX = GPIO20, RX = GPIO19 (korrigiert 2026-11-09; `main` hatte auskommentiert 21/20). GPIO19/20 sind USB D-/D+: Der native USB-Port entfällt, das Textlog läuft über UART0. Botschaften von BMS/Lader weiter offen.
 
 ## VCU-DEC-009 – Pinbelegung zentral in `board.h`
 - **Status:** accepted (Vorschlag 7, Nutzer 2026-10-28)

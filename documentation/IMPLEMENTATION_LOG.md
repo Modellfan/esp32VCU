@@ -4512,3 +4512,21 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - Firmware and pins TX20/RX19 are confirmed on CAN0. The fault on the COM10 board is its transceiver module or its wiring.
 - ESP32-S3 GPIOs are not 5 V tolerant; the transceiver must run at 3.3 V (or have a 3.3 V logic supply).
+
+
+## 2026-11-10 09:45:00 +01:00 - CAN0 on ACAN_ESP32 3.0.3
+
+### Changes Made
+- `src/drivers/canmanager.cpp`: CAN0 uses ACAN_ESP32 (pierremolinaro, registry 3.0.3) instead of ESP32-TWAI-CAN: `startCan0()`/`stopCan0()`, receive via `ACAN_ESP32::can.receive()`, TEC/REC/bus-off from the TWAI registers, `can0-status` shows status register, flags, error code capture and driver buffers; pin test restarts CAN0 also after bus-off.
+- `platformio.ini`: lib_deps `pierremolinaro/ACAN_ESP32@^3.0.3` (not the fork, user 2026-11-10); ESP32-TWAI-CAN commented out.
+- DECISIONS.md (DEC-008), REQUIREMENTS.md (REQ CAN0 implementation note), README (commands, open points).
+- PlatformIO penv: urllib3 was half removed (pio did not start), reinstalled with `penv/Scripts/python.exe -m pip install --force-reinstall --no-deps "urllib3<3"`.
+
+### Automated Tests Run
+- `platformio.exe run -e esp32s3`: PASS (RAM 15.0 %, flash 33.1 %)
+- `platformio.exe run -e esp32s3 --target upload --upload-port COM10` and `COM16`: PASS
+- Stick test stream 41, 100 frames @ 10 ms: COM10 CAN1 +100, CAN2 +100 beyond ECU frames, errors 0: PASS; COM16 CAN0 +100 plus the COM10 ECU frames, tec/rec 0: PASS; COM10 CAN0 rx 0 (transceiver module under investigation)
+- COM16 `can0-send` 0x6C0: stick `listen` captured `6C0 d 8 C0 C1 C2 C3 C4 C5 C6 C7`, tec 0: PASS
+
+### Notes
+- CAN0 on the main board (COM10) still sees no bus level on GPIO19 while COM16 on the same bus does: fault is the transceiver module or its wiring on COM10.

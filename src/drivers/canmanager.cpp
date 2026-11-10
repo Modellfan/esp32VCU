@@ -3,9 +3,8 @@
 #include "canmanager.h"
 
 #include <Arduino.h>
-#include <ESP32-TWAI-CAN.hpp>
+#include <ACAN_ESP32.h>
 #include <driver/gpio.h>
-#include <driver/twai.h>
 #include <soc/usb_serial_jtag_reg.h>
 
 #include "board.h"
@@ -16,6 +15,7 @@ constexpr uint32_t QUARTZ_FREQUENCY = 8UL * 1000UL * 1000UL;
 constexpr uint32_t BITRATE = 500UL * 1000UL;
 
 bool gCan0Active = false;
+uint32_t gCan0Error = 0xFFFFFFFF;  // ACAN_ESP32 begin() result
 uint16_t gCan1Error = 0xFFFF;
 uint16_t gCan2Error = 0xFFFF;
 
@@ -24,6 +24,27 @@ CanTaskStats gStats = {0, 0, 0, 0, 0};
 CanBusDiag gDiag[3] = {};  // index = bus number, guarded by gStatsMux
 
 constexpr uint8_t EFLG_TXBO = 0x20;  // MCP2515: transmitter bus-off
+
+// CAN0 (TWAI) with ACAN_ESP32: rx buffer 32, tx buffer 8 frames. begin() also leaves a
+// bus-off, so the pin test can restart the controller in any state.
+bool startCan0() {
+    ACAN_ESP32_Settings settings(BITRATE);
+    settings.mTxPin = (gpio_num_t)board::GPIO_CAN0_TX;
+    settings.mRxPin = (gpio_num_t)board::GPIO_CAN0_RX;
+    settings.mRequestedCANMode = ACAN_ESP32_Settings::NormalMode;
+    settings.mDriverReceiveBufferSize = 32;
+    settings.mDriverTransmitBufferSize = 8;
+    gCan0Error = ACAN_ESP32::can.begin(settings);
+    return gCan0Error == 0;
+}
+
+// CAN0 controller into reset mode with interrupts off (pin test).
+void stopCan0() {
+    ACAN_ESP32::can.TWAI_INT_ENA_REG() = 0;
+    while ((ACAN_ESP32::can.TWAI_MODE_REG() & TWAI_RESET_MODE) == 0) {
+        ACAN_ESP32::can.TWAI_MODE_REG() = TWAI_RESET_MODE;
+    }
+}
 }  // namespace
 
 ACAN2515 can1(board::GPIO_CAN1_CS, SPI, board::GPIO_CAN1_INT);
@@ -44,9 +65,9 @@ void canManager_setup() {
     VCU_LOG("[CAN] CAN2 (drive) init %s (0x%X)\n", gCan2Error == 0 ? "ok" : "FAILED", gCan2Error);
 
     if (board::CAN0_ENABLED) {
-        // tx queue 8, rx queue 32 frames
-        gCan0Active = ESP32Can.begin(ESP32Can.convertSpeed(500), board::GPIO_CAN0_TX, board::GPIO_CAN0_RX, 8, 32);
-        VCU_LOG("[CAN] CAN0 (battery, TWAI) init %s\n", gCan0Active ? "ok" : "FAILED");
+        gCan0Active = startCan0();
+        VCU_LOG("[CAN] CAN0 (battery, TWAI/ACAN_ESP32) init %s (0x%lX)\n", gCan0Active ? "ok" : "FAILED",
+                (unsigned long)gCan0Error);
     }
 }
 
@@ -58,18 +79,7 @@ bool can0Receive(CANMessage &frame) {
     if (!gCan0Active) {
         return false;
     }
-    CanFrame message;
-    if (!ESP32Can.readFrame(message, 0)) {
-        return false;
-    }
-    frame.id = message.identifier;
-    frame.ext = message.extd != 0;
-    frame.rtr = message.rtr != 0;
-    frame.len = message.data_length_code > 8 ? 8 : message.data_length_code;
-    for (uint8_t i = 0; i < frame.len; i++) {
-        frame.data[i] = message.data[i];
-    }
-    return true;
+    return ACAN_ESP32::can.receive(frame);
 }
 
 uint16_t canManager_error(uint8_t bus) {
@@ -132,12 +142,9 @@ void canRefreshErrors() {
         d[2].bus_off = (d[2].eflg & EFLG_TXBO) != 0;
     }
     if (gCan0Active) {
-        twai_status_info_t status;
-        if (twai_get_status_info(&status) == ESP_OK) {
-            d[0].tec = (uint8_t)(status.tx_error_counter > 255 ? 255 : status.tx_error_counter);
-            d[0].rec = (uint8_t)(status.rx_error_counter > 255 ? 255 : status.rx_error_counter);
-            d[0].bus_off = status.state == TWAI_STATE_BUS_OFF;
-        }
+        d[0].tec = (uint8_t)(ACAN_ESP32::can.TWAI_TX_ERR_CNT_REG() & 0xFF);
+        d[0].rec = (uint8_t)(ACAN_ESP32::can.TWAI_RX_ERR_CNT_REG() & 0xFF);
+        d[0].bus_off = (ACAN_ESP32::can.TWAI_STATUS_REG() & TWAI_BUS_OFF_ST) != 0;
     }
 
     portENTER_CRITICAL(&gStatsMux);
@@ -160,12 +167,18 @@ CanBusDiag canBusDiag(uint8_t bus) {
 }
 
 void canManagerLogCan0Status() {
-    twai_status_info_t s;
-    if (!gCan0Active || twai_get_status_info(&s) != ESP_OK) {
-        VCU_LOG("[CAN0] not active\n");
+    if (!gCan0Active) {
+        VCU_LOG("[CAN0] not active (init 0x%lX)\n", (unsigned long)gCan0Error);
         return;
     }
-    static const char *const STATES[] = {"stopped", "running", "bus-off", "recovering"};
+    const uint32_t status = ACAN_ESP32::can.TWAI_STATUS_REG();
+    const uint32_t tec = ACAN_ESP32::can.TWAI_TX_ERR_CNT_REG() & 0xFF;
+    const uint32_t rec = ACAN_ESP32::can.TWAI_RX_ERR_CNT_REG() & 0xFF;
+    const char *state = (status & TWAI_BUS_OFF_ST) != 0         ? "bus-off"
+                        : (ACAN_ESP32::can.TWAI_MODE_REG() & TWAI_RESET_MODE) != 0 ? "reset"
+                        : (tec >= 128 || rec >= 128)             ? "error-passive"
+                        : (status & TWAI_ERR_ST) != 0            ? "error-warning"
+                                                                 : "running";
     // Sample the RX pin for 50 ms: with traffic on the bus some samples are dominant (0).
     uint32_t samples = 0;
     uint32_t low = 0;
@@ -177,13 +190,13 @@ void canManagerLogCan0Status() {
         }
     }
     const bool usbPad = (READ_PERI_REG(USB_SERIAL_JTAG_CONF0_REG) & USB_SERIAL_JTAG_USB_PAD_ENABLE) != 0;
-    VCU_LOG("[CAN0] state=%s tec=%lu rec=%lu bus_err=%lu arb_lost=%lu rx_missed=%lu rx_overrun=%lu "
-            "tx_failed=%lu queued_rx=%lu | RX GPIO%d low %lu/%lu samples in 50 ms | usb_pad=%d\n",
-            s.state <= TWAI_STATE_RECOVERING ? STATES[s.state] : "?", (unsigned long)s.tx_error_counter,
-            (unsigned long)s.rx_error_counter, (unsigned long)s.bus_error_count, (unsigned long)s.arb_lost_count,
-            (unsigned long)s.rx_missed_count, (unsigned long)s.rx_overrun_count, (unsigned long)s.tx_failed_count,
-            (unsigned long)s.msgs_to_rx, board::GPIO_CAN0_RX, (unsigned long)low, (unsigned long)samples,
-            usbPad ? 1 : 0);
+    VCU_LOG("[CAN0] state=%s tec=%lu rec=%lu status=0x%02lX flags=0x%lX err_code=0x%02lX rx_buf=%u peak=%u "
+            "tx_buf=%u | RX GPIO%d low %lu/%lu samples in 50 ms | usb_pad=%d\n",
+            state, (unsigned long)tec, (unsigned long)rec, (unsigned long)(status & 0xFF),
+            (unsigned long)ACAN_ESP32::can.statusFlags(), (unsigned long)(ACAN_ESP32::can.TWAI_ERR_CODE_CAP_REG() & 0xFF),
+            ACAN_ESP32::can.driverReceiveBufferCount(), ACAN_ESP32::can.driverReceiveBufferPeakCount(),
+            ACAN_ESP32::can.driverTransmitBufferCount(), board::GPIO_CAN0_RX, (unsigned long)low,
+            (unsigned long)samples, usbPad ? 1 : 0);
 }
 
 void canManagerCan0SendTest() {
@@ -191,13 +204,13 @@ void canManagerCan0SendTest() {
         VCU_LOG("[CAN0] not active\n");
         return;
     }
-    CanFrame frame = {};
-    frame.identifier = 0x6C0;  // bench test ID, not used on the vehicle buses
-    frame.data_length_code = 8;
+    CANMessage frame;
+    frame.id = 0x6C0;  // bench test ID, not used on the vehicle buses
+    frame.len = 8;
     for (uint8_t i = 0; i < 8; i++) {
         frame.data[i] = (uint8_t)(0xC0 + i);
     }
-    const bool queued = ESP32Can.writeFrame(frame, 10);
+    const bool queued = ACAN_ESP32::can.tryToSend(frame);
     delay(20);
     VCU_LOG("[CAN0] send 0x6C0 %s\n", queued ? "queued" : "FAILED");
     canManagerLogCan0Status();
@@ -226,7 +239,7 @@ void canManagerCan0PinTest() {
     gCan0Active = false;  // loop() stops reading CAN0
     delay(5);             // let a running can0Receive() finish
     if (wasActive) {
-        ESP32Can.end();
+        stopCan0();
     }
     gpio_reset_pin(rx);
     gpio_reset_pin(tx);
@@ -265,8 +278,8 @@ void canManagerCan0PinTest() {
     gpio_reset_pin(rx);
     gpio_reset_pin(tx);
     if (wasActive) {
-        gCan0Active = ESP32Can.begin(ESP32Can.convertSpeed(500), board::GPIO_CAN0_TX, board::GPIO_CAN0_RX, 8, 32);
-        VCU_LOG("[PINTEST] CAN0 restarted %s\n", gCan0Active ? "ok" : "FAILED");
+        gCan0Active = startCan0();
+        VCU_LOG("[PINTEST] CAN0 restarted %s (0x%lX)\n", gCan0Active ? "ok" : "FAILED", (unsigned long)gCan0Error);
     }
 }
 

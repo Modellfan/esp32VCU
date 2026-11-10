@@ -38,7 +38,7 @@ platformio run --target uploadfs --upload-port COM10   # PWA ins SPIFFS
 - `GET /api/set-ecu?…` – schreibbare Motorsteuergerät-Signale; `auto` hebt einen Override auf
 - `GET /api/set-cluster?activated=0|1`
 - WLAN: Zugangspunkt `eboxster` (http://192.168.4.1/) und Heimnetz aus `secrets.h` (Hostname `eboxster-vcu`, IP mit `vcu_cmd.py wifi-status`)
-- UART0 (COM10, 115200): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `can0-status`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset. Der native USB-Port entfällt (GPIO19/20 = CAN0).
+- UART0 (COM10, 115200): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `can0-status`, `can0-send`, `can0-pintest`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset. Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
-CAN0 empfängt am Prüfstand nichts (RX GPIO19 sieht keinen Buspegel, Hardware prüfen), Brownout-Reset beim Kaltstart mit WLAN (Versorgung prüfen), Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
+CAN0-Transceiver der Hauptplatine (COM10) empfängt nichts (Firmware und Pins mit zweitem Board bestätigt, Modul prüfen), Pin Lüfter Stufe 1, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
