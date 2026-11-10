@@ -4497,3 +4497,18 @@ ew_4e0_bit_booleans_added_to_ui: true
 ### Notes
 - Same fault on two boards with the same transceiver type: the ESP32-S3, the TWAI driver and the firmware are ruled out as the cause. Remaining causes: transceiver type/supply (e.g. 5 V part at 3.3 V) or the bus connection of the transceiver modules.
 - `can0-pintest` cannot restart TWAI after a preceding bus-off (minor, bench command only).
+
+
+## 2026-11-10 11:00:00 +01:00 - CAN0 works on the second ESP32-S3 (COM16) with a known-good transceiver
+
+### Changes Made
+- No code change. User fitted a known-good TWAI transceiver on the COM16 board, corrected swapped CANH/CANL and the bus connection to the stick; COM10 is disconnected from the bus.
+
+### Automated Tests Run
+- Intermediate runs (streams 36-39): first no echo (wiring), then own frames echoed but no ACK and stick captured 0 frames (not on the same bus); at 5 V supply bus-off again
+- Stick test stream 40, 100 frames @ 10 ms: COM16 CAN0 rx +100, tec/rec 0: PASS
+- COM16 `can0-send` 0x6C0: state running, tec 0, bus_err 0; stick `listen` captured the 0x6C0 frame: PASS
+
+### Notes
+- Firmware and pins TX20/RX19 are confirmed on CAN0. The fault on the COM10 board is its transceiver module or its wiring.
+- ESP32-S3 GPIOs are not 5 V tolerant; the transceiver must run at 3.3 V (or have a 3.3 V logic supply).
