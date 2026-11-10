@@ -4664,3 +4664,17 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - After the playback bursts CAN2/CAN3 show EFLG 0x40 (MCP2515 RX1OVR latched): at least one frame was lost on those buses during 5 ms bursts. Open: check the ACAN2515 interrupt task latency/priority.
+
+
+## 2026-11-10 17:30:00 +01:00 - Investigation: MCP2515 RX overflow on CAN2 during playback bursts
+
+### Changes Made
+- No change in this repo (firmware reflashed at the committed state). Fork clone `acan2515`: local branch `esp32-task-priority` (a06f675, not pushed) with `ACAN2515_ESP32_TASK_PRIORITY` (default 16) for the experiment.
+
+### Automated Tests Run
+- Load during playback: 9 frames per 100 ms (5 ms spacing in the file) + 167 ECU frames/s + 10 heater frames/s, about 270 frames/s, about 7 % bus load; not unrealistic. Windows/USB bundles the stick frames into back-to-back bursts.
+- Loss measurement (rx counters via /api/live, CAN0 as reference, 30 playback loops, 2700 frames): idle 8 s: no loss: PASS. Playback, library task priority 16: CAN1 ~0, CAN2 48 lost (0.55 %, EFLG 0x40 RX1OVR), CAN3 5 lost: FAIL
+- Same with the ACAN2515 interrupt task at priority 24 (above the ECU task, symlink to the local fork + build flag): two runs CAN2 61 / 54 lost (EFLG 0x40), CAN3 0 / -1, CAN1 ~0: priority is not the cause of the CAN2 loss.
+
+### Notes
+- CAN2 and CAN3 see the same frames with the same software, library and SPI bus; only CAN2 loses frames. Suspect CAN2-specific hardware (module, INT line GPIO8, wiring). Open: hardware check, then repeat the measurement (scratchpad `loss_test.py`).
