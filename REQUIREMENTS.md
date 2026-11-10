@@ -216,7 +216,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Abhängigkeiten:** VCU-REQ-013
 - **Umsetzung:** CAN0 (TWAI, ACAN_ESP32, TX GPIO20 / RX GPIO19) hängt mitlesend am Bus von TeensyBMS, Zombie-Slave und Tesla-DC/DC (VCU-DEC-018). Codec `src/comms/battery_messages.cpp` nach `documentation/ZombieSlave_teensybms_dcdc_mvcu.dbc` (0x41A–0x41E, 0x437–0x439, 0x210, CRC-Prüfung); Felder `battery_*`, `heater_*`, `dcdc_*` in `/api/live`. Ladestand, Spannung, Strom, Ladeleistung und „lädt“ (Zustand CHARGE) kommen vom Bus; **Ladestecker und Ladeart fehlen** (nur intern im Zombie-Slave, an eBoxster Master gemeldet 2026-11-10). Die Touch-UI erwartet andere Feldnamen (`soc`, `range_km`, …).
 - **Nutzerentscheidung 2026-10-28:** eigener dritter CAN-Bus (zusätzlicher Controller nötig).
-- **Offen:** Steckerstatus und Ladeart vom Zombie-Slave; ob die Reichweite in der VCU berechnet wird; Empfang am Prüfstand mit Stick-Frames noch nicht geprüft.
+- **Offen:** Steckerstatus und Ladeart vom Zombie-Slave; ob die Reichweite in der VCU berechnet wird. Prüfstand 2026-11-10: alle Werte aus Stick-Frames korrekt, Frames mit falscher CRC verworfen.
 
 ### Sonstiges
 

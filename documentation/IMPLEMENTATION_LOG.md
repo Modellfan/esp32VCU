@@ -4651,3 +4651,16 @@ ew_4e0_bit_booleans_added_to_ui: true
 - `/io` on the board (Playwright, 390 px): fan level 2 and heater on applied and shown, pin warnings for fan stage 1 and potentiometer shown, no JS errors; reset to off afterwards: PASS
 - Receive of BMS/Zombie frames: NOT RUN. The CANable no longer shows up as COM22; COM27 opens but captures 0 frames (not on the bench bus). Test ASC generator ready (scratchpad `can0_check.py asc`).
 - Reaction of a real Zombie-Slave to 0x43A: NOT RUN (no Zombie-Slave on the bench).
+
+
+## 2026-11-10 16:20:00 +01:00 - CAN0 receive test with generated BMS / Zombie-Slave frames
+
+### Changes Made
+- No code change. CANable back on COM22 (had hung; COM27 is another CH343 device). TESTPLAN TC-BAT-01 and REQ-018 note updated.
+
+### Automated Tests Run
+- Generated ASC (0x41A-0x41E, 0x437-0x439, 0x210, valid STM32 CRC and counters, TeensyVCU algorithm), `can_test.cmd playback --port 22 --playback-count 8`: 720 frames sent. `/api/live` during playback: 364.8 V, +4.0 A, 3.70/3.80 V, 22/25 degC, 8 mV, 1.60 kW, 100.0/20.0 A, contactor 4, DTC 0, SoC 69.6, SoH 97.4, BMS 1, 5.00 kW, 3600 s, 11.96 kWh, state 7 -> charging_active, 2500/10000 W, heater active/closed/request, DC/DC 13.8 V 30 A 320 W 32.0 degC coolant request; stale only `battery_plug_connected`; crc_errors 0: PASS
+- Same frames with a wrong CRC in every 0x41D: crc_errors +80 (8 x 10), `battery_soc_pct`/`battery_soh_pct` stale while the other values stay fresh: PASS
+
+### Notes
+- After the playback bursts CAN2/CAN3 show EFLG 0x40 (MCP2515 RX1OVR latched): at least one frame was lost on those buses during 5 ms bursts. Open: check the ACAN2515 interrupt task latency/priority.
