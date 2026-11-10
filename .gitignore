@@ -31,3 +31,6 @@ sil/results/
 
 # Local screenshots, exports and logs
 /artifacts/
+
+# pioarduino build artefact
+src/idf_component.yml.orig
