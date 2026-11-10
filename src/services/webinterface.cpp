@@ -18,6 +18,7 @@
 #include "signal_table.h"
 #include "status_led.h"
 #include "params_lock.h"
+#include "persistence.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -491,6 +492,7 @@ void webTask(void *) {
         server.handleClient();
         gvretBridgeService();
         const uint32_t now = millis();
+        persistenceService(now);
         const bool staConnected = WiFi.status() == WL_CONNECTED;
         if (staConnected != staWasConnected) {  // log home network connect / loss once
             staWasConnected = staConnected;

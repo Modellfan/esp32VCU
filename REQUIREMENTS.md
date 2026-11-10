@@ -205,6 +205,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Abhängigkeiten:** VCU-REQ-018
 - **Umsetzung:** teilweise. Werte lassen sich in der Touch-UI setzen und werden begrenzt (`src/services/webinterface.cpp`), wirken aber auf kein Ladegerät.
 - **Nutzerentscheidung 2026-10-28:** Werte werden vorerst nicht über einen Neustart gespeichert.
+- **Geändert 2026-11-10 (Nutzer):** Werte bleiben über einen Neustart erhalten (VCU-REQ-020).
 
 ### VCU-REQ-018 – Batterie- und Ladedaten
 - **Typ:** Schnittstelle
@@ -227,3 +228,13 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Akzeptanz:** Sichtprüfung nach dem Start.
 - **Abhängigkeiten:** keine
 - **Umsetzung:** vorhanden (Dienst-Task in `src/services/webinterface.cpp`, 10 % Helligkeit).
+
+### VCU-REQ-020 – Dauerhaft gespeicherte Einstellungen
+- **Typ:** funktional
+- **Priorität:** should
+- **Status:** implemented
+- **Anforderung:** Die VCU muss Ziel-Ladestand, AC-Ladestromlimit, Lüftermodus mit manueller Stufe und die Bestzeiten 0–50 und 0–100 km/h im EEPROM speichern und nach einem Neustart wiederherstellen. Gespeichert wird nur bei einer Änderung; ein beschädigter Datensatz darf nicht geladen werden.
+- **Akzeptanz:** Gegeben geänderte Werte; wenn die VCU neu startet; dann gelten die geänderten Werte. Ohne Änderung schreibt die VCU nicht ins EEPROM. Ohne gültigen Datensatz gelten die Standardwerte.
+- **Abhängigkeiten:** VCU-REQ-008, VCU-REQ-017; VCU-DEC-017
+- **Umsetzung:** `src/services/persistence.cpp` mit `persistent_data_storage.h` (aus TeensyVCU) auf dem AT24C256 (`src/drivers/eeprom_at24c.cpp`). Prüfstand 2026-11-10: Speichern, Laden nach Reset, Umlauf über 16 Slots, kein Schreiben ohne Änderung.
+- **Nutzerentscheidung 2026-11-10:** Inhalt Ladeparameter, Bestzeiten, Lüftermodus.

@@ -4599,3 +4599,23 @@ ew_4e0_bit_booleans_added_to_ui: true
 - `eeprom-test` with the library's `verifyBlock()`: data correct but verify FAIL (read during the write cycle, ACK polling reports ready too early); with the 6 ms wait: 4x PASS (write+verify about 7.5 ms), also after a hard reset: PASS
 - Stick stream 48: CAN0/CAN2/CAN3 +100 beyond ECU frames, CAN1 +100, TEC/REC 0: PASS
 - PlatformIO from PowerShell reinstalls framework-arduinoespressif32 3.3.7 on every build; two builds failed with WinError 32 (file in use) during this, the next run passed.
+
+
+## 2026-11-10 12:30:00 +01:00 - Persistent settings in the AT24C (VCU-REQ-020, VCU-DEC-017)
+
+### Changes Made
+- `src/services/persistent_data_storage.h`: taken over from TeensyVCU (16 slots in turn, magic `EVCU`, version, sequence, FNV-1a checksum), backend `eepromRead`/`eepromWrite` instead of the Teensy EEPROM; payload 16 bytes without padding (static_assert); data written before the header.
+- `src/services/persistence.*`: `persistenceBegin()` in setup() loads the newest valid record and applies it (range-checked) to charging parameters, fan mode/level and the 0-50/0-100 best times; `persistenceService()` in the web task saves once per second only on a change.
+- REQUIREMENTS (REQ-017 note, new REQ-020), DECISIONS (DEC-017), TESTPLAN (TC-PERS-01), README.
+
+### Automated Tests Run
+- Build and upload from PowerShell: PASS (some runs needed a second attempt: the platform reinstalls esptool/framework packages on each build, WinError 32/145 in between)
+- Boot with empty EEPROM: "no record, defaults": PASS
+- With a temporary serial command (not committed) setting the values like /api/set: one save (slot 0, seq 1), no further saves: PASS; hard reset loads 65 %, 10 A, auto, level 2, best 0-50 4.25 s: PASS
+- 17 more changes: slots 2..15, 0, 1 (seq 18); reset loads slot 1 seq 18: PASS; 4 s idle: 0 saves: PASS
+- Test records erased afterwards (temporary command), clean firmware flashed, boot: "no record, defaults": PASS
+- `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+
+### Notes
+- Not tested through the web UI (home WiFi of the VCU does not connect; PC not on the VCU access point).
+- Not tested: power loss during a write (should leave the previous record valid).
