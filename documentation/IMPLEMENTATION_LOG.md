@@ -4692,3 +4692,14 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Neither the module nor task priority nor start order moves the loss; it stays with the CAN2 slot (socket/headers, INT line to GPIO8, CS GPIO7, wiring on the board). Open: check the slot, e.g. put the CAN2 module into the CAN3 socket and vice versa, measure the INT edge on GPIO8.
+
+## 2026-11-11 10:32:05 +01:00 - CAN2 RX overflow: modules of CAN2 and CAN3 swapped
+
+### Changes Made
+- No code change. User swapped the MCP2515 modules between the CAN2 and CAN3 sockets.
+
+### Automated Tests Run
+- Loss measurement (scratchpad `loss_test.py`, 3 x 2700 playback frames, CAN0 as reference): CAN1 ~0, CAN2 110 / 50 / 76 lost (EFLG 0x40), CAN3 2 / 1 / 2: FAIL; loss stays with the CAN2 socket, not with the module.
+
+### Notes
+- Cause is on the board at the CAN2 socket (CS GPIO7, INT GPIO8: socket contacts, traces, solder joints, pull-up/edge on INT). Open: measure the INT edge on GPIO8, check contacts.
