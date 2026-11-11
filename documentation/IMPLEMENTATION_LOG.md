@@ -4747,3 +4747,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - The sending controller never overflows (it does not receive its own frames). Among the controllers that receive the ECU frames, CAN2 loses most, CAN1 sets RX1OVR with little loss, CAN3 stays clean. The loss is tied to the load and timing around the ECU transmit, with CAN2 most sensitive; the earlier conclusion "socket hardware only" is too narrow. In the vehicle CAN2 (SDU bus) does not see the ECU frames. Open: INT edge GPIO8, interrupt service order, SPI blocking during transmit (ecu_max_cycle_us ~1050).
+
+## 2026-11-12 00:01:56 +01:00 - CAN2 RX overflow: driver timing measured (interrupt order, SPI)
+
+### Changes Made
+- No permanent change. Temporary instrumentation in the ACAN2515 copy under `.pio/libdeps` (interrupt-to-task latency, SPI mutex wait and hold per `isr_core`, `tryToSend` wait/hold) and a `[TIM]` line in `canManagerLogStatus()`; two experiments on top: `available()` without the SPI mutex, then the driver tasks pinned to core 1 at priority 24. Library restored from a backup, `canmanager.cpp` reverted, original reflashed.
+- `README.md`, open points: the CAN2 item describes the driver timing as the cause.
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10` (instrumented, 2 experiments, restore): PASS
+- Timing, original driver (per 1 s window, 50 s, loss test running): latency ISR->task max 384-464 us (median of maxima 250-380), SPI mutex wait max 680-785 us, `isr_core` average ~37 us per frame, SPI busy ~1.3-2.2 % per controller; `tryToSend` hold max ~200 us. Loss CAN2 35: FAIL
+- `available()` without the mutex: wait max 512-906 us, loss CAN2 31: no improvement.
+- Driver tasks on core 1, priority 24: wait max 283-580 us; loss CAN2 8 / 11 / 19 / 15 (4 runs), CAN1/CAN3 0-5: improved, not solved.
+- Original reflashed: CAN2 65 lost, EFLG 0x40: original behaviour restored.
+
+### Notes
+- Cause: one driver task per MCP2515 at priority 16 without core affinity, all on one SPI mutex; a frame seen by all controllers is served one after another, so the last waits 0.3-0.9 ms, while two hardware RX buffers last only ~0.25-0.46 ms for back-to-back frames. Why CAN2 is usually served last is not proven (assumption: order of the GPIO interrupt dispatch, INT GPIO6/8/9). Open: decision on core/priority of the driver tasks (fork), faster per-frame service, measurement with real separate buses.
