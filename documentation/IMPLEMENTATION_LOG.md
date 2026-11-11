@@ -4763,3 +4763,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Cause: one driver task per MCP2515 at priority 16 without core affinity, all on one SPI mutex; a frame seen by all controllers is served one after another, so the last waits 0.3-0.9 ms, while two hardware RX buffers last only ~0.25-0.46 ms for back-to-back frames. Why CAN2 is usually served last is not proven (assumption: order of the GPIO interrupt dispatch, INT GPIO6/8/9). Open: decision on core/priority of the driver tasks (fork), faster per-frame service, measurement with real separate buses.
+
+## 2026-11-12 00:15:57 +01:00 - CAN2 RX overflow: comparison with CAN-Grabber, own transmit as trigger
+
+### Changes Made
+- No permanent change. Compared with `../CAN-Grabber` (`src/can_capture/can_capture.cpp`): same `Modellfan/ACAN2515` (only the DLC clamp differs), same pins, same driver tasks; the Grabber never transmits, and its load tests were a software generator (500 frames/s, bypasses SPI) and 300 single frames at 10 ms on CAN1/CAN2. Temporary experiments in `src/main.cpp`: ECU transmit and `can0Send(heaterFrame)` disabled, then only the heater disabled; reverted with `git checkout`, original reflashed.
+- `README.md`, open points: CAN2 item extended by the comparison.
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10` (3 builds + restore): PASS
+- Grabber-style test on the original VCU (tx-pattern 300 frames, 10 ms, stream 71/72): CAN2 8 lost, EFLG 0x40 (2 runs): FAIL
+- No own transmit: tx-pattern (stream 73/74) and playback (2 x 2700 frames): CAN1-3 0 lost, EFLG 0x00: PASS
+- ECU frames only (no 0x43A): tx-pattern (stream 75) 0 lost: PASS; playback 42 / 44 lost on CAN2, EFLG 0x40: FAIL
+- `tools/vcu_cmd.py version` after restore: PASS
+
+### Notes
+- The overflow needs the VCU's own transmit plus traffic on the bus; without transmit there is no loss even with bursts. The Grabber load tests did not cover this case.
