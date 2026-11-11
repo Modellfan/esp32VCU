@@ -4703,3 +4703,16 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Cause is on the board at the CAN2 socket (CS GPIO7, INT GPIO8: socket contacts, traces, solder joints, pull-up/edge on INT). Open: measure the INT edge on GPIO8, check contacts.
+
+## 2026-11-11 11:20:53 +01:00 - Signal list: overview of all signals, source, reference, UI page
+
+### Changes Made
+- `documentation/signalliste_ui_tcu.md` rewritten: all 280 entries of `signal_table.cpp` plus the other `/api/live` fields, grouped by source (CAN1 vehicle, CAN2 SDU, CAN0 BMS/Zombie-Slave/DC-DC, VCU transmit, internal functions, CAN manager, VCU status), with columns direction, master reference, UI page today, UI proposal (not decided) and TCU need; section 9 lists values needed but not provided by any ECU; section 10 findings and open decisions.
+- `src/comms/battery_messages.h`: comment points to section 9 (no code change).
+
+### Automated Tests Run
+- Coverage check (PowerShell): every name of `signal_table.cpp` appears in the list, `canN_*` family as a group: PASS
+- No build (comment-only code change).
+
+### Notes
+- "UI today" taken from `pwa/src/js/app.js` (reachable sections only). Findings: the PWA looks for SoC/charge values under names the firmware does not provide, and shows placeholders (SoC 28 %, range 3.05 km/%, lap times).

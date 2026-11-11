@@ -61,7 +61,7 @@ struct BatterySignals {
     float dcdc_coolant_c = 0.0f;
     uint16_t dcdc_fault_bits = 0;      // bits 0..11 of the frame (12 status/fault flags)
     bool dcdc_coolant_request = false;
-    // Not on CAN today (Zombie-Slave internal, see documentation/signalliste_ui_tcu.md 3.2)
+    // Not on CAN today (Zombie-Slave internal, see documentation/signalliste_ui_tcu.md, section 9)
     bool plug_connected = false;
     // Statistics
     uint32_t crc_errors = 0;
