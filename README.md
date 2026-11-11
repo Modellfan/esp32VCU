@@ -48,3 +48,5 @@ PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Set
 
 ## Offene Punkte
 Pins Tankanzeige (X9C103S INC/UD, GPIO5/6 jetzt CAN3), Pin Lüfter Stufe 1, Rolle von CAN3, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
+
+- **CAN2 verliert Frames (Hardware am Steckplatz):** Bei Bursts gehen auf CAN2 etwa 0,5–1 % der Frames verloren (MCP2515 meldet RX-Überlauf, EFLG 0x40); CAN1 und CAN3 sind unauffällig. Modul, Task-Priorität und Startreihenfolge sind ausgeschlossen: Der Fehler bleibt am Steckplatz von CAN2, auch wenn die Module getauscht werden (Messungen 2026-11-10/11 in `documentation/IMPLEMENTATION_LOG.md`). Zu prüfen: INT-Leitung GPIO8 (Lötstellen, Flanke mit dem Oszi gegen INT von CAN3/GPIO6), Buchsenkontakte, CS GPIO7. Danach die Verlustmessung wiederholen.
