@@ -4733,3 +4733,17 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Stationary log only; driving signals unverified. Original DME sends every 10 ms, the VCU every 30 ms: open, no change without a decision.
+## 2026-11-11 12:47:31 +01:00 - CAN2 RX overflow: ECU transmit moved to CAN2 / CAN3
+
+### Changes Made
+- No permanent code change. Temporary experiment in `src/main.cpp` `ecuTask()`: ECU frames sent via `can2` and then `can3` instead of `can1`; reverted with `git checkout` and the committed state reflashed. Scratchpad `loss_test_tx2.py`/`loss_test_tx3.py`: expectations adapted to the sending bus.
+- `README.md`, open points: the CAN2 item now describes the load dependence instead of "hardware at the socket".
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10` (TX CAN2, TX CAN3, revert): PASS
+- Loss measurement, TX on CAN2 (3 x 2700 playback frames): CAN2 4-8 lost, EFLG 0x00 (same offset as all buses, heater estimate); CAN1 5-8, EFLG 0x40; CAN3 1-5: overflow on CAN2 gone.
+- Loss measurement, TX on CAN3: CAN2 27/33/35 lost, EFLG 0x40; CAN1 1-8, EFLG 0x40; CAN3 0-2: FAIL on CAN2.
+- Reverted (TX on CAN1): CAN2 40 lost, EFLG 0x40; CAN1 0; CAN3 1: original behaviour restored.
+
+### Notes
+- The sending controller never overflows (it does not receive its own frames). Among the controllers that receive the ECU frames, CAN2 loses most, CAN1 sets RX1OVR with little loss, CAN3 stays clean. The loss is tied to the load and timing around the ECU transmit, with CAN2 most sensitive; the earlier conclusion "socket hardware only" is too narrow. In the vehicle CAN2 (SDU bus) does not see the ECU frames. Open: INT edge GPIO8, interrupt service order, SPI blocking during transmit (ecu_max_cycle_us ~1050).
