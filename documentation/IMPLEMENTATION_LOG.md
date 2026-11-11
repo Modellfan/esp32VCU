@@ -4716,3 +4716,20 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - "UI today" taken from `pwa/src/js/app.js` (reachable sections only). Findings: the PWA looks for SoC/charge values under names the firmware does not provide, and shows placeholders (SoC 28 %, range 3.05 km/%, lap times).
+
+## 2026-11-11 11:33:15 +01:00 - Audit Porsche 986 CAN: log vs DBC vs decoders
+
+### Changes Made
+- `documentation/can_signals.md`: new section "Open decoding work, Porsche 986" (11 to-dos, measured cycle times).
+- `documentation/porsche_986_996_compiled_working.dbc`: `BA_DEF_DEF_ "filterlabeling" false;` -> `0;` (INT attribute; cantools rejected the file).
+- `documentation/signalliste_ui_tcu.md`: `itq_pct` and `driver_braking` marked as wrongly decoded, odometer hint (0x520).
+
+### Automated Tests Run
+- Scratchpad `can986_audit.py` on `can_logs/986_log_stand.csv` (3 segments, buses 0/1/2): all 11 IDs of the log are in the DBC and decoded; toggling bits not covered by the DBC: 0x280 bit 4, 0x4A1 bits 45-47/61-63, 0x510 bits 24-27, 0x520 bits 16-20: PASS (audit ran)
+- Byte sequences: 0x1A0 byte 6 is an 8-bit counter (read as `itq_pct`), 0x4A1 bits 13-15 a 3-bit counter (read as three flags incl. `driver_braking`), 0x510 byte 3 low nibble a 4-bit counter, 0x520 byte 5 rotates 4 values every 100 ms.
+- Scratchpad `can986_scale.py`: code factors/offsets equal the DBC; 0x289 bit 25 read by the code is missing in the DBC: PASS
+- Cycle times (median): DME frames 10 ms, 0x0C0 10 ms, 0x1A0/0x2A8/0x510/0x520 20 ms, 0x4A1 100 ms.
+- `cantools.database.load_file` on the fixed DBC: 14 messages: PASS
+
+### Notes
+- Stationary log only; driving signals unverified. Original DME sends every 10 ms, the VCU every 30 ms: open, no change without a decision.

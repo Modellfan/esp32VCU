@@ -179,7 +179,7 @@ BA_ "GenMsgForegroundColor" BO_ 640 "#000000";
 BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
 BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
 BA_DEF_DEF_ "matchingcriteria" 0;
-BA_DEF_DEF_ "filterlabeling" false;
+BA_DEF_DEF_ "filterlabeling" 0;
 CM_ BO_ 640 "0x280. Compiled from DBC + 'more infos' notes + Teensy sender. RPM scaling matches Teensy (raw = rpm*4). Time slice: 30ms.";
 CM_ BO_ 649 "0x289. Motor_2 mapped from VW PQ Motor_2 layout; replaces original EngineTemp mapping. Time slice: 30ms.";
 CM_ BO_ 664 "0x298. Several signals marked 'Turbo? Unsure' in notes; Speed_raw scaling unknown. Time slice: 30ms.";

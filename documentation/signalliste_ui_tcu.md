@@ -30,7 +30,7 @@ Vollständigkeit: Abschnitt 2–8 enthalten alle 280 Einträge der Firmware-Sign
 
 ## 2. Fahrzeug-CAN 986 (CAN1, empfangen)
 
-Referenz CS, DBC986. Mitschnitt Stand `can_logs/986_log_stand.csv`: 0x0C0, 0x1A0, 0x2A8, 0x4A1, 0x510, 0x520 vorhanden; **0x440 (PRND) und 0x560 fehlen** (offen: hat das Fahrzeug ein Getriebesteuergerät?).
+Referenz CS, DBC986; offene Dekodierung: CS, Abschnitt „Open decoding work, Porsche 986“. Mitschnitt Stand `can_logs/986_log_stand.csv`: 0x0C0, 0x1A0, 0x2A8, 0x4A1, 0x510, 0x520 vorhanden; **0x440 (PRND) und 0x560 fehlen** (offen: hat das Fahrzeug ein Getriebesteuergerät?).
 
 | API-Name | Bedeutung | Einheit | Quelle | Richtung | UI heute | UI Vorschlag | TCU |
 |---|---|---|---|---|---|---|---|
@@ -38,7 +38,7 @@ Referenz CS, DBC986. Mitschnitt Stand `can_logs/986_log_stand.csv`: 0x0C0, 0x1A0
 | `vehicle_speed_510` | Geschwindigkeit Kombi | km/h | Kombi 0x510 | RX | Fzg/Fzg, Uhr/Trip, [E]Adjust/Drive, [E]Cluster/Power, Cluster/Accel; Ladeerkennung der UI | Fzg/Fzg | |
 | `wfl_legacy_kmh`, `wfr_legacy_kmh`, `wrl_legacy_kmh`, `wrr_legacy_kmh` | Radgeschwindigkeiten | km/h | ABS 0x2A8 | RX | – | Uhr (Schlupf) | |
 | `abs`, `tcs`, `msr`, `abd`, `fdr` | Regeleingriff ABS/ASR/MSR/EDS/PSM | bool | 0x1A0 | RX | – | Uhr, Fzg/Fzg | |
-| `asr_mode`, `tcs_slow_pct`, `tcs_fast_pct`, `msr_inv_pct`, `itq_pct` | ASR-Modus, Eingriffsmomente | –/% | 0x1A0 | RX | – | – | |
+| `asr_mode`, `tcs_slow_pct`, `tcs_fast_pct`, `msr_inv_pct`, `itq_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, can_signals.md To-do 1) | –/% | 0x1A0 | RX | – | – | |
 | `abs_lamp`, `brake_lamp`, `fdr_lamp`, `fdr_lamp2`, `psm_button_lamp` | Warnlampen | bool | 0x1A0 | RX | [E]Cluster/Inputs (`fdr_lamp`, `psm_button_lamp`) | Home (Warnsymbol) | ✓ |
 | `brake_sw`, `brake_sw_inv` | Bremslichtschalter | bool | 0x1A0 | RX | – | – | |
 | `handbrake` | Handbremse | bool | 0x1A0 | RX | – | Home (Hinweis) | ✓ |
@@ -46,7 +46,7 @@ Referenz CS, DBC986. Mitschnitt Stand `can_logs/986_log_stand.csv`: 0x0C0, 0x1A0
 | `br1_counter`, `br1_asr_esp`, `br1_espasr_passive`, `br1_sta_esp`, `br1_ersatz_kmh`, `rough_road_suppression`, `rough_road_suppression_status` | Zähler und Statusbits Bremse_1 | – | 0x1A0 | RX | [E]Cluster/Inputs (`rough_road_suppression`) | – | |
 | `acceleration` | Längsbeschleunigung | g | ABS 0x4A1 | RX | Fzg/Fzg; Uhr/Runde (als Ersatz für „Delta“, Fehler) | Uhr | |
 | `yaw_rate`, `yaw_rate_sign` | Gierrate | °/s | 0x4A1 | RX | – | Uhr | |
-| `driver_braking` | Fahrer bremst | bool | 0x4A1 | RX | [E]Adjust/Info, [E]Cluster/Inputs | – | |
+| `driver_braking` | Fahrer bremst (**falsch dekodiert: Zählerbit**, can_signals.md To-do 2) | bool | 0x4A1 | RX | [E]Adjust/Info, [E]Cluster/Inputs | – | |
 | `brake_normal_or_offset` | Bremsdruck/Offset | % | 0x4A1 | RX | [E]Adjust/Drive | – | |
 | `no_actively_built_up_brake_pressure`, `acc_related_error`, `receipt_for_acc_message`, `regulator_error_fdr`, `error_driver_brake_detection`, `multiplex_byte4` | Status- und Fehlerbits ABS_2 | – | 0x4A1 | RX | [E]Adjust/Info, [E]Cluster/Inputs (`receipt_for_acc_message`) | – | |
 | `lenkwinkel_rb`, `vorzeichen_rb` | Lenkwinkel | ° | LWS 0x0C0 | RX | Fzg/Fzg | Uhr | |
@@ -194,7 +194,7 @@ Referenz README (CAN-Hardware), VCU-DEC-016. Anzeige heute nur auf der Testseite
 | 12-V-Batteriespannung | UI Bordnetz; TCU auxiliaryVoltage | Zombie-Slave `LVDU_12v_battery_voltage` (intern); Ersatz `dcdc_output_v`, `sdu_uaux` | offen |
 | Zündung, Ready-Eingang | Schlaf-/Weckverhalten | Zombie-Slave (intern) | offen |
 | Kühlmittelpumpe, Tesla-Ventil, Vakuumpumpe, EPS-Zustand | UI Kühl, Warnungen | Zombie-Slave (intern) | offen |
-| Kilometerstand | TCU odometer | nicht auf CAN bekannt; VCU könnte aufsummieren (nicht eichfähig) | offen |
+| Kilometerstand | TCU odometer | vielleicht 0x520 Byte 5 (gemultiplext, can_signals.md To-do 5); sonst VCU summiert auf (nicht eichfähig) | offen |
 | Reichweite | UI Home, Fzg/Akku | VCU aus `battery_remaining_energy_kwh` und Verbrauch | offen; UI zeigt heute einen Schätzwert 3,05 km je % |
 | Verbrauch kWh/100 km, Fahrtstrecke, Fahrzeit | UI Uhr/Trip | VCU integriert Leistung und Geschwindigkeit | offen; UI zeigt heute Platzhalter (24,2 kWh/100 km, Laufzeit des Umrichters) |
 | Ladeenergie je Ladung | TCU energy | VCU oder TCU integriert `battery_charge_power_w` | offen |

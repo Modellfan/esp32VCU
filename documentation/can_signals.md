@@ -18,6 +18,7 @@
   - [CAN ID 0x560 - Unknown_560 (INSTR)](#can-0x560)
   - [CAN ID 0x440 - AT_Line1 (TCU)](#can-0x440)
   - [CAN ID 0x00C0 - Steering Angle Sensor](#can-0x00c0)
+- [Open decoding work, Porsche 986](#open-986-decoding)
 - [OpenInverter stm32-sine](#openinverter-stm32-sine)
   - [CAN ID 0x500 / 1280 - DC electrical](#openinverter-0x500)
   - [CAN ID 0x501 / 1281 - Motor output](#openinverter-0x501)
@@ -238,6 +239,27 @@ Vehicle CAN coverage summary:
 
 Porsche 986 total coverage summary:
 - Total 986 messages tracked in codec coverage: 14
+
+<a id="open-986-decoding"></a>
+## Open decoding work, Porsche 986 (to-do, 2026-11-11)
+
+Audit of `can_logs/986_log_stand.csv` (stationary car, 3 segments, buses 0/1/2) against the DBC and the decoders. All 11 IDs in the log are in the DBC; there are no unknown IDs. The log is stationary only: speed, wheel speeds, acceleration, yaw and steering do not change and are **not verified** by it.
+
+Measured cycle times: 0x280/0x289/0x298/0x4E0/0x7A0 10 ms (bus 0, original DME), 0x0C0 10 ms, 0x1A0/0x2A8/0x510/0x520 20 ms, 0x4A1 100 ms.
+
+| # | ID | Finding | Effect today | To do |
+| --- | --- | --- | --- | --- |
+| 1 | 0x1A0 | Byte 6 (bits 48–55) counts up by 1 per frame. DBC and code read it as `BR1_MSR_Mo` → `intervention_torque` (`itq_pct`). | `itq_pct` shows a counter, not a torque. | Treat byte 6 as a message counter; re-check `BR1_Zaehler` (56\|4, low nibble constant 0xD) and bits 57–58 (toggle). |
+| 2 | 0x4A1 | Bits 13–15 count 0…7 per frame (3-bit counter). DBC: `ReceiptForACCMessage`, `DriverBraking`, `RegulatorError_FDR`. | `receipt_for_acc_message`, `driver_braking`, `regulator_error_fdr` are wrong. | Re-map as counter; find the real driver-braking bit with a log while braking. |
+| 3 | 0x4A1 | Bits 45–47 and 61–63 (top 3 bits of bytes 5 and 7) change every frame, not in the DBC; bits 30–31 change (`Multiplex_Byte4`), bit 29 always 1. | not decoded | Check for checksum/multiplexed content; log while driving. |
+| 4 | 0x510 | Bits 24–27 (byte 3 low nibble) count 0…15 (counter), not in the DBC. Bits 40 and 43 always 1 (byte 5 = 0x09). | not decoded | Add counter to the DBC; identify byte 5. |
+| 5 | 0x520 | Bits 16–20 (byte 2, 0x4E…0x50, changes slowly) not in the DBC. Bits 0 and 22 always 1. Byte 5 (`Counter_Unknown`) rotates 0x12, 0x03, 0x30, 0x1D every 100 ms. VW PQ `Kombi_3` (same ID) has `Kilometerstand` 40\|20 and `Standzeit` 24\|15. | not decoded; odometer wanted by the TCU | Check whether byte 5 carries the odometer multiplexed; identify byte 2 (temperature or fuel level?). |
+| 6 | 0x280 | Bit 4 (byte 0, 0x00/0x10) changes, not in the DBC; bits 8–15 (byte 1 = 0x79) and byte 6 (0x54) constant, not in the DBC. VW PQ `Motor_1`: bit 4 `Time_Out_Bremsen_Botschaft`, byte 1 inner torque, byte 4 inner torque without intervention, byte 6 mechanical loss torque, byte 7 driver torque request. The 986 DBC reads byte 4 and byte 7 as `PedalPosition1/2`. | The VCU sends these bytes; meaning unclear | Clarify the meaning of bytes 1, 4, 6, 7 with the original DME at different pedal positions. |
+| 7 | 0x289 | Bit 25 is read by the code (`motor2_speed_limiter_selected`) but missing in the DBC; bit 24 always 1, not in the DBC. | DBC incomplete | Add bits 24/25 to the DBC. |
+| 8 | 0x7A0, 0x4F8, 0x560 | No signals in the DBC; the code stores raw bytes only. 0x7A0 constant `85 0C 00 03 00 00 FF 02` in the log; 0x4F8 and 0x560 are not in the log. | not decoded | Log with a running engine; check whether 0x4F8/0x560 exist on this car. |
+| 9 | 0x440 | PRND (`AT_Line1`) not in the log. | `prnd_pos` always stale | Check whether the car has a Tiptronic control unit; otherwise use `sdu_seldir`. |
+| 10 | DME timing | Original DME sends each of 0x280/0x289/0x298/0x4E0/0x7A0 every 10 ms; the VCU sends each every 30 ms (5 slots × 6 ms). | Cluster works on the bench; timeouts in other control units unknown | Decision needed before changing (VCU-DEC, CAN capture). |
+| 11 | all | Stationary log only. | Driving signals unverified | Record a driving log (original car, CAN1) with braking, steering, indicators, cruise buttons, lights. |
 
 ## OpenInverter stm32-sine
 
