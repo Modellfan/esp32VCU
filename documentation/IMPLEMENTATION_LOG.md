@@ -4678,3 +4678,17 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - CAN2 and CAN3 see the same frames with the same software, library and SPI bus; only CAN2 loses frames. Suspect CAN2-specific hardware (module, INT line GPIO8, wiring). Open: hardware check, then repeat the measurement (scratchpad `loss_test.py`).
+
+
+## 2026-11-11 10:26:14 +01:00 - CAN2 RX overflow: module swapped, init order swapped
+
+### Changes Made
+- No permanent code change. User swapped the CAN2 MCP2515 module. Temporary experiment: CAN3 started before CAN2 in `canManager_setup()`, reverted afterwards and the committed state reflashed. PlatformIO penv: urllib3 broken again, reinstalled with pip (`--force-reinstall --no-deps urllib3`).
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10` (experiment and revert): PASS
+- Loss measurement with the new CAN2 module (scratchpad `loss_test.py`, 3 x 2700 playback frames, CAN0 as reference): CAN1 ~0, CAN2 62 / 53 / 87 lost (EFLG 0x40), CAN3 3 / 0 / 0: FAIL (unchanged with the new module)
+- Same with CAN3 initialised before CAN2: CAN2 69 / 79 / 90 lost (EFLG 0x40), CAN3 6 / 0 / 0: FAIL (loss stays on CAN2)
+
+### Notes
+- Neither the module nor task priority nor start order moves the loss; it stays with the CAN2 slot (socket/headers, INT line to GPIO8, CS GPIO7, wiring on the board). Open: check the slot, e.g. put the CAN2 module into the CAN3 socket and vice versa, measure the INT edge on GPIO8.
