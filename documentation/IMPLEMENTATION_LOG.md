@@ -3042,7 +3042,7 @@ This file is the permanent record for development work in this project.
 
 ### Planned Steps
 - Validate that the vehicle page includes all requested 986 vehicle signals.
-- Correct the acceleration unit text rendering in UI (m/s² display issue).
+- Correct the acceleration unit text rendering in UI (m/sï¿½ display issue).
 - Mirror the text fix in both data_spiffs/index.html and data/index.html.
 
 ### Changes Made
@@ -4729,7 +4729,7 @@ ew_4e0_bit_booleans_added_to_ui: true
 - Byte sequences: 0x1A0 byte 6 is an 8-bit counter (read as `itq_pct`), 0x4A1 bits 13-15 a 3-bit counter (read as three flags incl. `driver_braking`), 0x510 byte 3 low nibble a 4-bit counter, 0x520 byte 5 rotates 4 values every 100 ms.
 - Scratchpad `can986_scale.py`: code factors/offsets equal the DBC; 0x289 bit 25 read by the code is missing in the DBC: PASS
 - Cycle times (median): DME frames 10 ms, 0x0C0 10 ms, 0x1A0/0x2A8/0x510/0x520 20 ms, 0x4A1 100 ms.
-- `cantools.database.load_file` on the fixed DBC: 14 messages: PASS
+- `cantools.database.load_file(strict=False)` on the fixed DBC: 14 messages: PASS. Strict load still FAILS: overlapping signals (0x289 multiplexed `MO2_*_Code`/`MO2_max_Mo` without mux declaration, 0x1A0 `BR1_ASRMo_fa`/`BR1_MSR_Mo_inv` on the same byte); to-do 12 in can_signals.md.
 
 ### Notes
 - Stationary log only; driving signals unverified. Original DME sends every 10 ms, the VCU every 30 ms: open, no change without a decision.

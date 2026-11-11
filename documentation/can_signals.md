@@ -260,6 +260,7 @@ Measured cycle times: 0x280/0x289/0x298/0x4E0/0x7A0 10 ms (bus 0, original DME),
 | 9 | 0x440 | PRND (`AT_Line1`) not in the log. | `prnd_pos` always stale | Check whether the car has a Tiptronic control unit; otherwise use `sdu_seldir`. |
 | 10 | DME timing | Original DME sends each of 0x280/0x289/0x298/0x4E0/0x7A0 every 10 ms; the VCU sends each every 30 ms (5 slots × 6 ms). | Cluster works on the bench; timeouts in other control units unknown | Decision needed before changing (VCU-DEC, CAN capture). |
 | 11 | all | Stationary log only. | Driving signals unverified | Record a driving log (original car, CAN1) with braking, steering, indicators, cruise buttons, lights. |
+| 12 | 0x289, 0x1A0 | DBC overlaps: 0x289 `MO2_Getr_Code`/`MO2_max_Mo`/`MO2_CAN_Vers`/`MO2_Motor_Code` share bits 0–5 without a multiplexer declaration (selector `MO2_Mp_Code` 6\|2); 0x1A0 `BR1_ASRMo_fa` and `BR1_MSR_Mo_inv` both on byte 5. Strict DBC tools (cantools `strict=True`) reject the file. | the code handles the mux itself | Declare `MO2_Mp_Code` as multiplexer (M/m0…m3); keep one signal for 0x1A0 byte 5. |
 
 ## OpenInverter stm32-sine
 
