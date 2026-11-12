@@ -154,7 +154,7 @@ void ecuTask(void *) {
 // Setup and Loop
 //---------------------------------------------------------------------------
 void setup() {
-    Serial.begin(115200);  // UART0: text log, GVRET after 0xE7
+    Serial.begin(board::SERIAL_BAUD);  // UART0: text log, GVRET after 0xE7
 #if VCU_LOG_ENABLED
     vcuLogBegin();
 #endif

@@ -24,7 +24,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", nargs="?", help="help, version, wifi-status, reset")
     parser.add_argument("--port", default="COM10")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=2000000)
     parser.add_argument("--duration", type=float, default=1.5, help="seconds to read the answer")
     parser.add_argument("--hard-reset", action="store_true", help="reset via RTS instead of a command")
     parser.add_argument("--diag", action="store_true", help="also print [DIAG] lines")

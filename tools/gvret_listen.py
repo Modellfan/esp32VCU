@@ -3,7 +3,7 @@ r"""Read what the VCU receives and sends, via GVRET on UART0, and count frames p
     .pio\canivore-py-test-tool-venv\Scripts\python.exe tools\gvret_listen.py --port COM10 --duration 20 [--pattern-id 611]
 
 Buses as reported by the firmware: 0 = sent by the VCU (ECU emulation), 1 = CAN1 (vehicle,
-MCP2515), 2 = CAN2 (drive, MCP2515), 3 = battery bus (TWAI).
+MCP2515), 2 = CAN2 (drive, MCP2515), 3 = battery bus (TWAI), 4 = CAN3 (spare, MCP2515).
 
 --pattern-id checks frames of canivore-py-test-tool tx-pattern (0xCA, stream, 32-bit sequence,
 CRC-16-CCITT) per bus: count, missing and duplicate sequence numbers, CRC errors.
@@ -20,13 +20,13 @@ import time
 
 import serial
 
-BUS_NAMES = {0: "VCU-TX", 1: "CAN1", 2: "CAN2", 3: "CAN0/TWAI"}
+BUS_NAMES = {0: "VCU-TX", 1: "CAN1", 2: "CAN2", 3: "CAN0/TWAI", 4: "CAN3"}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", default="COM10")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=2000000)
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--pattern-id", default="", help="hex ID of the tx-pattern stream to verify")
     args = parser.parse_args()
@@ -45,6 +45,7 @@ def main() -> None:
     counts: dict[int, collections.Counter] = collections.defaultdict(collections.Counter)
     seqs: dict[int, list[int]] = collections.defaultdict(list)
     crc_errors: collections.Counter = collections.Counter()
+    resyncs = 0
     buf = bytearray()
     end = time.time() + args.duration
     while time.time() < end:
@@ -63,12 +64,16 @@ def main() -> None:
                 continue
             length = buf[10] & 0x0F
             bus = buf[10] >> 4
-            if length > 8 or bus > 3:
+            if length > 8 or bus > 4:
                 del buf[:1]
                 continue
             total = 12 + length
             if len(buf) < total:
                 break
+            if buf[total - 1] != 0x00:  # GVRET frames end with 0: false marker inside a frame
+                del buf[:1]
+                resyncs += 1
+                continue
             can_id = int.from_bytes(buf[6:10], "little") & 0x1FFFFFFF
             data = bytes(buf[11:11 + length])
             del buf[:total]
@@ -82,6 +87,7 @@ def main() -> None:
     for bus in sorted(counts):
         ids = ", ".join(f"{i:03X}:{n}" for i, n in sorted(counts[bus].items()))
         print(f"{BUS_NAMES.get(bus, bus):10s} {sum(counts[bus].values()):7d} frames  {ids}")
+    print(f"resyncs (false frame start): {resyncs}")
     if pattern_id is not None:
         print(f"\nPattern 0x{pattern_id:03X}:")
         for bus in (1, 2):

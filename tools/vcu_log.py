@@ -17,7 +17,7 @@ import serial
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", default="COM10")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=2000000)
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--diag-only", action="store_true", help="print only [DIAG] lines")
     args = parser.parse_args()

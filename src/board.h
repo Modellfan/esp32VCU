@@ -10,6 +10,10 @@ namespace board {
 
 constexpr int GPIO_UNASSIGNED = -1;
 
+// UART0 to the CH343 USB serial chip (COM10): text log, commands, GVRET (VCU-DEC-010).
+// A GVRET frame takes up to 20 bytes: 115200 baud carried about 570 frames/s, 2 Mbaud about 10 000.
+constexpr uint32_t SERIAL_BAUD = 2000000;
+
 // SPI bus shared by the three MCP2515 CAN controllers (8 MHz crystal, 500 kbit/s).
 // CAN1..CAN3 have a 120 ohm termination selectable by jumper; CAN0 has none.
 constexpr int GPIO_SPI_SCK = 12;

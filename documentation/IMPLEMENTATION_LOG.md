@@ -4799,3 +4799,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Not measured: separate buses with real vehicle/SDU load; no vehicle capture. EFLG RX1OVR stays latched until restart.
+
+## 2026-11-12 14:51:44 +01:00 - UART0 at 2 Mbaud, GVRET listener fix
+
+### Changes Made
+- `src/board.h`: `SERIAL_BAUD = 2000000`; `src/main.cpp` uses it for `Serial.begin`. Tools `vcu_cmd.py`, `vcu_log.py`, `gvret_listen.py` default to 2000000; `platformio.ini` `monitor_speed`; README and VCU-DEC-010 updated.
+- `tools/gvret_listen.py`: bus 4 (CAN3) is accepted and shown; a frame must end with 0x00, otherwise the parser resyncs (counted). Before, CAN3 frames were rejected and the parser resynchronised on a false 0xF1 inside them: corrupted IDs (e.g. `611014D`) and 2 "missing" pattern frames.
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10`: PASS
+- `tools/vcu_cmd.py version`, `tools/vcu_log.py --diag-only` at 2 Mbaud: PASS
+- `gvret_listen.py --pattern-id 611` with tx-pattern 300 x 10 ms (stream 83) and 2000 x 2 ms (stream 84): CAN1/CAN2 missing 0, duplicates 0, CRC errors 0, resyncs 0, `gvret_dropped` +0: PASS
+- Playback 30 x 90 frames during `gvret_listen.py` (40 s, ~38 700 frames forwarded): resyncs 0, `gvret_dropped` +0: PASS
+- `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+
+### Notes
+- Not tested: SavvyCAN at 2 Mbaud (serial speed must be set in its connection settings). The ROM boot messages before `Serial.begin` stay at 115200 and appear garbled at 2 Mbaud.
