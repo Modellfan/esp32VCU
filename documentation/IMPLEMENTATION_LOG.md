@@ -4779,3 +4779,23 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - The overflow needs the VCU's own transmit plus traffic on the bus; without transmit there is no loss even with bursts. The Grabber load tests did not cover this case.
+
+## 2026-11-12 01:19:47 +01:00 - MCP2515 driver: tasks on core 1, SPI block transfers (VCU-DEC-019)
+
+### Changes Made
+- Fork `../acan2515` (`Modellfan/acan2515`), branch `esp32-task-priority`, commit fac5684: build option `ACAN2515_ESP32_TASK_CORE` (default no affinity); one SPI block per received frame (READ RX BUFFER clears RXnIF, bit modify dropped), per transmitted frame and per register access. Defaults unchanged; `master` (used by CAN-Grabber) untouched.
+- `platformio.ini`: `lib_deps` pinned to the fork commit; build flags `ACAN2515_ESP32_TASK_PRIORITY=24`, `ACAN2515_ESP32_TASK_CORE=1`.
+- `DECISIONS.md`: VCU-DEC-019. `README.md`: open point reduced to the measurement with separate buses.
+- Worktree `../esp32VCU-gui` on new branch `esp32vcu_gui` (from 53110b6) for parallel GUI work.
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10` (symlink to the fork: block transfers only, then with the flags; then from the GitHub commit): PASS
+- Loss measurement, block transfers only: tx-pattern 300 frames (stream 76) CAN1-3 equal; playback 3 x 2700: CAN2 = CAN3, 0 lost: PASS
+- Loss measurement, block transfers + core 1/priority 24: tx-pattern (stream 77) and playback 3 x 2700: 0 lost, EFLG 0x00: PASS
+- From the GitHub commit: playback 2 x 2700: 0 lost, EFLG 0x00: PASS
+- Transmit check (`can_test.cmd listen`, 3 s): 0x280/0x289/0x298/0x4E0/0x7A0 100 frames each (30 ms), DLC 8; 0x43A with changing counter/CRC: PASS
+- `tools/gvret_listen.py --pattern-id 611` (streams 78-80): duplicates 0, CRC errors 0: PASS; "missing" frames are dropped by the GVRET UART bridge (`gvret_dropped` +2289 in one run), not on CAN.
+- `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+
+### Notes
+- Not measured: separate buses with real vehicle/SDU load; no vehicle capture. EFLG RX1OVR stays latched until restart.
