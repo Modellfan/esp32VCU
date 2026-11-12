@@ -7,8 +7,10 @@ update_dynamic_mock_state() animates them over time (drive cycle, charging, temp
 from __future__ import annotations
 
 import math
+import re
 import threading
 import time
+from pathlib import Path
 
 MOCK_LIVE = {
     "ap_ssid": "eboxster",
@@ -159,6 +161,34 @@ MOCK_LIVE = {
     "rough_road_suppression": False,
     "receipt_for_acc_message": True,
 }
+# /api/signals like the firmware: parsed from src/services/signal_table.{h,cpp}, so the
+# mock catalog follows the firmware. Signals without a MOCK_LIVE value get 0 / false.
+FIRMWARE_SERVICES = Path(__file__).resolve().parents[2] / "src" / "services"
+STORAGE_TYPES = {"bool": "bool", "uint8_t": "u8", "int8_t": "i8", "uint16_t": "u16", "int16_t": "i16",
+                 "uint32_t": "u32", "int32_t": "i32", "float": "f32"}
+
+
+def load_signal_catalog() -> list[dict]:
+    try:
+        header = (FIRMWARE_SERVICES / "signal_table.h").read_text(encoding="utf-8")
+        table = (FIRMWARE_SERVICES / "signal_table.cpp").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    groups = dict(re.findall(r"X\((G_\w+),\s*\w+,\s*(\w+)\)", header))
+    signals = []
+    for name, group, fmt in re.findall(r'SIG\("(\w+)",\s*(G_\w+),\s*[^,]+,\s*[\w.]+,\s*(F_\w+)', table):
+        signals.append({"name": name, "type": "bool" if fmt == "F_BOOL" else "f32",
+                        "group": groups.get(group, "?"), "source": "vcu", "writable": False})
+    return signals
+
+
+SIGNAL_CATALOG = load_signal_catalog()
+
+
+def signal_defaults() -> dict:
+    return {s["name"]: (False if s["type"] == "bool" else 0) for s in SIGNAL_CATALOG}
+
+
 MOCK_STATE = dict(MOCK_LIVE)
 MOCK_LOCK = threading.Lock()
 MOCK_START_MONOTONIC = time.monotonic()

@@ -2630,3 +2630,54 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Engineering mode shows 9 first-level icons: keep them inside 600 px. */
+.screen.is-engineering-mode .l1-icon {
+  height: 58px;
+}
+
+.screen.is-engineering-mode .l1-icon img {
+  width: 44px;
+  height: 44px;
+}
+
+/* Engineering page "Signals" (VCU-REQ-022): one full-width list, API names as titles. */
+.pt-layout-signals {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pt-layout-signals .pt-list {
+  border-right: 0;
+}
+
+.pt-layout-signals .pt-row-copy {
+  min-width: 0;
+}
+
+.pt-layout-signals .pt-row-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-layout-signals .pt-row.is-no-icon {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+}
+
+.pt-layout-signals .pt-row-value {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pt-layout-signals .pt-live-value strong {
+  white-space: nowrap;
+}
+
+.pt-live-value.is-stale strong,
+.pt-live-value.is-stale small {
+  color: rgba(255, 255, 255, 0.38);
+  text-decoration: line-through;
+}

@@ -41,6 +41,7 @@ Host-Tests laufen über die SIL-Umgebung (`sil/`, Compiler aus dem PyPI-Paket `z
 | VCU-REQ-019 | TC-LED-01: Sichtprüfung 1 Hz grün | P | offen |
 | VCU-REQ-021 | TC-HEAT-01: `heater_request` 0/1 → 0x43A alle 100 ms, CRC gültig, Byte 0 folgt; Zombie-Slave meldet die Anforderung in 0x439 | P | teilweise: Senden bestanden 2026-11-10, Zombie-Slave nicht am Prüfstand |
 | VCU-REQ-020 | TC-PERS-01: Werte setzen, Reset, Werte wieder da; 17 Änderungen (Slot-Umlauf), Reset lädt den neuesten Datensatz; 4 s ohne Änderung kein Schreibvorgang | P | bestanden 2026-11-10 (über seriellen Testbefehl, nicht über die Weboberfläche) |
+| VCU-REQ-022 | TC-UI-SIG-01: Engineering-Modus, Seite „Signals“: jedes Feld aus `/api/signals` und `/api/live` genau einmal in einer Kategorie; `stale` markiert; nur Felder der Kategorie abgefragt; ohne Engineering-Modus ausgeblendet | W/P | W bestanden 2026-11-12 (`pwa/tests/test_pwa.py::test_signals_page_lists_every_field_once`); P: 301 Felder je einmal, `stale` markiert (Prüfstand 2026-11-12) |
 
 ## 3. Abnahmeregeln
 - Prüfstand und Fahrzeug: Mitschnitt oder Foto mit Datum im Implementierungsprotokoll verlinken.

@@ -23,9 +23,9 @@ Vollständigkeit: Abschnitt 2–8 enthalten alle 280 Einträge der Firmware-Sign
 - **Richtung:** RX = von einem Steuergerät empfangen · TX = von der VCU gesendet · intern = in der VCU berechnet · Einst. = Einstellung über `/api/set` · Ausg. = Hardware-Ausgang der VCU · Diag. = Diagnose der VCU selbst. **gesp.** = im EEPROM gespeichert (VCU-REQ-020).
 - **Veraltet nach:** empfangene Werte gelten nach 500 ms ohne Botschaft als `stale`, 0x41D/0x41E nach 2,5 s (`rxTimeoutMs()`).
 - **UI heute:** wo die PWA den Wert heute tatsächlich anzeigt (`pwa/src/js/app.js`). Alte, nicht mehr erreichbare Konfigurationen (Bereich `sdu`, alte Zeilen der Seiten Vehicle, Ventilation und Stopwatch) zählen nicht.
-  - Seiten: **Home** · **Fzg/Motor**, **Fzg/Akku**, **Fzg/Laden**, **Fzg/Fzg** (Seite Vehicle, Tabs Engine/Battery/Charger/Vehicle) · **Kühl** (Coolant) · **EFluss** (Energiefluss) · **Uhr/Trip**, **Uhr/Beschl**, **Uhr/Runde** (Stopwatch) · **Stil** (Porsche-Referenztest) · **[E]Cluster/…**, **[E]Adjust/…** (nur Engineering-Modus).
+  - Seiten: **Home** · **Fzg/Motor**, **Fzg/Akku**, **Fzg/Laden**, **Fzg/Fzg** (Seite Vehicle, Tabs Engine/Battery/Charger/Vehicle) · **Kühl** (Coolant) · **EFluss** (Energiefluss) · **Uhr/Trip**, **Uhr/Beschl**, **Uhr/Runde** (Stopwatch) · **Stil** (Porsche-Referenztest) · **[E]Cluster/…**, **[E]Adjust/…**, **[E]Signals/…** (nur Engineering-Modus).
   - Zusatz **(E)** = Zeile nur im Engineering-Modus.
-- **UI Vorschlag:** **nicht entschieden**, Arbeitsgrundlage für die Seitenaufteilung. Im Engineering-Modus sollen zusätzlich **alle** Signale anzeigbar sein (Abschnitt 10), das steht nicht in jeder Zeile.
+- **UI Vorschlag:** **nicht entschieden**, Arbeitsgrundlage für die Seitenaufteilung. Im Engineering-Modus zeigt die Seite **[E]Signals** (VCU-REQ-022) zusätzlich **alle** Signale, Tabs Vehicle (CAN1 und DME-Sendung), Drive (CAN2), Battery (CAN0 und Heizung), VCU (intern, CAN-Diagnose, Status); das steht nicht in jeder Zeile.
 - **TCU:** ✓ = die TCU braucht den Wert (Quelle TCU).
 
 ## 2. Fahrzeug-CAN 986 (CAN1, empfangen)

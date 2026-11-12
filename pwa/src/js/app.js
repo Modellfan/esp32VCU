@@ -42,7 +42,7 @@
   let coolantStageView = null;
   let batterySettingsModal = null;
   const ENGINEERING_STORAGE_KEY = "touchEngineeringMode";
-  const ENGINEERING_SECTIONS = ["cluster", "adjust"];
+  const ENGINEERING_SECTIONS = ["cluster", "adjust", "signals"];
   const bootState = {
     introElapsed: false,
     windowLoaded: document.readyState === "complete",
@@ -1137,6 +1137,12 @@
         }
       ]
     },
+    signals: {
+      image: "a/signals.svg",
+      tabs: window.VcuSignals.TABS.map(function (tab) {
+        return { label: tab.label, title: tab.title, subtitle: tab.subtitle, rows: [], hero: [] };
+      })
+    },
     cluster: {
       image: "a/i_cluster.svg",
       tabs: [
@@ -1776,7 +1782,7 @@
   }
 
   function renderRows() {
-    if (state.section === "styleTest" || state.section === "stopwatch" || state.section === "vehicle") {
+    if (state.section === "styleTest" || state.section === "stopwatch" || state.section === "vehicle" || state.section === "signals") {
       if (valueTable) {
         valueTable.hidden = true;
       }
@@ -1941,6 +1947,10 @@
     const next = Object.assign({}, state.live || {});
     Object.keys(incoming).forEach(function (key) {
       const value = incoming[key];
+      if (key === "stale") {  // names of values received too long ago (VCU-REQ-013)
+        next.stale = Array.isArray(value) ? value.filter(function (name) { return typeof name === "string"; }) : [];
+        return;
+      }
       if (value !== null && typeof value === "object") {
         return;
       }
@@ -2415,6 +2425,44 @@
       "</section>" +
       porscheReferencePhoto("i/front.webp", "Vehicle reference") +
     "</div>";
+  }
+
+  // Engineering page "Signals" (VCU-REQ-022): rows from js/signals.js.
+  function loadSignalsCatalog() {
+    if (window.VcuSignals.loaded()) {
+      return;
+    }
+    window.VcuSignals.load(function (path) {
+      return net.getJson(path, { timeoutMs: 6000 });
+    }).then(function () {
+      if (state.section === "signals") {
+        renderView();
+      }
+    }).catch(function () {
+      // retried on the next render
+    });
+  }
+
+  function signalsPageMarkup() {
+    const signalsApi = window.VcuSignals;
+    if (!signalsApi.loaded()) {
+      loadSignalsCatalog();
+      return "<div class=\"pt-layout pt-layout-drive pt-layout-signals\"><section class=\"pt-list\">" +
+        porscheRows([{ label: "Loading signal list", detail: "From the VCU", control: porscheStatusValue("--"), engineeringOnly: true }]) +
+        "</section></div>";
+    }
+    const live = state.live || {};
+    const rows = signalsApi.entriesFor(state.tabIndex).map(function (entry) {
+      const formatted = signalsApi.formatValue(entry, live);
+      const stale = signalsApi.isStale(entry, live);
+      const value = "<span class=\"pt-live-value" + (stale ? " is-stale" : "") + "\"><strong>" + escapeHtml(formatted.text) + "</strong>" +
+        (formatted.unit ? "<small>" + escapeHtml(formatted.unit) + "</small>" : "") +
+        "</span>";
+      return { label: entry.name, detail: entry.subtitle, control: value, engineeringOnly: true };
+    });
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-signals\"><section class=\"pt-list\">" +
+      porscheRows(rows) +
+      "</section></div>";
   }
 
   function porscheVehicleSectionMarkup() {
@@ -2896,7 +2944,7 @@
 
   function styleTestScrollKey() {
     const tab = currentTab();
-    return tab && tab.label ? tab.label : String(state.tabIndex);
+    return state.section + ":" + (tab && tab.label ? tab.label : String(state.tabIndex));
   }
 
   function findStyleTestScroller() {
@@ -3205,6 +3253,8 @@
     rememberStyleTestScroll();
     const content = state.section === "ventilation"
       ? energyFlowMarkup()
+      : state.section === "signals"
+      ? signalsPageMarkup()
       : state.section === "vehicle"
       ? porscheVehicleSectionMarkup()
       : state.section === "stopwatch"
@@ -3824,7 +3874,7 @@
     const isHome = state.section === "home";
     const isCoolant = state.section === "coolant";
     const isStyleTest = state.section === "styleTest";
-    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation";
+    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation" || state.section === "signals";
     const activeSection = currentSection();
     const activeTab = currentTab();
     const isTileBoard = isCurrentTabTileBoard();
@@ -4141,6 +4191,11 @@
         "charger_connected",
         "charge_port_connected"
       );
+    } else if (state.section === "signals") {
+      window.VcuSignals.keysFor(state.tabIndex).forEach(function (key) {
+        keys.push(key);
+      });
+      keys.push("stale");
     } else if (state.section === "vehicle" || state.section === "stopwatch" || state.section === "styleTest") {
       porscheStagePollKeys().forEach(function (key) {
         keys.push(key);

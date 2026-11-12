@@ -5,7 +5,7 @@ Static files behave like the ESP32 WebServer + SPIFFS:
   `x.js` missing but `x.js.gz` present -> serve the .gz with Content-Encoding gzip,
   directory requests -> index.html.
 
-Mock API: /api/live, /api/set, /api/set-ecu, /api/set-cluster (dynamic values from
+Mock API: /api/live, /api/signals, /api/set, /api/set-ecu, /api/set-cluster (dynamic values from
 pwa/tools/mock_api.py). Test control endpoints (not on the VCU):
   GET /__test/fault?mode=<mode>&delay_ms=<n>   modes: ok, down, slow, http500, badjson,
         array, empty, garbage, stale_set, static_down, all_down
@@ -151,6 +151,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/live":
             return self._live(query, mode)
+        if path == "/api/signals":
+            return self._json({"timeout_ms": 500, "signals": mock.SIGNAL_CATALOG})
         if path in ("/api/set", "/api/set-ecu", "/api/set-cluster"):
             return self._set(path, query)
         return self._send(404, b"Not found", "text/plain")
@@ -165,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with mock.MOCK_LOCK:
                 mock.update_dynamic_mock_state()
-                snapshot = dict(mock.MOCK_STATE)
+                snapshot = {**mock.signal_defaults(), **mock.MOCK_STATE}
             if mode == "stale_set":
                 with LOCK:
                     snapshot.update(STALE_VALUES)

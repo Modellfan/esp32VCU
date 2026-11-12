@@ -309,6 +309,8 @@ void handleSignals() {
         appendJsonString(body, def.name);
         body += ",\"type\":\"";
         body += sigStorageName(def.storage);
+        body += "\",\"group\":\"";
+        body += sigGroupName(def.group);
         body += "\",\"source\":";
         body += def.rx == RX_NONE ? "\"vcu\"" : "\"can\"";
         body += ",\"writable\":";

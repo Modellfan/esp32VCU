@@ -17,8 +17,9 @@ from PIL import Image
 from conftest import PWA, VIEWPORT, enable_engineering, open_app, screenshot
 
 import build
+from urllib.parse import parse_qs, urlsplit
 
-SECTIONS = ["home", "vehicle", "coolant", "styleTest", "ventilation", "stopwatch", "cluster", "adjust"]
+SECTIONS = ["home", "vehicle", "coolant", "styleTest", "ventilation", "stopwatch", "cluster", "adjust", "signals"]
 
 VIEW_CHECK_JS = """
 () => {
@@ -157,6 +158,54 @@ def test_every_section_and_tab_renders(page, server):
             assert result["scrollH"] <= VIEWPORT["height"], (label, result)
     assert not page.probe.errors, page.probe.errors
     assert not page.probe.console_errors, page.probe.console_errors
+
+
+def test_signals_page_lists_every_field_once(page, server, api):
+    """TC-UI-SIG-01 (VCU-REQ-022): every /api/signals name and /api/live field in one category."""
+    open_app(page, server)
+    hidden = page.evaluate("() => document.querySelector(\".l1-icon[data-section='signals']\").hidden")
+    assert hidden, "Signals icon must be hidden without engineering mode"
+    signals = [s["name"] for s in api._get("/api/signals")["signals"]]
+    expected = set(signals) | (set(api._get("/api/live")) - {"stale"})
+
+    enable_engineering(page)
+    live_urls = []
+    page.on("request", lambda r: live_urls.append(r.url) if "/api/live?" in r.url else None)
+    goto_section(page, "signals")
+    page.wait_for_function("() => document.querySelectorAll('.pt-layout-signals .pt-row').length > 1", timeout=8000)
+    seen = []
+    for tab in visible_tabs(page):
+        page.click(f".tab[data-tab-index='{tab}']")
+        live_urls.clear()
+        page.wait_for_timeout(1300)
+        names = page.evaluate("() => Array.from(document.querySelectorAll('.pt-layout-signals .pt-row-copy strong'))"
+                              ".map(e => e.textContent)")
+        seen.extend(names)
+        requested = set()
+        for url in live_urls:
+            fields = parse_qs(urlsplit(url).query).get("fields", [""])[0]
+            requested |= set(f for f in fields.split(",") if f)
+        # only the shown category plus the always-polled header fields
+        assert requested <= set(names) | {"stale", "sta_ssid", "ap_ssid", "ap_ip"}, (tab, requested - set(names))
+        screenshot(page, f"signals-{tab}")
+    assert len(seen) == len(set(seen)), "a field appears in more than one row"
+    assert set(seen) == expected, (expected - set(seen), set(seen) - expected)
+    assert len(visible_tabs(page)) == 4
+
+    # A value listed in "stale" is marked.
+    def add_stale(route):
+        response = route.fetch()
+        body = response.json()
+        body["stale"] = ["vehicle_speed_510"]
+        route.fulfill(response=response, json=body)
+
+    page.route(re.compile(r"/api/live\?"), add_stale)
+    page.click(".tab[data-tab-index='0']")
+    page.wait_for_timeout(1300)
+    stale = page.evaluate("() => Array.from(document.querySelectorAll('.pt-layout-signals .pt-row'))"
+                          ".filter(r => r.querySelector('.is-stale')).map(r => r.querySelector('strong').textContent)")
+    assert stale == ["vehicle_speed_510"], stale
+    assert not page.probe.errors, page.probe.errors
 
 
 def test_polling_rate_about_one_per_second(page, server, api):

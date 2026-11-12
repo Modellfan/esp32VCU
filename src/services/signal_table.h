@@ -82,5 +82,6 @@ bool parseSignalBool(const String &text, bool &out);
 bool parseSignalNumber(const String &text, double &out);
 
 const char *sigStorageName(SigStorage storage);
+const char *sigGroupName(SigGroup group);  // third column of SIGNAL_GROUPS, e.g. "vehicle"
 
 #endif  // SIGNAL_TABLE_H

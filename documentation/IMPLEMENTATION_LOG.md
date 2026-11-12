@@ -4815,3 +4815,22 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Not tested: SavvyCAN at 2 Mbaud (serial speed must be set in its connection settings). The ROM boot messages before `Serial.begin` stay at 115200 and appear garbled at 2 Mbaud.
+
+## 2026-11-12 15:43:59 +01:00 - Engineering page "Signals" (VCU-REQ-022)
+
+### Changes Made
+- `REQUIREMENTS.md`: new VCU-REQ-022 (implemented); REQ-010/-013 notes. `TESTPLAN.md`: TC-UI-SIG-01.
+- Firmware: `/api/signals` gets `group` (`sigGroupName()` in `src/services/signal_table.*`, `src/services/webinterface.cpp`).
+- PWA: `pwa/src/js/signals.js` (catalog, categories, units), hooks in `pwa/src/js/app.js` (section `signals`, engineering only; rows in the Porsche list style; only the shown tab's fields are polled), `mergeLive()` keeps the `stale` list (string names only), scroll memory per section; `index.html` icon + script; `a/signals.svg`; CSS for the full-width list, stale values and smaller first-level icons in engineering mode (9 icons in 600 px).
+- Test server: `/api/signals` parsed from `src/services/signal_table.{h,cpp}`; signals without a mock value return 0/false.
+- `documentation/signalliste_ui_tcu.md`: page code `[E]Signals`.
+
+### Automated Tests Run
+- `python pwa/tools/build.py`: PASS
+- `python -m pytest pwa/tests -q`: 32 passed (new `test_signals_page_lists_every_field_once`; `signals` added to the section render test): PASS. Earlier runs: `test_rapid_slider_changes_coalesce` / `test_set_command_reaches_vcu` failed 3 times out of ~10 runs (element not visible); 5 isolated reruns and the final full run passed. Cause not found; baseline without the change passed once.
+- `python -m pytest sil/tests -q`: 43 passed, 3 xfailed: PASS
+- `platformio run -e esp32s3 --target upload` and `--target uploadfs` (COM10): PASS
+- Bench (Playwright against http://192.168.0.77): 280 signals with group, 301 fields shown, each once; values shown, vehicle/SDU/BMS values marked stale (no bus traffic): PASS. Repeat after the unit fix: structure PASS, values `--` because the VCU WLAN answered ping in 0.4-2.4 s (router 4 ms) and polls timed out.
+
+### Notes
+- Open: slow VCU WLAN response observed 2026-11-12 ~15:40 (ping 0.4-2.4 s); cause unknown (signal -62 dBm, modem sleep, other clients).

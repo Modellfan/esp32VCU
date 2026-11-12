@@ -130,7 +130,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss alle dekodierten, berechneten und gesetzten Werte als JSON unter `GET /api/live` bereitstellen; mit `fields=` lässt sich die Antwort auf einzelne Felder beschränken. Sollwerte werden über `/api/set`, `/api/set-ecu` und `/api/set-cluster` gesetzt; die Antwort enthält den neuen Live-Stand.
 - **Akzeptanz:** Gegeben eine laufende VCU; wenn `/api/live?fields=sdu_udc,rpm` abgerufen wird; dann enthält die Antwort genau diese Felder als gültiges JSON. Wenn `/api/set?coolant_fan_level=1` aufgerufen wird; dann meldet die Antwort `coolant_fan_level` 1.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
-- **Umsetzung:** aus der zentralen Signaltabelle `src/services/signal_table.cpp` erzeugt (VCU-DEC-007); zusätzlich `/api/signals`, `rejected` für ungültige Setzwerte, `null` statt `nan`.
+- **Umsetzung:** aus der zentralen Signaltabelle `src/services/signal_table.cpp` erzeugt (VCU-DEC-007); zusätzlich `/api/signals` (Name, Typ, Gruppe, Quelle, schreibbar), `rejected` für ungültige Setzwerte, `null` statt `nan`.
 - **Lücke:** Die Touch-UI fordert Felder an, die die Firmware nicht liefert (`soc`, `range_km`, Ladestecker-/Ladezustand, `cluster_trip_distance_km`) und ruft im Editor-Modus `POST /api/energy-flow-layout` auf, das es nur im Python-Testserver gibt.
 
 ### VCU-REQ-011 – Touch-Oberfläche für das Navi-Display
@@ -160,7 +160,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Für jedes CAN-Signal muss die VCU erkennen, ob es innerhalb einer festgelegten Zeit empfangen wurde. Fehlende oder veraltete Werte werden als ungültig gekennzeichnet und weder als 0 noch als letzter Wert ausgegeben.
 - **Akzeptanz:** Gegeben der Umrichter-CAN ist getrennt; wenn 1 s vergeht; dann kennzeichnet `/api/live` alle `sdu_*`-Werte als ungültig, und die Oberfläche zeigt „–“ statt 0.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
-- **Umsetzung:** Firmware umgesetzt 2026-10-28 (VCU-DEC-006): Empfangszeit je Botschaft, `stale`-Liste in `/api/live`, Zeitgrenze 500 ms (Entwurf). Die PWA wertet `stale` noch nicht aus.
+- **Umsetzung:** Firmware umgesetzt 2026-10-28 (VCU-DEC-006): Empfangszeit je Botschaft, `stale`-Liste in `/api/live`, Zeitgrenze 500 ms (Entwurf). Die PWA wertet `stale` bisher nur auf der Engineering-Seite „Signals“ aus (VCU-REQ-022).
 - **Offen:** Zeitgrenze je Botschaft (Vorschlag: 3 × Zykluszeit, mindestens 300 ms) und Darstellung im JSON.
 
 ### Netzwerk und Sicherheit
@@ -248,3 +248,14 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Abhängigkeiten:** VCU-REQ-018; VCU-DEC-018
 - **Umsetzung:** `encodeHeaterControl()` in `src/comms/battery_messages.cpp`, gesendet in `updateOutputs()` (`src/main.cpp`). Prüfstand 2026-11-10: 0x43A von CAN1 empfangen, CRC fehlerfrei, Byte 0 folgt der API; Reaktion des Zombie-Slave nicht geprüft (nicht am Prüfstand).
 - **Nutzerentscheidung 2026-11-10:** Heizung auf einer Testseite per CAN schaltbar.
+
+### VCU-REQ-022 – Engineering-Seite mit allen Signalen
+- **Typ:** funktional / Bedienung
+- **Priorität:** should
+- **Status:** implemented (Nutzerwunsch 2026-11-12)
+- **Anforderung:** Im Engineering-Modus muss die Touch-Oberfläche eine Seite „Signals“ anbieten, die jeden Wert der Live-Schnittstelle mit seinem API-Namen, Wert und Einheit zeigt, nach Kategorien gegliedert: Fahrzeug (CAN1 und DME-Sendung), Antrieb (CAN2), Akku (CAN0 einschließlich Heizung) und VCU (interne Funktionen, CAN-Diagnose, Systemstatus). Neue Signale der Firmware erscheinen ohne Änderung der Oberfläche. Ohne Engineering-Modus ist die Seite nicht erreichbar.
+- **Akzeptanz:** Gegeben die VCU (oder der Testserver) und der Engineering-Modus; wenn die Seite „Signals“ geöffnet wird; dann erscheint jeder Name aus `/api/signals` und jedes weitere Feld aus `/api/live` genau einmal in genau einer Kategorie, ein veralteter Wert (in `stale`) ist erkennbar markiert, abgefragt werden nur die Werte der angezeigten Kategorie, und ohne Engineering-Modus ist das Symbol ausgeblendet.
+- **Abhängigkeiten:** VCU-REQ-010, -011, -013
+- **Hinweis:** Bezeichnungen und Kategorien folgen `documentation/signalliste_ui_tcu.md`; keine CAN-IDs in der Oberfläche.
+- **Umsetzung:** `pwa/src/js/signals.js` (Katalog aus `/api/signals` und einer vollständigen `/api/live`-Abfrage, Kategorie aus der Firmware-Gruppe, Einheit aus dem Namensende), eingehängt in `pwa/src/js/app.js`; Tabs Vehicle/Drive/Battery/VCU, Untertitel = Kategorie, veraltete Werte grau durchgestrichen. Testserver liest die Signaltabelle aus der Firmware-Quelle (`pwa/tools/mock_api.py`).
+

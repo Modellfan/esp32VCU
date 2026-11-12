@@ -433,6 +433,16 @@ bool writeSignal(const SignalDef &def, const String &text) {
     }
 }
 
+const char *sigGroupName(SigGroup group) {
+#define SIGNAL_GROUP_NAME(id, Type, name)     case id: return #name;
+    switch (group) {
+        SIGNAL_GROUPS(SIGNAL_GROUP_NAME)
+        default: break;
+    }
+#undef SIGNAL_GROUP_NAME
+    return "?";
+}
+
 const char *sigStorageName(SigStorage storage) {
     switch (storage) {
         case S_BOOL: return "bool";
