@@ -47,6 +47,43 @@ PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Set
 - UART0 (COM10, 2 000 000 Baud; SavvyCAN und Terminal auf dieselbe Rate stellen): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `wifi-scan`, `can0-status`, `can0-send`, `can0-pintest`, `eeprom-test`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset; SavvyCAN-Bus 0–3 = CAN0–CAN3, Bus 4 = von der VCU gesendet (VCU-DEC-010). Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
-Pins Tankanzeige (X9C103S INC/UD, GPIO5/6 jetzt CAN3), Pin Lüfter Stufe 1, Rolle von CAN3, Lüfterschwellen, Umrechnung Verbrauch, BMS-/Ladegerät-Botschaften auf CAN0, Zeitgrenze für veraltete Werte, Browser des Navi-Displays. Details in REQUIREMENTS.md und DECISIONS.md.
+Stand 2026-11-13, nach Priorität. Details in REQUIREMENTS.md, DECISIONS.md und [documentation/signalliste_ui_tcu.md](documentation/signalliste_ui_tcu.md) (Abschnitt 10).
 
-- **CAN-Empfang bei getrennten Bussen und realer Last nachmessen:** Der Frameverlust auf CAN2 am Prüfstand (alle Busse parallel, VCU sendet mit) ist mit VCU-DEC-019 behoben (2026-11-12: 0 Frames Verlust bei 2700 Burst-Frames, vorher 35–110). Offen: Messung mit getrennten Bussen und realer Fahrzeug- und SDU-Last; `EFLG` bleibt nach einem Überlauf gesetzt, bis der Controller neu startet.
+**Fahrzeug**
+- **Erster Flash ins Fahrzeug:** Noch keine Anforderung ist `verified`, alles ist nur am Prüfstand bzw. in der SIL geprüft. Es fehlt ein Ablauf für die Inbetriebnahme: Vorabprüfung, CAN-Mitschnitte, Rückweg auf den alten Stand.
+- **DME-Emulation im Auto belegen:** Nimmt das Kombi die von der VCU gesendeten Botschaften ohne Warnungen an?
+- **CAN-Empfang bei getrennten Bussen und realer Last nachmessen:**
+  - Der Frameverlust auf CAN2 am Prüfstand (alle Busse parallel, VCU sendet mit) ist mit VCU-DEC-019 behoben: am 2026-11-12 0 Frames Verlust bei 2700 Burst-Frames, vorher 35–110.
+  - Offen ist die Messung mit getrennten Bussen und realer Fahrzeug- und SDU-Last.
+  - `EFLG` bleibt nach einem Überlauf gesetzt, bis der Controller neu startet.
+- **986 vollständig reverse engineeren:**
+  - Mitschnitte mit SavvyCAN; Busnummern siehe Schnittstellen.
+  - DBC-Punkte 4, 7 und 12.
+  - 0x440 (Gangwahl) und 0x560 fehlen im Mitschnitt; offen ist, ob das Fahrzeug ein Getriebesteuergerät hat.
+
+**Hardware (Nutzerentscheidung)**
+- Pins der Tankanzeige (X9C103S INC/UD; GPIO5/6 sind jetzt CAN3, die Tankanzeige ist abgeschaltet).
+- Pin Lüfter Stufe 1, Lüfterschwellen.
+- Rolle von CAN3.
+
+**Akku, Laden, TCU**
+- BMS- und Ladegerät-Botschaften auf CAN0.
+- Welche fehlenden Werte der Zombie-Slave sendet und welche die VCU berechnet (Signalliste, Abschnitt 9).
+- Umrechnung Verbrauch.
+- Werte der VCU für die TCU (VCU-REQ-013); ID-Konflikt 0x210 (TCU-Demo-Map `WakeCommand` gegen Tesla-DC/DC).
+
+**Touch-UI**
+- **GUI aufräumen und Signale festlegen:** je Signal Menü und Tab in der Spalte „UI Vorschlag“ der Signalliste entscheiden. Danach die PWA auf die Firmware-Namen umstellen.
+  - Heute zeigen Home, Akku, Laden und Energiefluss Platzhalter (SoC 28 %, 193 kW) oder Ersatzrechnungen statt CAN0-Werten.
+- **GUI-Worktree `esp32vcu_gui` angleichen:** Er steht auf f4e47a4 und ist damit hinter diesem Zweig; Konflikte in `app.js`, `index.html` und `app.css` sind zu erwarten.
+- Browser des Navi-Displays.
+- Zwei PWA-Tests schlagen sporadisch fehl (`test_rapid_slider_changes_coalesce`, `test_set_command_reaches_vcu`); Ursache unbekannt.
+
+**Sonstiges**
+- WLAN der VCU antwortete am 2026-11-12 zeitweise mit 0,4 bis 2,4 s; Ursache unbekannt.
+- SavvyCAN mit 2 Mbaud und 5 Bussen noch nicht ausprobiert (nur `tools/gvret_listen.py`).
+- Zeitgrenze für veraltete Werte (heute 500 ms, 0x41D/0x41E 2,5 s).
+- Doppelte Namen und LTE-Felder in der Signaltabelle aufräumen.
+
+**Nächster Schritt nach fertiger Entwicklung**
+- **Native Android-App mit serieller Anbindung an die VCU** als Nachfolger der PWA über WLAN. Anforderungen und Architektur sind noch nicht festgelegt.

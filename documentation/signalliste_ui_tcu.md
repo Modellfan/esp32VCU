@@ -213,7 +213,7 @@ Befunde aus dem Abgleich PWA ↔ Firmware:
 
 Offene Entscheidungen:
 1. Seitenaufteilung der UI (Spalte „UI Vorschlag“).
-2. Engineering-Modus: alle Signale anzeigbar, z. B. als eigene Seite, die die Signaltabelle der Firmware nach Gruppen auflistet.
+2. ~~Engineering-Modus: alle Signale anzeigbar~~ erledigt: Seite [E]Signals (VCU-REQ-022).
 3. PWA auf die Firmware-Namen umstellen und Platzhalter durch „--“ ersetzen.
 4. Welche Werte aus Abschnitt 9 der Zombie-Slave senden soll und welche die VCU selbst berechnet.
 5. Welche Werte die VCU für die TCU sendet (VCU-REQ-013); ID-Konflikt 0x210 (TCU-Demo-Map `WakeCommand` gegen Tesla-DC/DC).
