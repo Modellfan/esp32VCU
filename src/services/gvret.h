@@ -147,7 +147,7 @@ inline void gvret_loop() {
                     case PROTO_GET_NUMBUSES:
                         buff[0] = 0xF1;
                         buff[1] = 12;
-                        buff[2] = 3;
+                        buff[2] = GVRET_BUS_COUNT;
                         GVRET_PORT.write(buff, 3);
                         gvretState = IDLE;
                         break;

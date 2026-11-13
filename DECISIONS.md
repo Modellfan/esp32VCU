@@ -69,6 +69,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Betroffene Requirements:** VCU-REQ-012
 - **Entscheidung:** Der CAN-Task legt jeden empfangenen und gesendeten Frame in eine Warteschlange (128 Einträge, bei Überlauf verworfen und gezählt); die Dienst-Task schreibt sie über UART0 an SavvyCAN, sobald GVRET im Binärmodus ist. Textausgaben gingen über den nativen USB-Port; seit 2026-11-09 (CAN0 auf GPIO20 = USB D+) laufen sie über UART0, solange GVRET nicht im Binärmodus ist. Ebenso Textbefehle (Version mit Build-Datum, WLAN-Status, Reset) wie in der CANivore-Firmware; Bytes, die GVRET nicht auswertet, gehen an `serial_console`.
 - **Geändert 2026-11-12:** UART0 läuft mit 2 000 000 Baud (`board::SERIAL_BAUD`, CH343 an COM10). Bei 115200 Baud passten nur etwa 570 GVRET-Frames/s durch, am Prüfstand kommen etwa 1000/s an; jetzt etwa 10 000/s. SavvyCAN und Terminal müssen auf dieselbe Rate gestellt werden. Die Frage nach COM16/COM24 ist damit hinfällig (nur noch COM10).
+- **Geändert 2026-11-13 (Nutzer):** GVRET-Busnummer = CAN-Nummer der VCU: 0 = CAN0 Akku/BMS, 1 = CAN1 Fahrzeug, 2 = CAN2 SDU, 3 = CAN3 Reserve, 4 = von der VCU gesendet (DME-Emulation). Die VCU meldet SavvyCAN 5 Busse (`gvret_bridge.h`).
 
 ## VCU-DEC-011 – WLAN: Zugangspunkt plus Heimnetz, Zugangsdaten außerhalb von Git
 - **Status:** accepted (Nutzerentscheidung 2026-10-28)
@@ -108,7 +109,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Status:** accepted (Nutzerentscheidung 2026-11-10)
 - **Betroffene Requirements:** VCU-REQ-001, -002, -009, -018
 - **Kontext:** Auf der Platine sitzt ein dritter MCP2515 (CAN3, CS GPIO5, INT GPIO6, gemeinsamer SPI-Bus). GPIO5/6 waren INC/UD des Tankanzeige-Potis. CAN0 lief beim Start über (Puffer 32), weil `setup()` erst nach dem WLAN-Start zurückkehrte und `loop()` so lange nicht pollte.
-- **Entscheidung:** CAN3 wird gestartet, gezählt und an GVRET (Bus 4) gespiegelt; Rolle offen. Poti abgeschaltet, bis neue Pins feststehen. Alle CAN-Busse starten in `setup()`; WLAN, SPIFFS und Webserver startet die Web-Task selbst (Kern 0, Priorität 1 = niedrigste Anwendungspriorität). Einstellungen (Bitrate, SPI-Takt, Puffer, Budget, Perioden, Prioritäten) und Status aller Busse und der ECU-Task stehen in `params::can` (`src/drivers/canmanager_api.h`) und damit in `/api/live`; Testseite `/can` in der Firmware.
+- **Entscheidung:** CAN3 wird gestartet, gezählt und an GVRET (Bus 4, seit 2026-11-13 Bus 3) gespiegelt; Rolle offen. Poti abgeschaltet, bis neue Pins feststehen. Alle CAN-Busse starten in `setup()`; WLAN, SPIFFS und Webserver startet die Web-Task selbst (Kern 0, Priorität 1 = niedrigste Anwendungspriorität). Einstellungen (Bitrate, SPI-Takt, Puffer, Budget, Perioden, Prioritäten) und Status aller Busse und der ECU-Task stehen in `params::can` (`src/drivers/canmanager_api.h`) und damit in `/api/live`; Testseite `/can` in der Firmware.
 - **Konsequenzen:** Tankanzeige ohne Funktion. CAN0-Empfangspuffer 64. Die JSON-Felder `rt_*`, `can0_active`, `can1_error`/`can2_error` entfallen zugunsten von `ecu_*`, `canN_up`, `canN_error`. Die Einstellungen werden nur beim Start gelesen (nicht schreibbar).
 
 ## VCU-DEC-017 – Persistenz im AT24C mit Slot-Umlauf

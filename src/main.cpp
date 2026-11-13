@@ -38,7 +38,6 @@
 // CAN receive: decode, mark the reception time, mirror to GVRET.
 //---------------------------------------------------------------------------
 // Frames per bus and call: params::can.rx_budget_per_bus; the rest waits for the next call.
-constexpr int GVRET_BUS_SPARE = 4;  // CAN3 in SavvyCAN (no decoder, no receive monitor)
 
 // CAN1: Porsche 986 vehicle messages
 void pollVehicleCAN() {
@@ -49,7 +48,7 @@ void pollVehicleCAN() {
         if (decode986Vehicle(frame)) {
             rxMark(BUS_VEHICLE, frame.id);
         }
-        gvretBridgeObserve(frame, BUS_VEHICLE);
+        gvretBridgeObserve(frame, GVRET_BUS_CAN1);
     }
 }
 
@@ -62,7 +61,7 @@ void pollTeslaCAN() {
         if (decodeTeslaSdu(frame)) {
             rxMark(BUS_DRIVE, frame.id);
         }
-        gvretBridgeObserve(frame, BUS_DRIVE);
+        gvretBridgeObserve(frame, GVRET_BUS_CAN2);
     }
 }
 
@@ -74,7 +73,7 @@ void pollBatteryCAN() {
         if (decodeBattery(frame)) {
             rxMark(BUS_BATTERY, frame.id);
         }
-        gvretBridgeObserve(frame, BUS_BATTERY);
+        gvretBridgeObserve(frame, GVRET_BUS_CAN0);
     }
 }
 
@@ -84,7 +83,7 @@ void pollSpareCAN() {
     for (int budget = params::can.rx_budget_per_bus; budget > 0 && can3.available(); budget--) {
         can3.receive(frame);
         canCountRx(3);
-        gvretBridgeObserve(frame, GVRET_BUS_SPARE);
+        gvretBridgeObserve(frame, GVRET_BUS_CAN3);
     }
 }
 

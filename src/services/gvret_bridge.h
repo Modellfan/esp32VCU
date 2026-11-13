@@ -5,7 +5,13 @@
 
 #include <ACAN2515.h>
 
-constexpr int GVRET_BUS_TX = 0;  // frames sent by the VCU (ECU emulation)
+// Bus numbers in SavvyCAN: 0-3 = CAN0-CAN3, 4 = frames sent by the VCU (ECU emulation).
+constexpr int GVRET_BUS_CAN0 = 0;  // battery / BMS (TWAI)
+constexpr int GVRET_BUS_CAN1 = 1;  // vehicle
+constexpr int GVRET_BUS_CAN2 = 2;  // Tesla SDU
+constexpr int GVRET_BUS_CAN3 = 3;  // spare
+constexpr int GVRET_BUS_TX = 4;    // sent by the VCU
+constexpr int GVRET_BUS_COUNT = 5;
 
 void gvretBridgeBegin();
 // CAN task side: non-blocking, drops the frame when the queue is full.

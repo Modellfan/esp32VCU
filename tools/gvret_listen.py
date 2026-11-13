@@ -20,7 +20,7 @@ import time
 
 import serial
 
-BUS_NAMES = {0: "VCU-TX", 1: "CAN1", 2: "CAN2", 3: "CAN0/TWAI", 4: "CAN3"}
+BUS_NAMES = {0: "CAN0/TWAI", 1: "CAN1", 2: "CAN2", 3: "CAN3", 4: "VCU-TX"}
 
 
 def main() -> None:

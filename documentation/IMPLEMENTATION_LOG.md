@@ -4850,3 +4850,23 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Artifacts
 - none (screenshot only in the session scratchpad)
+
+## 2026-11-13 13:13:31 +01:00 - GVRET bus numbers = VCU CAN numbers
+
+### Changes Made
+- `src/services/gvret_bridge.h`: constants `GVRET_BUS_CAN0..CAN3` = 0..3, `GVRET_BUS_TX` 0 -> 4, `GVRET_BUS_COUNT` = 5.
+- `src/main.cpp`: receive loops mirror with the new constants (before: CAN1 = 1, CAN2 = 2, CAN0 = 3, CAN3 = 4, own TX = 0).
+- `src/services/gvret.h`: GET_NUMBUSES answers 5 instead of 3, so SavvyCAN accepts bus 3 and 4.
+- `tools/gvret_listen.py`: bus names follow the new numbers.
+- `DECISIONS.md` (VCU-DEC-010 change note, DEC line on CAN3), `README.md` (UART0 line).
+
+### Automated Tests Run
+- `platformio run -e esp32s3 --target upload --upload-port COM10`: PASS
+- `gvret_listen.py --duration 15 --pattern-id 611` during `tx-pattern` 200 x 10 ms (stream 85): bus 0 has the DME frames but not 0x43A (sent by CAN0), bus 1 has 0x43A and 0x611 but not the DME frames (sent by CAN1), bus 2/3 have everything, bus 4 only the DME frames; pattern on CAN1/CAN2 missing 0, CRC errors 0, resyncs 0: PASS
+
+### Result
+- `gvret_bus_map: 0=CAN0, 1=CAN1, 2=CAN2, 3=CAN3, 4=VCU-TX`
+
+### Notes
+- Not tested: SavvyCAN itself (bus numbers above 2 depend on the reported bus count).
+- On the bench CAN0 (TWAI) now also receives the stick's frames (0x611), unlike the bench note in CLAUDE.md.
