@@ -4834,3 +4834,19 @@ ew_4e0_bit_booleans_added_to_ui: true
 
 ### Notes
 - Open: slow VCU WLAN response observed 2026-11-12 ~15:40 (ping 0.4-2.4 s); cause unknown (signal -62 dBm, modem sleep, other clients).
+
+## 2026-11-13 13:10:06 +01:00 - Home: larger time and date at the battery
+
+### Changes Made
+- `pwa/src/js/home-battery.js`: time 38 -> 48 px (small screens 32 -> 40 px), date and weekday 15 -> 19 px (13 -> 16 px), gap 4 -> 6 px.
+
+### Automated Tests Run
+- Screenshot of the home page on the test server (1280 x 720): PASS (visual check)
+- `python pwa/tools/build.py`: PASS
+- `platformio run -e esp32s3 --target uploadfs --upload-port COM10`: PASS
+
+### Result
+- `home_time_font_px: 48`
+
+### Artifacts
+- none (screenshot only in the session scratchpad)
