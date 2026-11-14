@@ -26,7 +26,7 @@ BUS_NAMES = {0: "CAN0/TWAI", 1: "CAN1", 2: "CAN2", 3: "CAN3", 4: "VCU-TX"}
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", default="COM10")
-    parser.add_argument("--baud", type=int, default=2000000)
+    parser.add_argument("--baud", type=int, default=1000000)
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--pattern-id", default="", help="hex ID of the tx-pattern stream to verify")
     parser.add_argument("--cycles", action="store_true", help="print the cycle time per bus and ID")

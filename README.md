@@ -43,7 +43,7 @@ PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Set
 - `POST /api/set-ecu?…` – schreibbare Motorsteuergerät-Signale; `auto` hebt einen Override auf
 - `POST /api/set-cluster?activated=0|1`; `/api/set?reset_best_times=1` löscht die Bestzeiten
 - WLAN: Zugangspunkt `eboxster` (http://192.168.4.1/) und Heimnetz aus `secrets.h` (Hostname `eboxster-vcu`, IP mit `vcu_cmd.py wifi-status`); Sendeleistung 8,5 dBm (mit voller Leistung scheiterte der Handshake mit dem Heimnetz)
-- UART0 (COM10, 2 000 000 Baud; SavvyCAN und Terminal auf dieselbe Rate stellen): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `wifi-scan`, `can0-status`, `can0-send`, `can0-pintest`, `eeprom-test`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset; SavvyCAN-Bus 0–3 = CAN0–CAN3, Bus 4 = von der VCU gesendet (VCU-DEC-010). Der native USB-Port entfällt (GPIO19/20 = CAN0).
+- UART0 (COM10, 1 000 000 Baud, fest vorgegeben durch SavvyCAN): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `wifi-scan`, `can0-status`, `can0-send`, `can0-pintest`, `eeprom-test`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset; SavvyCAN-Bus 0–3 = CAN0–CAN3, Bus 4 = von der VCU gesendet (VCU-DEC-010). Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
 Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requirements/DECISIONS.md und [documentation/signalliste.md](documentation/signalliste.md) (Abschnitt 10).
@@ -81,7 +81,7 @@ Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requ
 **Sonstiges**
 - WLAN der VCU antwortete am 2026-11-12 zeitweise mit 0,4 bis 2,4 s. Wahrscheinliche Ursachen laut Review: Webserver wartet bis 5 s auf stumme Verbindungen (B-07, nur mit Webserver-Tausch lösbar) und Dauersuche nach dem Heimnetz (B-09, seit 2026-11-14 gedrosselt). Nachmessen.
 - EEPROM (AT24C) antwortet am Prüfstand nicht (I2C-Fehler, 2026-11-14, auch mit älterer Firmware): Verbindung prüfen.
-- SavvyCAN mit 2 Mbaud und 5 Bussen noch nicht ausprobiert (nur `tools/gvret_listen.py`); prüfen, ob SavvyCAN Keepalives sendet (sonst nach 5 s zurück in den Textmodus).
+- SavvyCAN mit 1 Mbaud und 5 Bussen noch nicht ausprobiert (nur `tools/gvret_listen.py`); SavvyCAN sendet laut Quellcode alle 250 ms ein Keepalive.
 - Fable-Review ([FABLE_REVIEW.md](FABLE_REVIEW.md)): umgesetzt 2026-11-14 B-01, B-04, B-05, B-06, B-08 bis B-16, U-05, U-06, U-07, P-01. Offen: B-02 (negative SDU-Temperaturen, Mitschnitt bei Kälte), B-03, B-07/A-03, U-01/U-02 (beim GUI-Aufräumen), U-10, A-01 bis A-10, P-02 bis P-08.
 - Zeitgrenze für veraltete Werte (heute 500 ms, 0x41D/0x41E 2,5 s).
 - Doppelte Namen und LTE-Felder in der Signaltabelle aufräumen.
