@@ -46,7 +46,7 @@ PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Set
 - UART0 (COM10, 2 000 000 Baud; SavvyCAN und Terminal auf dieselbe Rate stellen): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `wifi-scan`, `can0-status`, `can0-send`, `can0-pintest`, `eeprom-test`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset; SavvyCAN-Bus 0–3 = CAN0–CAN3, Bus 4 = von der VCU gesendet (VCU-DEC-010). Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
-Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requirements/DECISIONS.md und [documentation/signalliste_ui_tcu.md](documentation/signalliste_ui_tcu.md) (Abschnitt 10).
+Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requirements/DECISIONS.md und [documentation/signalliste.md](documentation/signalliste.md) (Abschnitt 10).
 
 **Fahrzeug**
 - **Erster Flash ins Fahrzeug:** Noch keine Anforderung ist `verified`, alles ist nur am Prüfstand geprüft. Es fehlt ein Ablauf für die Inbetriebnahme: Vorabprüfung, CAN-Mitschnitte, Rückweg auf den alten Stand.
