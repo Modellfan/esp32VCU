@@ -46,9 +46,9 @@ body.is-booting #screenRoot[hidden] {
 }
 
 #introSplash .intro-splash-frame {
-  width: min(100vw, 1024px);
-  height: min(100vh, 600px);  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
-  height: min(100dvh, 600px);
+  width: 100vw;  /* fill the radio screen (was capped at 1024 px) */
+  height: 100vh;  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
+  height: 100dvh;  /* fill the radio screen (was capped at 600 px) */
   display: grid;
   place-items: center;
   overflow: hidden;
