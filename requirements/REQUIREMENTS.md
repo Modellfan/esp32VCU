@@ -11,7 +11,7 @@ Dies ist der **Soll-Zustand** der VCU. Nur Anforderungen dokumentieren, keine Im
 - Bei `verified`: Test/Prüfung mit Pfad oder genauer Fundstelle benennen.
 - **Umsetzung:** Stand des Codes nach dem Architektur-Umbau vom 2026-10-28 (VCU-DEC-002 bis -012). „Umgesetzt“ heißt nicht „verifiziert“; auf Hardware ist nichts davon geprüft.
 
-Quellen: aus Code, `documentation/IMPLEMENTATION_LOG.md` und `documentation/can_signals.md` rückwirkend abgeleitet am 2026-10-28, ergänzt um Nutzerentscheidungen vom 2026-10-28. Alle Einträge stehen auf `draft`, bis der Nutzer sie bestätigt.
+Quellen: aus Code, dem damaligen Änderungsprotokoll (entfernt 2026-11-14) und `documentation/can_signals.md` rückwirkend abgeleitet am 2026-10-28, ergänzt um Nutzerentscheidungen vom 2026-10-28. Alle Einträge stehen auf `draft`, bis der Nutzer sie bestätigt.
 
 ## Systemkontext
 Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsumrichter (Tesla SDU mit OpenInverter stm32-sine) über einen zweiten CAN-Bus, passt das Kombiinstrument an die E-Maschine an, steuert Kühlmittellüfter und ein Digitalpotentiometer und liefert eine Touch-Oberfläche für das Navi-Display (1024×600). Das Projekt ist eigenständig; es gibt keine Abhängigkeit zu TCU, Backend oder App anderer Projekte (Nutzerentscheidung 2026-10-28).

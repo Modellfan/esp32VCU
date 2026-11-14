@@ -89,7 +89,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Entscheidung:** `src/vw_pq_messages.*` (ca. 10 000 Zeilen, ungenutzt) bleibt zum Abgleich mit den 986-Botschaften erhalten.
 
 ## VCU-DEC-014 – Software-in-the-Loop mit unverändertem Firmware-Code
-- **Status:** accepted (Nutzerauftrag 2026-11-05)
+- **Status:** aufgehoben (Nutzer 2026-11-14: SIL-Umgebung `sil/` entfernt; Nachweise aus SIL bleiben als historische Evidenz in REQUIREMENTS/TESTPLAN stehen)
 - **Betroffene Requirements:** VCU-REQ-005, -006, -007 (Demo-Prüfling Kombi-Funktion), künftig alle Anwendungsfunktionen
 - **Optionen:** A: einzelne Komponenten unverändert als PC-Bibliothek, Stubs für Arduino/FreeRTOS, C-Shim + Python (ctypes), Kopplung über die Signaltabelle, Tests auf Applikationsebene ohne CAN (Nutzervorgabe 2026-11-05); B: Funktion in Python nachbauen; C: `pio test -e native` (Unity, ohne Umgebungsmodell).
 - **Entscheidung:** A, Ordner `sil/`. Compiler: Clang aus dem PyPI-Paket `ziglang` (kein Visual Studio/MinGW nötig).

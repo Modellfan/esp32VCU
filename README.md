@@ -2,9 +2,8 @@
 
 Die VCU ersetzt das Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsumrichter (Tesla SDU mit OpenInverter), passt das Kombiinstrument an den E-Antrieb an, steuert Kühlmittellüfter und Tankanzeige und liefert die Touch-Oberfläche für das Navi-Display (1024×600).
 
-- Anforderungen: [REQUIREMENTS.md](REQUIREMENTS.md) · Entscheidungen: [DECISIONS.md](DECISIONS.md) · Tests: [TESTPLAN.md](TESTPLAN.md)
+- Anforderungen: [requirements/REQUIREMENTS.md](requirements/REQUIREMENTS.md) · Entscheidungen: [requirements/DECISIONS.md](requirements/DECISIONS.md) · Tests: [requirements/TESTPLAN.md](requirements/TESTPLAN.md)
 - Architektur: [documentation/architecture.html](documentation/architecture.html) (interaktiv, Details im JSON-Block der Datei) · Übersicht [architecture.svg](documentation/architecture.svg) · CAN-Signale: [documentation/can_signals.md](documentation/can_signals.md)
-- Änderungsprotokoll: [documentation/IMPLEMENTATION_LOG.md](documentation/IMPLEMENTATION_LOG.md)
 
 ## Hardware
 ESP32-S3-DevKitC-1 (8 MB), 3× MCP2515 an einem SPI-Bus (CAN1 Fahrzeug, CAN2 Umrichter, CAN3 Reserve), TWAI als CAN0 (Bus von TeensyBMS, Zombie-Slave und DC/DC, TX GPIO20, RX GPIO19), X9C103S (Tankgeber, zurzeit ohne Pins), AT24C256-EEPROM (I2C, SCL GPIO39, SDA GPIO37, Adresse 0x50; Ladeparameter, Lüftermodus und Bestzeiten bleiben über einen Neustart erhalten, VCU-REQ-020), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).
@@ -47,10 +46,10 @@ PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Set
 - UART0 (COM10, 2 000 000 Baud; SavvyCAN und Terminal auf dieselbe Rate stellen): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `wifi-scan`, `can0-status`, `can0-send`, `can0-pintest`, `eeprom-test`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset; SavvyCAN-Bus 0–3 = CAN0–CAN3, Bus 4 = von der VCU gesendet (VCU-DEC-010). Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
 ## Offene Punkte
-Stand 2026-11-13, nach Priorität. Details in REQUIREMENTS.md, DECISIONS.md und [documentation/signalliste_ui_tcu.md](documentation/signalliste_ui_tcu.md) (Abschnitt 10).
+Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requirements/DECISIONS.md und [documentation/signalliste_ui_tcu.md](documentation/signalliste_ui_tcu.md) (Abschnitt 10).
 
 **Fahrzeug**
-- **Erster Flash ins Fahrzeug:** Noch keine Anforderung ist `verified`, alles ist nur am Prüfstand bzw. in der SIL geprüft. Es fehlt ein Ablauf für die Inbetriebnahme: Vorabprüfung, CAN-Mitschnitte, Rückweg auf den alten Stand.
+- **Erster Flash ins Fahrzeug:** Noch keine Anforderung ist `verified`, alles ist nur am Prüfstand geprüft. Es fehlt ein Ablauf für die Inbetriebnahme: Vorabprüfung, CAN-Mitschnitte, Rückweg auf den alten Stand.
 - **DME-Emulation im Auto belegen:** Nimmt das Kombi die von der VCU gesendeten Botschaften ohne Warnungen an?
 - **CAN-Empfang bei getrennten Bussen und realer Last nachmessen:**
   - Der Frameverlust auf CAN2 am Prüfstand (alle Busse parallel, VCU sendet mit) ist mit VCU-DEC-019 behoben: am 2026-11-12 0 Frames Verlust bei 2700 Burst-Frames, vorher 35–110.

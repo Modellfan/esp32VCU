@@ -2,11 +2,10 @@
 
 ## Dokumentationsquellen
 - `README.md`: Projektziel, Hardware, Build, Aufbau und offene Fragen.
-- `REQUIREMENTS.md`: verbindlicher Soll-Zustand der VCU (Requirements `VCU-REQ-…`).
-- `DECISIONS.md`: Begründungen und Konsequenzen wesentlicher technischer Entscheidungen (`VCU-DEC-…`).
-- `TESTPLAN.md`: Testfälle je Requirement, Teststufen und Abnahmeregeln für `verified`.
+- `requirements/REQUIREMENTS.md`: verbindlicher Soll-Zustand der VCU (Requirements `VCU-REQ-…`).
+- `requirements/DECISIONS.md`: Begründungen und Konsequenzen wesentlicher technischer Entscheidungen (`VCU-DEC-…`).
+- `requirements/TESTPLAN.md`: Testfälle je Requirement, Teststufen und Abnahmeregeln für `verified`.
 - `documentation/can_signals.md` und die DBC-Dateien: CAN-Signaldefinitionen (maßgeblich für Kodierung und Dekodierung).
-- `documentation/IMPLEMENTATION_LOG.md`: Änderungsprotokoll (siehe Arbeitsregel 8).
 - Das Projekt ist eigenständig; es gibt keine Abhängigkeit zu anderen Repos (Nutzerentscheidung 2026-10-28).
 
 Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weiteren Spec-, Proposal-, Plan- oder Task-Dateien, außer der Nutzer verlangt dies ausdrücklich.
@@ -14,12 +13,11 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 ## Arbeitsregeln
 1. **Kleine Änderungen:** Korrigiere reine Tippfehler, Refactorings ohne Verhaltensänderung und kleine Bugs ohne zusätzlichen RE-Prozess. Passe Dokumente nur bei geänderten Aussagen an.
 2. **Neues oder geändertes Systemverhalten:** Verwende `/re-refine`. Ordne Anforderungen vorhandenen VCU-REQ-IDs zu oder ergänze neue IDs. Formuliere beobachtbare Akzeptanzkriterien. Erfinde keine bestätigten Anforderungen.
-3. **Architekturentscheidungen:** Dokumentiere nur signifikante Entscheidungen in `DECISIONS.md`, insbesondere Änderungen von Schnittstellen, CAN-Botschaften, Persistenz, Zeitverhalten, Pinbelegung, Sicherheits- und Hardwaregrenzen.
+3. **Architekturentscheidungen:** Dokumentiere nur signifikante Entscheidungen in `requirements/DECISIONS.md`, insbesondere Änderungen von Schnittstellen, CAN-Botschaften, Persistenz, Zeitverhalten, Pinbelegung, Sicherheits- und Hardwaregrenzen.
 4. **Vor riskanten oder größeren Änderungen:** Verwende `/re-review` und untersuche Abhängigkeiten, Widersprüche, Auswirkungen und Testbarkeit. Bei Unsicherheit betroffene Stellen als offen kennzeichnen statt als geklärt auszugeben.
 5. **Implementierung:** Maßgeblich sind bestätigte Anforderungen und Entscheidungen. Verifiziere betroffene Akzeptanzkriterien mit passenden Tests oder beschreibe ehrlich, welche Prüfungen nicht durchgeführt wurden.
 6. **Dokumentation nachziehen:** Aktualisiere nur die betroffenen Abschnitte. Keine Doppelpflege derselben Details in README, Requirements, Decisions und `can_signals.md`.
 7. **Abschluss:** Berichte knapp: geändertes Verhalten, betroffene REQ-/DEC-IDs, Tests und offene Fragen.
-8. **Änderungsprotokoll:** Jede Code- oder Flash-Aufgabe bekommt einen Eintrag in `documentation/IMPLEMENTATION_LOG.md` nach der dortigen Vorlage (Zeitstempel mit Zeitzone, Änderungen, ausgeführte Befehle mit PASS/FAIL, Ergebnis, Artefakte). Das Log ist Nachweisquelle, keine Anforderungsquelle.
 
 ## Projektspezifische Grenzen
 - **Fahrzeugsicherheit:** Die VCU sendet auf dem Fahrzeug-CAN anstelle des Motorsteuergeräts. Änderungen an gesendeten Botschaften, Zeitschlitzen oder Standardbits nur mit Bezug auf `can_signals.md`/DBC und mit CAN-Mitschnitt prüfen. Nie ungeprüft auf das Fahrzeug flashen.
@@ -39,7 +37,7 @@ Eine verhaltensrelevante Änderung ist erst abgeschlossen, wenn Implementierung 
 ## Werkzeuge
 - PlatformIO: `%USERPROFILE%\.platformio\penv\Scripts\platformio.exe` (nicht im PATH). Build: `platformio run -e esp32s3`; Upload: `platformio run --target upload --upload-port COM10`. Aus PowerShell starten, nicht aus Git Bash (`idf_tools.py` der Plattform bricht unter MSYS ab, danach fehlt esptool); `PYTHONIOENCODING=utf-8` setzen und die Ausgabe nicht filtern (pio stürzt sonst beim Fortschrittsbalken ab).
 - Compiler-Problem der pioarduino-Plattform unter Windows und Abhilfe: README, Abschnitt „Build und Flashen“.
-- Tests auf dem PC: SIL `python -m pytest sil/tests` (Compiler über das PyPI-Paket `ziglang`, siehe `sil/README.md`), PWA `python -m pytest pwa/tests` (Playwright). Eine PlatformIO-Umgebung `native` gibt es nicht.
+- Tests auf dem PC: PWA `python -m pytest pwa/tests` (Playwright). Eine PlatformIO-Umgebung `native` gibt es nicht.
 - Touch-UI-Testserver: `python pwa/tools/serve.py` → http://127.0.0.1:8090/
 
 ## CAN-Hardwaretests

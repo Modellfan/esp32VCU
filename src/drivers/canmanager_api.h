@@ -1,5 +1,5 @@
 // Public interface of the CAN manager, free of hardware dependencies (also used by the
-// signal table and the SIL build). The controllers themselves: canmanager.h.
+// signal table). The controllers themselves: canmanager.h.
 //
 //   Receive monitor (VCU-REQ-013, VCU-DEC-006): last reception time per known message. The
 //   receive loop marks every decoded frame; the web API and the fan automatic ask whether a

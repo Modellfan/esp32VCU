@@ -10,11 +10,11 @@ Stand 2026-10-28: Firmware- und SPIFFS-Build grün; PWA-Suite 28/28 (zwei Läufe
 |---|---|---|---|
 | Build | B | Firmware, SPIFFS-Image, Pin-Prüfung | `platformio run -e esp32s3`, `platformio run --target buildfs`, `python pwa/tools/build.py` |
 | Web | W | PWA gegen VCU-ähnlichen Mock mit Fehlereinspeisung | `python -m pytest pwa/tests` (Chromium, 1024×600) |
-| SIL | S | Einzelne Komponenten auf Applikationsebene (Parameter rein/raus, kein CAN), optional mit Python-Umgebungsmodell | `python -m pytest sil/tests` (siehe `sil/README.md`) |
+| SIL | S | entfernt 2026-11-14 (VCU-DEC-014 aufgehoben); frühere S-Nachweise sind historisch | – |
 | Prüfstand | P | VCU mit beiden CAN-Bussen, Mitschnitt, Messgeräte | SavvyCAN/CAN-Adapter, Multimeter, Browser |
 | Fahrzeug | F | VCU im 986 | Sichtprüfung Kombiinstrument, Mitschnitt |
 
-Host-Tests laufen über die SIL-Umgebung (`sil/`, Compiler aus dem PyPI-Paket `ziglang`). Bisher abgedeckt: Kombi-Funktion; Lüfterlogik und Signaltabelle sind die nächsten Kandidaten.
+Firmware-Tests auf dem PC gibt es seit dem Entfernen der SIL-Umgebung (2026-11-14) nicht mehr; Firmware-Verhalten wird am Prüfstand (P) und im Fahrzeug (F) nachgewiesen.
 
 ## 2. Zuordnung
 

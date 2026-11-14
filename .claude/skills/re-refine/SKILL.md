@@ -5,7 +5,7 @@ description: Nutze diesen Skill, wenn neue Funktionen oder geändertes Systemver
 
 # RE-Light: Anforderungen verfeinern
 
-1. Lies die relevanten Abschnitte von `README.md`, `REQUIREMENTS.md` und bei Architekturbezug `DECISIONS.md`. Wenn nötig, prüfe betroffenen Code.
+1. Lies die relevanten Abschnitte von `README.md`, `requirements/REQUIREMENTS.md` und bei Architekturbezug `requirements/DECISIONS.md`. Wenn nötig, prüfe betroffenen Code.
 2. Bestimme, ob die Anfrage eine neue Anforderung, eine Änderung an bestehendem Verhalten oder nur eine Aufgabe ohne neue Anforderung ist.
 3. Wiederverwende vorhandene REQ-IDs für geändertes Verhalten; vergib neue IDs nur für neue, eigenständige Anforderungen.
 4. Schreibe kurze, eindeutige Aussagen über beobachtbares Soll-Verhalten; ergänze testbare Akzeptanzkriterien, Priorität und Status. Keine vorgetäuschten Freigaben.

@@ -16,7 +16,7 @@ Vollständigkeit: Abschnitt 2–8 enthalten alle 280 Einträge der Firmware-Sign
 | BMS | `TeensyVCU/documentation/CAN_Message_Packing.md` | Packing und CRC der TeensyBMS-Botschaften 0x41A–0x41E |
 | mVCU | `Zombie-Slave/docs/mVCU_Integration.md` | Schnittstelle Zombie-Slave ↔ mVCU (diese VCU), Heizung 0x43A |
 | TCU | `ESP32S3-TCU/specs/001-vehicle-companion-spec/data-model.md`, `ESP32S3-TCU/data/can/eboxster-demo.dbc.json` | Werte, die die TCU erwartet |
-| REQ / DEC | [REQUIREMENTS.md](../REQUIREMENTS.md), [DECISIONS.md](../DECISIONS.md) | Soll-Verhalten der internen Funktionen |
+| REQ / DEC | [REQUIREMENTS.md](../requirements/REQUIREMENTS.md), [DECISIONS.md](../requirements/DECISIONS.md) | Soll-Verhalten der internen Funktionen |
 
 ### Spalten
 
