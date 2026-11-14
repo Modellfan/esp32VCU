@@ -1,4 +1,4 @@
-# CAN Signal Reference
+# CAN-Botschaften CAN2 (Tesla SDU) und CAN0 (Akku)
 
 ## Table of Contents
 
@@ -17,31 +17,35 @@
 
 ## Porsche 986 (CAN1)
 
-Bitlage, Skalierung, Zykluszeiten und offene Punkte des Reverse Engineering: [porsche_986_messages.md](porsche_986_messages.md) (Spiegel der DBC [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), Masterquelle). Hier nur die Zuordnung zum Code.
+Eigene Liste: [porsche_986_messages.md](porsche_986_messages.md) (Spiegel der DBC, Masterquelle). Codecs: `src/comms/986_ecu_messages.cpp` (gesendet), `src/comms/986_vehicle_messages.cpp` (empfangen).
 
-### Von der VCU gesendet (DME-Emulation)
+## OpenInverter stm32-sine
 
-| CAN ID | Message | DBC Sender | Target File | Decoder | Encoder | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| 0x280 | Engine_1 | ECU | `src/comms/986_ecu_messages.cpp` | [decode986Ecu0x280](../src/comms/986_ecu_messages.cpp#L9) | [encode986Ecu0x280](../src/comms/986_ecu_messages.cpp#L22) | Implemented |
-| 0x289 | Motor_2 | ECU | `src/comms/986_ecu_messages.cpp` | [decode986Ecu0x289](../src/comms/986_ecu_messages.cpp) | [encode986Ecu0x289](../src/comms/986_ecu_messages.cpp) | Implemented |
-| 0x298 | Engine_2 | ECU | `src/comms/986_ecu_messages.cpp` | [decode986Ecu0x298](../src/comms/986_ecu_messages.cpp#L175) | [encode986Ecu0x298](../src/comms/986_ecu_messages.cpp#L189) | Implemented |
-| 0x4E0 | EngineStat | ECU | `src/comms/986_ecu_messages.cpp` | [decode986Ecu0x4E0](../src/comms/986_ecu_messages.cpp#L213) | [encode986Ecu0x4E0](../src/comms/986_ecu_messages.cpp#L228) | Implemented |
-| 0x4F8 | Unknown_4F8 | ECU | `src/comms/986_ecu_messages.cpp` | [decode986Ecu0x4F8](../src/comms/986_ecu_messages.cpp#L249) | [encode986Ecu0x4F8](../src/comms/986_ecu_messages.cpp#L259) | Implemented (raw bytes) |
-| 0x7A0 | Unknown_7A0 | ECU | `src/comms/986_ecu_messages.cpp` | [decode986Ecu0x7A0](../src/comms/986_ecu_messages.cpp#L267) | [encode986Ecu0x7A0](../src/comms/986_ecu_messages.cpp#L277) | Implemented (raw bytes) |
+All OpenInverter `stm32-sine` telemetry messages use:
 
-### Vom Fahrzeug empfangen
+- Standard 11-bit CAN identifiers
+- Intel/little-endian signal byte order
+- DBC byte order notation `@1`
+- Physical value calculation: `physicalValue = rawValue * factor + offset`
+- Signed values decoded as two's-complement with the configured bit length
 
-| CAN ID | Message | DBC Sender | Target File | Decoder | Encoder | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| 0x2A8 | Vehicle_Speed | ABS_PSM | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x2A8](../src/comms/986_vehicle_messages.cpp#L9) | [encode986Vehicle0x2A8](../src/comms/986_vehicle_messages.cpp#L34) | Implemented |
-| 0x1A0 | ABS_1 | ABS_PSM | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x1A0](../src/comms/986_vehicle_messages.cpp#L62) | [encode986Vehicle0x1A0](../src/comms/986_vehicle_messages.cpp#L91) | Implemented |
-| 0x4A1 | ABS_2 | ABS_PSM | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x4A1](../src/comms/986_vehicle_messages.cpp#L182) | [encode986Vehicle0x4A1](../src/comms/986_vehicle_messages.cpp#L201) | Implemented |
-| 0x510 | InstrCluster_1 | INSTR | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x510](../src/comms/986_vehicle_messages.cpp#L225) | [encode986Vehicle0x510](../src/comms/986_vehicle_messages.cpp#L239) | Implemented |
-| 0x520 | InstrCluster_2 | INSTR | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x520](../src/comms/986_vehicle_messages.cpp#L126) | [encode986Vehicle0x520](../src/comms/986_vehicle_messages.cpp#L138) | Implemented |
-| 0x560 | Unknown_560 | INSTR | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x560](../src/comms/986_vehicle_messages.cpp#L335) | [encode986Vehicle0x560](../src/comms/986_vehicle_messages.cpp#L345) | Implemented (raw bytes) |
-| 0x440 | AT_Line1 | TCU | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x440](../src/comms/986_vehicle_messages.cpp#L255) | [encode986Vehicle0x440](../src/comms/986_vehicle_messages.cpp#L263) | Implemented |
-| 0x0C0 | SWA | STEER | `src/comms/986_vehicle_messages.cpp` | [decode986Vehicle0x00C0](../src/comms/986_vehicle_messages.cpp#L154) | [encode986Vehicle0x00C0](../src/comms/986_vehicle_messages.cpp#L166) | Implemented |
+Signed extraction must not treat negative values as unsigned. Messages shorter than their configured DLC are invalid/incomplete.
+
+| CAN ID | Decimal | Message | CAN Device | Description | DLC | Signal Count | Decoder | WebUI Rendering | Status |
+| --- | ---: | --- | --- | --- | ---: | ---: | --- | --- | --- |
+| 0x500 | 1280 | DC electrical | OpenInverter `stm32-sine` | [CAN ID 0x500 / 1280](#openinverter-0x500) | 8 | 4 | Required | Required | Documented |
+| 0x501 | 1281 | Motor output | OpenInverter `stm32-sine` | [CAN ID 0x501 / 1281](#openinverter-0x501) | 8 | 4 | Required | Required | Documented |
+| 0x502 | 1282 | RMS and derived SINE values | OpenInverter `stm32-sine` | [CAN ID 0x502 / 1282](#openinverter-0x502) | 8 | 4 | Required | Required | Documented |
+| 0x503 | 1283 | Driver demand | OpenInverter `stm32-sine` | [CAN ID 0x503 / 1283](#openinverter-0x503) | 8 | 5 | Required | Required | Documented |
+| 0x504 | 1284 | Direction, regen and thermal state | OpenInverter `stm32-sine` | [CAN ID 0x504 / 1284](#openinverter-0x504) | 8 | 6 | Required | Required | Documented |
+| 0x505 | 1285 | Mode, fault and status | OpenInverter `stm32-sine` | [CAN ID 0x505 / 1285](#openinverter-0x505) | 7 | 6 | Required | Required | Documented |
+| 0x506 | 1286 | Digital inputs A | OpenInverter `stm32-sine` | [CAN ID 0x506 / 1286](#openinverter-0x506) | 2 | 8 | Required | Required | Documented |
+| 0x507 | 1287 | Digital inputs B and cruise speed | OpenInverter `stm32-sine` | [CAN ID 0x507 / 1287](#openinverter-0x507) | 4 | 3 | Required | Required | Documented |
+| 0x508 | 1288 | Turns and uptime | OpenInverter `stm32-sine` | [CAN ID 0x508 / 1288](#openinverter-0x508) | 8 | 2 | Required | Required | Documented |
+
+OpenInverter coverage summary:
+- Total OpenInverter `stm32-sine` messages documented: 9
+- Total OpenInverter `stm32-sine` signals documented: 42
 
 <a id="openinverter-0x500"></a>
 ### CAN ID 0x500 / 1280 - DC electrical
