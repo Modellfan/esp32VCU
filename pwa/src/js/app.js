@@ -2647,7 +2647,9 @@
           { label: "Delta", detail: "Lap delta", control: porscheStopwatchValue(delta === null ? "+0.00" : (delta >= 0 ? "+" : "") + delta.toFixed(2), "s") }
         ]) +
       "</section>" +
-      porscheStopwatchGraphic("lap") +
+      "<section class=\"pt-stopwatch-visual pt-stopwatch-photo\" aria-label=\"Race track\">" +
+        "<img src=\"i/track.webp\" alt=\"Boxster on the race track\">" +
+      "</section>" +
     "</div>";
   }
 
