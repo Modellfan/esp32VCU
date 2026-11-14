@@ -21,6 +21,7 @@ struct ClusterSignals {
     float acceleration_0_100_best_s = 0.0f;
     bool acceleration_0_50_valid = false;
     bool acceleration_0_100_valid = false;
+    bool sdu_data_ok = false;  // 0x500 and 0x504 fresh; otherwise the cluster shows the fallback
 };
 
 extern ClusterSignals cluster;
@@ -29,7 +30,9 @@ extern ClusterSignals cluster;
 
 float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode);
 int needleFromPercent(int8_t dir, float percentSigned);
-// Every 6 ms (ecuTask in main.cpp): power, needle, acceleration timing, fuel; then the ECU overrides.
+// Every ECU task cycle (main.cpp): power, needle, acceleration timing, fuel; then the ECU overrides.
 void updateCluster();
+// Clears the stored best acceleration times (/api/set?reset_best_times=1).
+void clusterResetBestTimes();
 
 #endif

@@ -2,7 +2,7 @@
 //
 // loop() (core 1): pollVehicleCAN, pollTeslaCAN, pollBatteryCAN, pollSpareCAN continuously;
 //                  updateOutputs (fan, fuel gauge) every 100 ms; CAN error counters every 300 ms.
-// ecuTask (core 1, every 6 ms, higher priority): updateCluster -> emulateECUCAN (one ECU frame).
+// ecuTask (core 1, every 10 ms, higher priority): updateCluster -> emulateECUCAN (5 ECU frames).
 // Web task (core 0, lowest priority, src/services/webinterface.cpp): WiFi, web API, PWA,
 //                  GVRET, log, LED. It starts WiFi itself, so CAN runs before WiFi is up.
 // Periods, buffers and priorities: params::can (src/drivers/canmanager_api.h).
@@ -27,6 +27,8 @@
 #include "digipot_control.h"
 #include "eeprom_at24c.h"
 #include "gvret_bridge.h"
+#include <esp_task_wdt.h>
+#include <esp_system.h>
 #include "params_lock.h"
 #include "persistence.h"
 #include "serial_console.h"
@@ -88,19 +90,17 @@ void pollSpareCAN() {
 }
 
 //---------------------------------------------------------------------------
-// CAN1: Porsche 986 ECU emulation.
-// 5 ECU frames x 6 ms slot = 30 ms full cycle, evenly distributed.
+// CAN1: Porsche 986 ECU emulation (VCU-DEC-020).
+// Like the original DME: all 5 frames back to back every 10 ms, in the original order.
 //---------------------------------------------------------------------------
-void emulateECUCAN(CANMessage &outFrame) {
-    static uint8_t slot = 0;
-    switch (slot) {
-        case 0: encode986Ecu0x280(outFrame); break;
-        case 1: encode986Ecu0x289(outFrame); break;
-        case 2: encode986Ecu0x298(outFrame); break;
-        case 3: encode986Ecu0x4E0(outFrame); break;
-        default: encode986Ecu0x7A0(outFrame); break;
-    }
-    slot = (uint8_t)((slot + 1U) % 5U);
+constexpr uint8_t ECU_FRAME_COUNT = 5;
+
+void emulateECUCAN(CANMessage (&frames)[ECU_FRAME_COUNT]) {
+    encode986Ecu0x280(frames[0]);
+    encode986Ecu0x289(frames[1]);
+    encode986Ecu0x298(frames[2]);
+    encode986Ecu0x7A0(frames[3]);
+    encode986Ecu0x4E0(frames[4]);
 }
 
 //---------------------------------------------------------------------------
@@ -130,20 +130,27 @@ void updateOutputs(uint32_t nowMs) {
 }
 
 //---------------------------------------------------------------------------
-// ECU task (core 1, every 6 ms): Kombi values, then one ECU frame on CAN1.
+// ECU task (core 1, every 10 ms): Kombi values, then the 5 ECU frames on CAN1.
 //---------------------------------------------------------------------------
 void ecuTask(void *) {
+    esp_task_wdt_add(nullptr);  // review B-05: a hanging ECU task resets the VCU
     TickType_t lastWake = xTaskGetTickCount();
     for (;;) {
+        esp_task_wdt_reset();
         const uint32_t startUs = micros();
-        CANMessage outFrame;
+        CANMessage frames[ECU_FRAME_COUNT];
         {
             ParamsGuard guard;
             updateCluster();  // cluster values, then ECU overrides
-            emulateECUCAN(outFrame);
+            emulateECUCAN(frames);
         }
-        const bool sent = can1.tryToSend(outFrame);
-        gvretBridgeObserve(outFrame, GVRET_BUS_TX);
+        bool sent = canBusUp(1);
+        if (sent) {
+            for (const CANMessage &frame : frames) {
+                sent = can1.tryToSend(frame) && sent;  // driver queue holds 16 frames
+                gvretBridgeObserve(frame, GVRET_BUS_TX);
+            }
+        }
         canTaskStatsRecord(millis(), micros() - startUs, sent);
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(params::can.ecu_period_ms));
     }
@@ -164,12 +171,20 @@ void setup() {
     coolantFanBegin();
     canManager_setup();  // CAN0 (TWAI), CAN1..CAN3: receive from here on
     gvretBridgeBegin();
-    eepromBegin();       // AT24C (I2C), after CAN so it does not delay reception
-    persistenceBegin();  // charging parameters, fan mode, best times (VCU-REQ-020)
 
-    // ECU emulation first: frames go out before WiFi is even started (VCU-REQ-002).
+    // Task watchdog (review B-05): ECU task and loop() must report within 3 s, else reset.
+    esp_task_wdt_config_t wdt = {3000, 0, true};  // timeout ms, no idle tasks, panic + reset
+    if (esp_task_wdt_reconfigure(&wdt) != ESP_OK) {
+        esp_task_wdt_init(&wdt);
+    }
+    enableLoopWDT();
+    VCU_LOG("[VCU] reset reason %d\n", (int)esp_reset_reason());
+
+    // ECU emulation before WiFi: frames go out before the web task starts (VCU-REQ-002).
     // Highest application priority on core 1; the web task (WiFi, web server) on core 0 at
     // the lowest priority. setup() returns at once, so loop() polls CAN without delay.
+    eepromBegin();       // AT24C (I2C); before the ECU task (I2C failed when started after it, bench 2026-11-14)
+    persistenceBegin();  // charging parameters, fan mode, best times (VCU-REQ-020)
     xTaskCreatePinnedToCore(ecuTask, "vcu_ecu", 8192, nullptr, params::can.ecu_task_priority, nullptr, 1);
     webinterfaceBegin(params::can.web_task_priority);
     VCU_LOG("[VCU] started, ECU task period %u ms\n", (unsigned)params::can.ecu_period_ms);
@@ -195,6 +210,7 @@ void loop() {
     if (nowMs - lastErrors >= params::can.error_refresh_ms) {  // error counters (SPI, outside the lock)
         lastErrors = nowMs;
         canRefreshErrors();
+        canManagerRecover(nowMs);  // failed init, CAN0 bus-off (review B-06)
     }
     vTaskDelay(1);  // 1 tick: lets the idle task run; receive latency stays about 1 ms
 }

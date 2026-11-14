@@ -99,8 +99,11 @@
         pending.delete(key);
         const query = new URLSearchParams();
         query.set(job.param, String(job.value));
+        query.set("fields", job.param);  // small response instead of the whole /api/live (P-01)
         try {
-          const data = await getJson(job.endpoint + "?" + query.toString(), { timeoutMs: 3000 });
+          /* POST with the X-VCU header: the VCU rejects writes without it (review B-08). */
+          const data = await getJson(job.endpoint + "?" + query.toString(),
+            { timeoutMs: 3000, method: "POST", headers: { "X-VCU": "1" } });
           emit({ ok: true, key: job.param, value: job.value, data: data });
         } catch (error) {
           emit({ ok: false, key: job.param, value: job.value, error: error });

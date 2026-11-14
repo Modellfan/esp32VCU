@@ -1872,6 +1872,18 @@ body {
     #000000;
 }
 
+/* Active ECU override (review U-05): small amber badge next to the clock. */
+.topbar-override {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid #ffb020;
+  border-radius: 4px;
+  color: #ffb020;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 /* Track mode (Lap tab): photo instead of the drawn track. */
 .pt-stopwatch-photo img {
   position: absolute;

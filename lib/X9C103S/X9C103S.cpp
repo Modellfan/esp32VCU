@@ -14,7 +14,11 @@ void X9C103S::begin() {
     digitalWrite(_udPin, LOW);
     delayMicroseconds(10);
 
-    setPercent(0);
+    // Position unknown after power-up: run to 0 once, then step relative.
+    select();
+    pulse(kMaxWiper, false);
+    deselect();
+    _wiper = 0;
 }
 
 void X9C103S::setPercent(uint8_t percent) {
@@ -24,10 +28,15 @@ void X9C103S::setPercent(uint8_t percent) {
 
     const uint8_t targetWiper = percentToWiper(percent);
 
+    if (targetWiper == _wiper) {
+        return;
+    }
+    // Relative steps: the sender never drops to 0 ohm on the way (review B-16).
     select();
-    pulse(kMaxWiper, false);
-    if (targetWiper > 0U) {
-        pulse(targetWiper, true);
+    if (targetWiper > _wiper) {
+        pulse(targetWiper - _wiper, true);
+    } else {
+        pulse(_wiper - targetWiper, false);
     }
     deselect();
 

@@ -6,6 +6,7 @@
 #include "986_ecu_messages.h"
 #include "986_vehicle_messages.h"
 #include "tesla_sdu_messages.h"
+#include "canmanager_api.h"
 
 // =====================================================
 // Configuration
@@ -33,6 +34,11 @@
 // noisy speed signal around 0 km/h from repeatedly starting a new run.
 #define ACCEL_STOP_SPEED_KMH 0.5f
 #define ACCEL_START_SPEED_KMH 1.0f
+// Plausibility (review B-04): a run is dropped when it is faster than these times (speed glitch),
+// when the speed falls this far below the run's maximum, or when 0x510 is no longer received.
+#define ACCEL_MIN_0_50_S 1.0f
+#define ACCEL_MIN_0_100_S 2.0f
+#define ACCEL_ABORT_DROP_KMH 5.0f
 #define ACCEL_TARGET_50_KMH 50.0f
 #define ACCEL_TARGET_100_KMH 100.0f
 
@@ -55,7 +61,7 @@
 // Fuel simulation for MO5 consumption.
 #define FUEL_STEP_UL 500U
 #define FUEL_MAX_L 20.0f
-#define FUEL_SLICE_TICKS 5U
+#define FUEL_SLICE_MS 30U  // fuel simulation step, independent of the ECU task period
 #define NUM_FUEL_OVERFLOW_FLAG 5U
 #define MO5_VERBRAUCH_MAX 0x7FFFU
 #define MO5_VERBRAUCH_WRAP (MO5_VERBRAUCH_MAX + 1U)
@@ -81,13 +87,25 @@ static inline float lerpf(float a, float b, float t) {
 static uint32_t s_mo5LastOverflowCount = 0U;
 static uint8_t s_mo5OverflowFlagTicksRemaining = 0U;
 
-static void updateAccelerationTiming(float vehicleSpeedKmh) {
+static void updateAccelerationTiming(float vehicleSpeedKmh, bool speedFresh) {
     static bool armed = false;
     static bool reached50 = false;
     static uint32_t runStartMs = 0U;
+    static float runMaxKmh = 0.0f;
 
     const uint32_t nowMs = millis();
     const float speedKmh = isfinite(vehicleSpeedKmh) ? vehicleSpeedKmh : 0.0f;
+
+    // No speed or clear deceleration: drop the run; a new one needs a stop first.
+    if (params::cluster.acceleration_run_active &&
+        (!speedFresh || speedKmh < runMaxKmh - ACCEL_ABORT_DROP_KMH)) {
+        params::cluster.acceleration_run_active = false;
+        params::cluster.acceleration_run_time_s = 0.0f;
+        armed = false;
+    }
+    if (!speedFresh) {
+        return;
+    }
 
     if (speedKmh <= ACCEL_STOP_SPEED_KMH) {
         armed = true;
@@ -101,6 +119,7 @@ static void updateAccelerationTiming(float vehicleSpeedKmh) {
         armed = false;
         reached50 = false;
         runStartMs = nowMs;
+        runMaxKmh = speedKmh;
         params::cluster.acceleration_run_active = true;
         params::cluster.acceleration_run_time_s = 0.0f;
     }
@@ -109,7 +128,14 @@ static void updateAccelerationTiming(float vehicleSpeedKmh) {
 
     const float elapsedS = (float)(nowMs - runStartMs) * 0.001f;
     params::cluster.acceleration_run_time_s = elapsedS;
+    if (speedKmh > runMaxKmh) {
+        runMaxKmh = speedKmh;
+    }
 
+    if (!reached50 && speedKmh >= ACCEL_TARGET_50_KMH && elapsedS < ACCEL_MIN_0_50_S) {
+        params::cluster.acceleration_run_active = false;  // implausible: speed glitch
+        return;
+    }
     if (!reached50 && speedKmh >= ACCEL_TARGET_50_KMH) {
         reached50 = true;
         params::cluster.acceleration_0_50_last_s = elapsedS;
@@ -120,6 +146,10 @@ static void updateAccelerationTiming(float vehicleSpeedKmh) {
         params::cluster.acceleration_0_50_valid = true;
     }
 
+    if (speedKmh >= ACCEL_TARGET_100_KMH && elapsedS < ACCEL_MIN_0_100_S) {
+        params::cluster.acceleration_run_active = false;  // implausible: speed glitch
+        return;
+    }
     if (speedKmh >= ACCEL_TARGET_100_KMH) {
         params::cluster.acceleration_0_100_last_s = elapsedS;
         if (!params::cluster.acceleration_0_100_valid ||
@@ -209,30 +239,35 @@ static void applyEcuOverrides() {
 }
 
 void updateCluster() {
-    const float battVoltage_V = params::tesla_sdu.udc;
-    const float motorCurrent_A = params::tesla_sdu.idc;
-    const int8_t direction = params::tesla_sdu.seldir;
-    static uint8_t s_fuelTickDivider = 0U;
+    const uint32_t nowMs = millis();
+    static uint32_t s_lastFuelMs = 0U;
+    // Fallback when the inverter values are stale (review B-01): needle neutral, gauge at rest,
+    // coolant warning on, so the driver sees that drive data is missing.
+    const bool sduOk = rxFresh(RX_SDU_500, nowMs) && rxFresh(RX_SDU_504, nowMs);
+    params::cluster.sdu_data_ok = sduOk;
+    const float battVoltage_V = sduOk ? params::tesla_sdu.udc : 0.0f;
+    const float motorCurrent_A = sduOk ? params::tesla_sdu.idc : 0.0f;
+    const int8_t direction = sduOk ? params::tesla_sdu.seldir : (int8_t)0;
 
-    updateAccelerationTiming(params::vehicle.vehicle_speed_510);
+    updateAccelerationTiming(params::vehicle.vehicle_speed_510, rxFresh(RX_VEH_510, nowMs));
 
     params::cluster.power_percent_max = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_MAX_POWER);
     params::cluster.power_percent_dyn = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_DYN_POWER);
     params::cluster.needle_position = needleFromPercent(direction, params::cluster.power_percent_max);
-    params::cluster.heatsink_temp_critical = params::tesla_sdu.tmphs >= (float)MAX_HEATSINK_TEMP_C;
-    params::cluster.motor_temp_critical = params::tesla_sdu.tmpm >= (float)MAX_MOTOR_TEMP_C;
+    params::cluster.heatsink_temp_critical = sduOk && params::tesla_sdu.tmphs >= (float)MAX_HEATSINK_TEMP_C;
+    params::cluster.motor_temp_critical = sduOk && params::tesla_sdu.tmpm >= (float)MAX_MOTOR_TEMP_C;
 
     if (params::cluster.activated) {
         // Cluster mode intentionally overwrites ECU values; UI reflects this through /api/live.
         params::ecu.engine_speed_rpm = (float)params::cluster.needle_position;
-        params::ecu.motor2_coolant_temperature =
-            clampf(params::tesla_sdu.tmpm, (float)MO2_KUEHLM_T_MIN_C, (float)MO2_KUEHLM_T_MAX_C);
+        params::ecu.motor2_coolant_temperature = sduOk
+            ? clampf(params::tesla_sdu.tmpm, (float)MO2_KUEHLM_T_MIN_C, (float)MO2_KUEHLM_T_MAX_C)
+            : (float)MO2_KUEHLM_T_MIN_C;
         params::ecu.motor2_coolant_temp_not_ok =
-            params::cluster.heatsink_temp_critical || params::cluster.motor_temp_critical;
+            !sduOk || params::cluster.heatsink_temp_critical || params::cluster.motor_temp_critical;
 
-        s_fuelTickDivider++;
-        if (s_fuelTickDivider >= FUEL_SLICE_TICKS) {
-            s_fuelTickDivider = 0U;
+        if (nowMs - s_lastFuelMs >= FUEL_SLICE_MS) {
+            s_lastFuelMs = nowMs;
             if (params::cluster.total_fuel < (float)FUEL_MAX_L) {
                 params::cluster.total_fuel += ((float)FUEL_STEP_UL) * 0.000001f;
                 if (params::cluster.total_fuel > (float)FUEL_MAX_L) {
@@ -242,9 +277,16 @@ void updateCluster() {
             updateMo5FuelFromTotalFuel(params::cluster.total_fuel);
         }
     } else {
-        s_fuelTickDivider = 0U;
+        s_lastFuelMs = nowMs;
         resetMo5FuelOverflowState();
     }
 
     applyEcuOverrides();
+}
+
+void clusterResetBestTimes() {
+    params::cluster.acceleration_0_50_best_s = 0.0f;
+    params::cluster.acceleration_0_100_best_s = 0.0f;
+    params::cluster.acceleration_0_50_valid = false;
+    params::cluster.acceleration_0_100_valid = false;
 }

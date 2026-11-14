@@ -55,9 +55,11 @@ void canManagerCan0SendTest();
 // Disturbs the bench bus for 20 ms; never on the vehicle.
 void canManagerCan0PinTest();
 
-// ECU task cycle (src/main.cpp): 5 ECU frames x 6 ms = 30 ms per frame (VCU-REQ-001).
-// Default of params::can.ecu_period_ms.
-constexpr uint32_t CAN_TASK_PERIOD_MS = 6;
+// true while the controller of this bus (0..3) is initialised and usable.
+bool canBusUp(uint8_t bus);
+// loop(), with canRefreshErrors(): retries a failed MCP2515 init every 5 s and restarts CAN0
+// after bus-off or a failed init (review B-06). Logs every attempt.
+void canManagerRecover(uint32_t nowMs);
 
 struct CanTaskStats {
     uint32_t cycles;

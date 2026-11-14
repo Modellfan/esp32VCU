@@ -62,7 +62,7 @@ struct CanManagerSignals {
     uint16_t can0_rx_buffer = 64;              // TWAI driver receive buffer, frames
     uint16_t can0_tx_buffer = 8;
     uint8_t rx_budget_per_bus = 32;            // frames per bus and loop() pass
-    uint8_t ecu_period_ms = 6;                 // ECU task: 5 frames x 6 ms = 30 ms (VCU-REQ-001)
+    uint8_t ecu_period_ms = 10;                // ECU task: all 5 ECU frames every 10 ms (VCU-DEC-020)
     uint16_t error_refresh_ms = 300;           // error counters and this status block
     uint8_t ecu_task_priority = 23;            // configMAX_PRIORITIES - 2, core 1
     uint8_t web_task_priority = 1;             // WiFi/web/GVRET/log, core 0, lowest

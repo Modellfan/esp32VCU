@@ -11,7 +11,8 @@
 #include "params_lock.h"
 
 namespace {
-bool gCan0Active = false;
+volatile bool gCan0Active = false;
+volatile bool gMcpUp[CAN_BUS_COUNT] = {false, false, false, false};  // index 1..3
 uint32_t gError[CAN_BUS_COUNT] = {0xFFFFFFFF, 0xFFFF, 0xFFFF, 0xFFFF};  // init results
 
 portMUX_TYPE gStatsMux = portMUX_INITIALIZER_UNLOCKED;
@@ -79,16 +80,32 @@ ACAN2515 can1(board::GPIO_CAN1_CS, SPI, board::GPIO_CAN1_INT);
 ACAN2515 can2(board::GPIO_CAN2_CS, SPI, board::GPIO_CAN2_INT);
 ACAN2515 can3(board::GPIO_CAN3_CS, SPI, board::GPIO_CAN3_INT);
 
+namespace {
+const char *const kMcpName[CAN_BUS_COUNT] = {"", "CAN1 (vehicle)", "CAN2 (drive)", "CAN3 (spare)"};
+
+// The driver task is only created when begin() succeeds, so a failed init can be retried.
+void initMcp(uint8_t bus) {
+    ACAN2515 &controller = bus == 1 ? can1 : bus == 2 ? can2 : can3;
+    void (*isr)() = nullptr;
+    switch (bus) {
+        case 1: isr = [] { can1.isr(); }; break;
+        case 2: isr = [] { can2.isr(); }; break;
+        default: isr = [] { can3.isr(); }; break;
+    }
+    gMcpUp[bus] = false;
+    gError[bus] = startMcp2515(controller, isr);
+    gMcpUp[bus] = gError[bus] == 0;
+    VCU_LOG("[CAN] %s init %s (0x%lX)\n", kMcpName[bus], gError[bus] == 0 ? "ok" : "FAILED", (unsigned long)gError[bus]);
+}
+}  // namespace
+
 void canManager_setup() {
     SPI.setFrequency(params::can.spi_clock_hz);
     SPI.begin(board::GPIO_SPI_SCK, board::GPIO_SPI_MISO, board::GPIO_SPI_MOSI);
 
-    gError[1] = startMcp2515(can1, [] { can1.isr(); });
-    VCU_LOG("[CAN] CAN1 (vehicle) init %s (0x%lX)\n", gError[1] == 0 ? "ok" : "FAILED", (unsigned long)gError[1]);
-    gError[2] = startMcp2515(can2, [] { can2.isr(); });
-    VCU_LOG("[CAN] CAN2 (drive) init %s (0x%lX)\n", gError[2] == 0 ? "ok" : "FAILED", (unsigned long)gError[2]);
-    gError[3] = startMcp2515(can3, [] { can3.isr(); });
-    VCU_LOG("[CAN] CAN3 (spare) init %s (0x%lX)\n", gError[3] == 0 ? "ok" : "FAILED", (unsigned long)gError[3]);
+    initMcp(1);
+    initMcp(2);
+    initMcp(3);
 
     if (board::CAN0_ENABLED) {
         gCan0Active = startCan0();
@@ -101,6 +118,37 @@ void canManager_setup() {
 
 bool can0Active() {
     return gCan0Active;
+}
+
+bool canBusUp(uint8_t bus) {
+    if (bus == 0) {
+        return gCan0Active;
+    }
+    return bus < CAN_BUS_COUNT && gMcpUp[bus];
+}
+
+void canManagerRecover(uint32_t nowMs) {
+    static uint32_t lastMcpTry = 0;
+    static uint32_t lastCan0Try = 0;
+    if (nowMs - lastMcpTry >= 5000U) {
+        lastMcpTry = nowMs;
+        for (uint8_t bus = 1; bus < CAN_BUS_COUNT; bus++) {
+            if (!gMcpUp[bus]) {
+                initMcp(bus);  // MCP2515 leaves bus-off by itself (128 x 11 recessive bits)
+            }
+        }
+    }
+    if (!board::CAN0_ENABLED || nowMs - lastCan0Try < 1000U) {
+        return;
+    }
+    const bool busOff = gCan0Active && (ACAN_ESP32::can.TWAI_STATUS_REG() & TWAI_BUS_OFF_ST) != 0;
+    if (!gCan0Active || busOff) {
+        lastCan0Try = nowMs;
+        gCan0Active = false;
+        gCan0Active = startCan0();  // the TWAI controller needs a restart after bus-off
+        VCU_LOG("[CAN] CAN0 %s, restart %s (0x%lX)\n", busOff ? "bus-off" : "down", gCan0Active ? "ok" : "FAILED",
+                (unsigned long)gError[0]);
+    }
 }
 
 bool can0Receive(CANMessage &frame) {
@@ -162,13 +210,13 @@ void canRefreshErrors() {
     portEXIT_CRITICAL(&gStatsMux);
 
     // MCP2515 registers over SPI (Arduino SPI transactions are locked).
-    if (gError[1] == 0) {
+    if (gMcpUp[1]) {
         readMcp2515Errors(can1, d[1]);
     }
-    if (gError[2] == 0) {
+    if (gMcpUp[2]) {
         readMcp2515Errors(can2, d[2]);
     }
-    if (gError[3] == 0) {
+    if (gMcpUp[3]) {
         readMcp2515Errors(can3, d[3]);
     }
     if (gCan0Active) {

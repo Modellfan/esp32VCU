@@ -50,7 +50,8 @@ enum GVRET_PROTOCOL {
 
 // GVRET state variables
 // (Since this header is only included in one file, we define these as static.)
-static bool gvret_binOutput = false;
+static volatile bool gvret_binOutput = false;  // read by the CAN tasks on core 1
+static volatile uint32_t gvret_lastHostMs = 0;   // last byte from the host (U-07)
 static GVRET_STATE gvretState = IDLE;
 static int gvretStep = 0;
 
@@ -64,6 +65,7 @@ inline void gvret_loop() {
     
     while (GVRET_PORT.available()) {
         c = GVRET_PORT.read();
+        gvret_lastHostMs = millis();
         // For debugging you can uncomment these lines:
         // Serial.print("Received: 0x");
         // Serial.print(c, HEX);
@@ -154,7 +156,7 @@ inline void gvret_loop() {
                     case PROTO_GET_EXT_BUSES:
                         buff[0] = 0xF1;
                         buff[1] = 13;
-                        for (int u = 2; u < 17; u++) {
+                        for (int u = 2; u < 18; u++) {
                             buff[u] = 0;
                         }
                         GVRET_PORT.write(buff, 18);
@@ -173,6 +175,7 @@ inline void gvret_loop() {
                         gvretState = IDLE;
                         break;
                     default:
+                        gvretState = IDLE;  // unknown command: do not read the next byte as one
                         break;
                 }
                 break;
@@ -193,9 +196,8 @@ inline void gvret_loop() {
 }
 
 // sendFrameToUSB: Send a standard CAN frame to USB using the GVRET protocol.
-inline void sendFrameToUSB(const CANMessage &msg, int busNum) {
+inline void sendFrameToUSB(const CANMessage &msg, int busNum, uint32_t now) {
     uint8_t buff[20];
-    uint32_t now = micros();
     buff[0] = 0xF1;
     buff[1] = 0;
     buff[2] = now & 0xFF;

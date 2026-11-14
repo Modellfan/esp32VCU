@@ -3806,7 +3806,9 @@
     topbarTime.innerHTML =
       "<span class=\"topbar-time-plain\">" +
       escapeHtml(timeText) +
-      "</span>";
+      "</span>" +
+      (overrideActive(state.live) ?
+        "<span class=\"topbar-override\" title=\"Engine override active\">OVR</span>" : "");
     syncNetworkPopover();
   }
 
@@ -4157,12 +4159,19 @@
     return [];
   }
 
+  /* Active ECU overrides are shown in the top bar on every page (review U-05). */
+  const OVERRIDE_KEYS = ["rpm_override", "coolant_override", "coolant_warning_override", "fuel_override"];
+
+  function overrideActive(live) {
+    return OVERRIDE_KEYS.some(function (key) { return live && live[key] === true; });
+  }
+
   function visibleLiveFields() {
     const keys = [
       "sta_ssid",
       "ap_ssid",
       "ap_ip"
-    ];
+    ].concat(OVERRIDE_KEYS);
     if (state.section === "home") {
       keys.push(
         "battery_level",

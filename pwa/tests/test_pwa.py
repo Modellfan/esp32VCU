@@ -186,7 +186,7 @@ def test_signals_page_lists_every_field_once(page, server, api):
             fields = parse_qs(urlsplit(url).query).get("fields", [""])[0]
             requested |= set(f for f in fields.split(",") if f)
         # only the shown category plus the always-polled header fields
-        assert requested <= set(names) | {"stale", "sta_ssid", "ap_ssid", "ap_ip"}, (tab, requested - set(names))
+        assert requested <= set(names) | {"stale", "sta_ssid", "ap_ssid", "ap_ip", "rpm_override", "coolant_override", "coolant_warning_override", "fuel_override"}, (tab, requested - set(names))
         screenshot(page, f"signals-{tab}")
     assert len(seen) == len(set(seen)), "a field appears in more than one row"
     assert set(seen) == expected, (expected - set(seen), set(seen) - expected)

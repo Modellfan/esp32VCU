@@ -301,6 +301,9 @@ void encode986Vehicle0x560(CANMessage &frame) {
 }
 
 bool decode986Vehicle(const CANMessage &frame) {
+    if (frame.ext || frame.rtr) {
+        return false;
+    }
     switch (frame.id) {
         case 0x2A8: return decode986Vehicle0x2A8(frame);
         case 0x1A0: return decode986Vehicle0x1A0(frame);

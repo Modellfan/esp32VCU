@@ -20,6 +20,9 @@
 #include "status_led.h"
 #include "params_lock.h"
 #include "persistence.h"
+#include "cluster_calc.h"
+#include "coolant_fan_control.h"
+#include <esp_system.h>
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -183,6 +186,7 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
 
     // Diagnostics (CAN manager settings and status: params::can in the signal table)
     addUInt("uptime_ms", now);
+    addUInt("reset_reason", (uint32_t)esp_reset_reason());  // esp_reset_reason_t, review B-05
     addUInt("gvret_dropped", gvretBridgeDropped());
     addUInt("free_heap", ESP.getFreeHeap());
 
@@ -321,14 +325,27 @@ void handleSignals() {
     sendJson(200, body);
 }
 
-// Outputs are applied by the next CAN task cycle; wait two cycles so the response
-// already reports the new state.
-void waitForOutputs() {
-    vTaskDelay(pdMS_TO_TICKS(2 * CAN_TASK_PERIOD_MS + 2));
+// Write requests need POST plus this header: a foreign web page opened on a device in the
+// WLAN cannot set values with a plain link or image (review B-08).
+bool writeAllowed() {
+    if (server.header("X-VCU") == "1") {
+        return true;
+    }
+    sendJson(403, "{\"error\":\"POST with header X-VCU: 1 required\"}");
+    return false;
+}
+
+// Caller holds the params lock: compute the effective fan level now, so the response already
+// reports it; the relays follow within 100 ms (updateOutputs in main.cpp, review B-10).
+void refreshOutputState() {
+    coolantFanAutoUpdate(millis());
 }
 
 // /api/set: charging parameters, actuators and legacy ECU shortcuts.
 void handleSet() {
+    if (!writeAllowed()) {
+        return;
+    }
     String rejected;
     bool outputs = false;
     {
@@ -362,19 +379,24 @@ void handleSet() {
             } else if (key == "rpm" && setOverride(OVR_ENGINE_SPEED, value)) {
             } else if (key == "coolant" && setOverride(OVR_COOLANT_TEMP, value)) {
             } else if (key == "oil" && setOverride(OVR_FUEL, value)) {
+            } else if (key == "reset_best_times" && value == "1") {
+                clusterResetBestTimes();  // review B-04
             } else {
                 addRejected(rejected, key);
             }
         }
-    }
-    if (outputs) {
-        waitForOutputs();
+        if (outputs) {
+            refreshOutputState();
+        }
     }
     sendLive(rejectedJson(rejected));
 }
 
 // /api/set-ecu: every signal of the table marked writable.
 void handleSetEcu() {
+    if (!writeAllowed()) {
+        return;
+    }
     String rejected;
     bool outputs = false;
     {
@@ -407,14 +429,17 @@ void handleSetEcu() {
                 addRejected(rejected, key);
             }
         }
-    }
-    if (outputs) {
-        waitForOutputs();
+        if (outputs) {
+            refreshOutputState();
+        }
     }
     sendLive(rejectedJson(rejected));
 }
 
 void handleSetCluster() {
+    if (!writeAllowed()) {
+        return;
+    }
     String rejected;
     if (server.hasArg("activated")) {
         bool value;
@@ -484,6 +509,50 @@ void handleNotFound() {
 void startWifi();
 void startServer();
 
+// LED colour (review U-06): red = CAN1 down or ECU frames not sent, yellow = CAN0/CAN2 down or
+// bus-off or no data from vehicle, inverter or BMS, green = all fine.
+LedColor ledStatus(uint32_t now) {
+    static uint32_t lastTxFailed = 0;
+    ParamsGuard guard;
+    const params::CanManagerSignals &c = params::can;
+    const bool txFailed = c.ecu_tx_failed != lastTxFailed;
+    lastTxFailed = c.ecu_tx_failed;
+    if (!c.can1.up || c.can1.bus_off || txFailed) {
+        return LED_RED;
+    }
+    if (!c.can0.up || !c.can2.up || c.can0.bus_off || c.can2.bus_off || !rxFresh(RX_VEH_1A0, now) ||
+        !rxFresh(RX_SDU_500, now) || !rxFresh(RX_BMS_41A, now)) {
+        return LED_YELLOW;
+    }
+    return LED_GREEN;
+}
+
+// Home network (review B-09): the ESP32 shares one radio between access point and station; a
+// permanent search disturbs the access point in the car. After 3 failed tries search only every
+// 5 min and never while a client uses the access point.
+void serviceHomeNetwork(uint32_t now, bool connected) {
+    static uint32_t lastTry = 0;
+    static uint8_t fails = 0;
+    if (strlen(VCU_WIFI_HOME_SSID) == 0) {
+        return;
+    }
+    if (connected) {
+        fails = 0;
+        lastTry = now;
+        return;
+    }
+    const uint32_t interval = fails < 3 ? 20000U : 300000U;
+    if (now - lastTry < interval || (fails >= 3 && WiFi.softAPgetStationNum() > 0)) {
+        return;
+    }
+    lastTry = now;
+    if (fails < 255) {
+        fails++;
+    }
+    WiFi.disconnect(false);
+    WiFi.begin(VCU_WIFI_HOME_SSID, VCU_WIFI_HOME_PASSWORD);  // non-blocking, one attempt
+}
+
 void webTask(void *) {
     // WiFi, file system and server start here, not in setup(): CAN reception and the ECU
     // emulation run while WiFi is still coming up.
@@ -503,16 +572,17 @@ void webTask(void *) {
             staWasConnected = staConnected;
             webinterfaceLogWifiStatus();
         }
+        serviceHomeNetwork(now, staConnected);
         if (now - lastDiag >= 1000U) {  // one diagnostic line per second on COM10
             lastDiag = now;
             canManagerLogStatus();
         }
-        if (now - lastLed >= 500U) {  // VCU-REQ-019: 1 Hz green blink at 10 %
+        if (now - lastLed >= 500U) {  // VCU-REQ-019: 1 Hz blink at 10 %, colour = state (U-06)
             lastLed = now;
             ledOn = !ledOn;
             FastLED.setBrightness((uint8_t)((255U * 10U) / 100U));
             if (ledOn) {
-                fastled(LED_GREEN);
+                fastled(ledStatus(now));
             } else {
                 fastledOff();
             }
@@ -539,13 +609,13 @@ void startWifi() {
         ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.mode(WIFI_AP_STA);
     WiFi.setHostname("eboxster-vcu");
-    // Full TX power (19.5 dBm): home network failed with handshake timeouts (reasons 15/4/2) at
-    // -56 dBm; with 8.5 dBm it connects at once (bench 2026-11-10). Enough for the car.
+    // 8.5 dBm instead of full power (19.5 dBm): at full power the home network failed with handshake
+    // timeouts (reasons 15/4/2) at -56 dBm; with 8.5 dBm it connects at once (bench 2026-11-10).
     WiFi.setTxPower(WIFI_POWER_8_5dBm);
     const bool apOk = WiFi.softAP(VCU_WIFI_AP_SSID, VCU_WIFI_AP_PASSWORD);
     VCU_LOG("[WEB] AP %s %s ip=%s\n", VCU_WIFI_AP_SSID, apOk ? "up" : "FAILED", ipToString(WiFi.softAPIP()).c_str());
     if (strlen(VCU_WIFI_HOME_SSID) > 0) {
-        WiFi.setAutoReconnect(true);
+        WiFi.setAutoReconnect(false);  // retries: serviceHomeNetwork() (review B-09)
         WiFi.begin(VCU_WIFI_HOME_SSID, VCU_WIFI_HOME_PASSWORD);  // non-blocking
     }
 }
@@ -556,9 +626,11 @@ void startServer() {
 
     server.on("/api/live", HTTP_GET, handleLive);
     server.on("/api/signals", HTTP_GET, handleSignals);
-    server.on("/api/set", HTTP_GET, handleSet);
-    server.on("/api/set-ecu", HTTP_GET, handleSetEcu);
-    server.on("/api/set-cluster", HTTP_GET, handleSetCluster);
+    server.on("/api/set", HTTP_POST, handleSet);  // POST + X-VCU header (review B-08)
+    server.on("/api/set-ecu", HTTP_POST, handleSetEcu);
+    server.on("/api/set-cluster", HTTP_POST, handleSetCluster);
+    const char *headers[] = {"X-VCU"};
+    server.collectHeaders(headers, 1);
     server.on("/can", HTTP_GET, [] {  // CAN test page (can_page.h), independent of SPIFFS
         server.sendHeader("Cache-Control", "no-cache");
         server.send_P(200, "text/html", kCanPageHtml);

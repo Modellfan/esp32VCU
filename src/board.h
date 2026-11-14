@@ -38,10 +38,9 @@ constexpr int GPIO_DIGIPOT_CS = 4;
 constexpr int GPIO_DIGIPOT_INC = GPIO_UNASSIGNED;
 constexpr int GPIO_DIGIPOT_UD = GPIO_UNASSIGNED;
 
-// Coolant fan relay stages. Stage 1 was configured on GPIO7, which is CAN2 chip select.
-// The real pin is unknown (open question 2026-10-28): fan outputs stay disabled until set.
-constexpr int GPIO_FAN_STAGE1 = GPIO_UNASSIGNED;
-constexpr int GPIO_FAN_STAGE2 = 15;
+// Coolant fan relays on the board outputs DOUT1/DOUT2 (user 2026-11-14), active high.
+constexpr int GPIO_FAN_STAGE1 = 21;  // DOUT1
+constexpr int GPIO_FAN_STAGE2 = 47;  // DOUT2
 
 // AT24C I2C EEPROM (persistent data), added 2026-11-10 (user). GPIO37 is free: N8 module without PSRAM.
 constexpr int GPIO_EEPROM_SCL = 39;

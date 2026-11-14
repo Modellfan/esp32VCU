@@ -185,6 +185,7 @@ const SignalDef kSignals[] = {
     SIG("cluster_acceleration_0_100_best_s", G_CLUSTER, params::ClusterSignals, acceleration_0_100_best_s, F_NUM, 3, RX_NONE, 0),
     SIG("cluster_acceleration_0_50_valid", G_CLUSTER, params::ClusterSignals, acceleration_0_50_valid, F_BOOL, 0, RX_NONE, 0),
     SIG("cluster_acceleration_0_100_valid", G_CLUSTER, params::ClusterSignals, acceleration_0_100_valid, F_BOOL, 0, RX_NONE, 0),
+    SIG("cluster_sdu_data_ok", G_CLUSTER, params::ClusterSignals, sdu_data_ok, F_BOOL, 0, RX_NONE, 0),
     SIG("target_charge_pct", G_CHARGING, params::ChargingSignals, target_charge_pct, F_NUM, 0, RX_NONE, 0),
     SIG("ac_current_limit_a", G_CHARGING, params::ChargingSignals, ac_current_limit_a, F_NUM, 0, RX_NONE, 0),
     SIG("digital_pot_pct", G_DIGIPOT, params::DigipotSignals, digipot_applied_pct, F_UINT, 0, RX_NONE, 0),

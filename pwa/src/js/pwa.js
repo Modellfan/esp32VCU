@@ -47,22 +47,33 @@
   }, 2000);
 
   let reloading = false;
+  /* First install: the worker takes control of a page that already runs the current version. */
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", function () {
-    if (reloading) {
+    if (reloading || !hadController) {
       return;
     }
     reloading = true;
-    /* Reload only while the page is not in front of the driver. */
+    /* Reload while the page is hidden; on the radio it practically never is (review B-15), so
+       also reload after 30 s without a touch. */
+    let idleTimer = null;
+    function armIdle() {
+      if (idleTimer !== null) {
+        window.clearTimeout(idleTimer);
+      }
+      idleTimer = window.setTimeout(function () { window.location.reload(); }, 30000);
+    }
     if (document.hidden) {
       window.location.reload();
-    } else {
-      document.addEventListener("visibilitychange", function onHidden() {
-        if (document.hidden) {
-          document.removeEventListener("visibilitychange", onHidden);
-          window.location.reload();
-        }
-      });
+      return;
     }
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) {
+        window.location.reload();
+      }
+    });
+    document.addEventListener("pointerdown", armIdle, true);
+    armIdle();
   });
 
   window.addEventListener("load", function () {

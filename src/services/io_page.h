@@ -57,7 +57,7 @@ function render(d){
  $("st").textContent="Laufzeit "+(d.uptime_ms/1000).toFixed(0)+" s · "+new Date().toLocaleTimeString();
 }
 async function call(url){
- try{const r=await fetch(url,{cache:"no-store"});render(await r.json())}
+ try{const r=await fetch(url,{method:"POST",headers:{"X-VCU":"1"},cache:"no-store"});render(await r.json())}
  catch(e){$("st").textContent="keine Verbindung: "+e}
 }
 document.querySelectorAll("[data-fan]").forEach(b=>b.onclick=()=>call(b.dataset.fan==="auto"?"/api/set?coolant_fan_mode=auto":"/api/set?coolant_fan_level="+b.dataset.fan));

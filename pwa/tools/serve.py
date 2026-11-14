@@ -103,6 +103,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         self.do_GET()
 
+    def do_POST(self) -> None:
+        # Like the firmware: writes only per POST with the header X-VCU: 1 (review B-08).
+        url = urlsplit(self.path)
+        path = unquote(url.path)
+        if path not in ("/api/set", "/api/set-ecu", "/api/set-cluster"):
+            return self._send(404, b"Not found", "text/plain")
+        if self.headers.get("X-VCU") != "1":
+            return self._json({"error": "POST with header X-VCU: 1 required"}, 403)
+        return self._api(path, parse_qs(url.query))
+
     def do_GET(self) -> None:
         url = urlsplit(self.path)
         path = unquote(url.path)
@@ -154,6 +164,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/signals":
             return self._json({"timeout_ms": 500, "signals": mock.SIGNAL_CATALOG})
         if path in ("/api/set", "/api/set-ecu", "/api/set-cluster"):
+            if self.command != "POST":
+                return self._send(404, b"Not found", "text/plain")
             return self._set(path, query)
         return self._send(404, b"Not found", "text/plain")
 
@@ -186,6 +198,7 @@ class Handler(BaseHTTPRequestHandler):
     def _set(self, path: str, query: dict) -> None:
         limits = {"target_charge_pct": (50, 100), "ac_current_limit_a": (6, 32),
                   "digital_pot_pct": (0, 100), "coolant_fan_level": (0, 2)}
+        fields = query.pop("fields", [""])[0]
         with mock.MOCK_LOCK:
             for key, values in query.items():
                 raw = values[0]
@@ -205,6 +218,8 @@ class Handler(BaseHTTPRequestHandler):
                     mock.MOCK_STATE[key] = number
             mock.update_dynamic_mock_state()
             snapshot = dict(mock.MOCK_STATE)
+        if fields:
+            snapshot = {f: snapshot[f] for f in fields.split(",") if f in snapshot}
         self._json(snapshot)
 
     def _static(self, path: str, versioned: bool = False) -> None:

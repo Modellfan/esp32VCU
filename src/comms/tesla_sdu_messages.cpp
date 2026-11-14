@@ -248,6 +248,9 @@ void encodeTeslaSdu0x508(CANMessage &frame) {
 }
 
 bool decodeTeslaSdu(const CANMessage &frame) {
+    if (frame.ext || frame.rtr) {
+        return false;
+    }
     switch (frame.id) {
         case 0x500: return decodeTeslaSdu0x500(frame);
         case 0x501: return decodeTeslaSdu0x501(frame);

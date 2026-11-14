@@ -119,7 +119,9 @@ self.addEventListener("fetch", function (event) {
         return response;
       }).catch(function () {
         return caches.match("index.html").then(function (cached) {
-          return cached || caches.match("./") || offlineApi();
+          return cached || caches.match("./");
+        }).then(function (cached) {
+          return cached || offlineApi();  /* caches.match() is a promise: resolve before falling back (B-14) */
         });
       })
     );

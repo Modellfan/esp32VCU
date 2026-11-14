@@ -29,6 +29,7 @@ def main() -> None:
     parser.add_argument("--baud", type=int, default=2000000)
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--pattern-id", default="", help="hex ID of the tx-pattern stream to verify")
+    parser.add_argument("--cycles", action="store_true", help="print the cycle time per bus and ID")
     args = parser.parse_args()
     pattern_id = int(args.pattern_id, 16) if args.pattern_id else None
 
@@ -46,9 +47,15 @@ def main() -> None:
     seqs: dict[int, list[int]] = collections.defaultdict(list)
     crc_errors: collections.Counter = collections.Counter()
     resyncs = 0
+    last_ts: dict[tuple[int, int], int] = {}
+    gaps: dict[tuple[int, int], list[int]] = collections.defaultdict(list)
     buf = bytearray()
     end = time.time() + args.duration
+    next_keepalive = 0.0
     while time.time() < end:
+        if time.time() >= next_keepalive:  # the VCU leaves binary mode after 5 s without host bytes
+            ser.write(bytes([0xF1, 0x09]))
+            next_keepalive = time.time() + 1.0
         buf += ser.read(4096)
         while True:
             start = buf.find(0xF1)
@@ -76,8 +83,13 @@ def main() -> None:
                 continue
             can_id = int.from_bytes(buf[6:10], "little") & 0x1FFFFFFF
             data = bytes(buf[11:11 + length])
+            stamp = int.from_bytes(buf[2:6], "little")
             del buf[:total]
             counts[bus][can_id] += 1
+            key = (bus, can_id)
+            if key in last_ts:
+                gaps[key].append((stamp - last_ts[key]) & 0xFFFFFFFF)
+            last_ts[key] = stamp
             if pattern_id is not None and can_id == pattern_id and length == 8 and data[0] == 0xCA:
                 if binascii.crc_hqx(data[:6], 0xFFFF) != int.from_bytes(data[6:8], "big"):
                     crc_errors[bus] += 1
@@ -88,6 +100,12 @@ def main() -> None:
         ids = ", ".join(f"{i:03X}:{n}" for i, n in sorted(counts[bus].items()))
         print(f"{BUS_NAMES.get(bus, bus):10s} {sum(counts[bus].values()):7d} frames  {ids}")
     print(f"resyncs (false frame start): {resyncs}")
+    if args.cycles:
+        print("cycle per bus and ID (median / min / max in ms, VCU time stamps):")
+        for (bus, can_id), values in sorted(gaps.items()):
+            v = sorted(values)
+            print(f"  {BUS_NAMES.get(bus, bus):10s} 0x{can_id:03X}: {v[len(v) // 2] / 1000:6.2f} / "
+                  f"{v[0] / 1000:6.2f} / {v[-1] / 1000:6.2f}  (n={len(v) + 1})")
     if pattern_id is not None:
         print(f"\nPattern 0x{pattern_id:03X}:")
         for bus in (1, 2):
