@@ -1,51 +1,54 @@
 # Porsche 986 CAN (CAN1)
 
-> **Gespiegelt aus der DBC, nicht von Hand ändern.** Masterquelle: [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc). Erkenntnisse aus dem Reverse Engineering (Signale, Kommentare, `OPEN (986 #n)`, `GenMsgCycleTime`) zuerst in die DBC eintragen, dann `python tools/generate_986_can_md.py` ausführen. Zuordnung zu VCU-Feldern und UI: [signalliste.md](signalliste.md).
+> **Gespiegelt aus der DBC, nicht von Hand ändern.** Masterquelle: [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc). Änderungen zuerst in die DBC eintragen, dann `python tools/generate_can_md.py` ausführen. Erkenntnisse aus dem Reverse Engineering: Signale, `CM_`-Kommentare, `OPEN (986 #n)`, `GenMsgCycleTime`. Zuordnung zu VCU-Feldern und UI: [signalliste.md](signalliste.md).
 
-14 Botschaften, 114 Signale. Zykluszeiten aus dem Standmitschnitt `can_logs/986_log_stand.csv` (Originalfahrzeug); die VCU sendet jede DME-Botschaft alle 30 ms.
+Zykluszeiten aus dem Standmitschnitt `can_logs/986_log_stand.csv` (Originalfahrzeug).
+
+14 Botschaften, 114 Signale.
 
 ## Übersicht
 
-| ID | Botschaft | Sender | VCU | Zyklus | Signale | Offen |
+| ID | Botschaft | Sender | Rolle | Zyklus | Signale | Offen |
 | --- | --- | --- | --- | --- | ---: | --- |
-| 0x280 | Engine_1 | ECU | sendet (statt DME) | 10 ms | 4 | #6 |
-| 0x289 | Motor_2 | ECU | sendet (statt DME) | 10 ms | 23 | #12 |
-| 0x298 | Engine_2 | ECU | sendet (statt DME) | 10 ms | 5 | - |
-| 0x4E0 | EngineStat | ECU | sendet (statt DME) | 10 ms | 17 | - |
-| 0x4F8 | Unknown_4F8 | ECU | sendet (statt DME) | - | 0 | #8 |
-| 0x7A0 | Unknown_7A0 | ECU | sendet (statt DME) | 10 ms | 0 | - |
-| 0x2A8 | Vehicle_Speed | ABS_PSM | empfängt | 20 ms | 8 | - |
-| 0x1A0 | ABS_1 | ABS_PSM | empfängt | 20 ms | 26 | #1, #12 |
-| 0x4A1 | ABS_2 | ABS_PSM | empfängt | 100 ms | 11 | #2, #3 |
-| 0x510 | InstrCluster_1 | INSTR | empfängt | 20 ms | 7 | #4 |
-| 0x520 | InstrCluster_2 | INSTR | empfängt | 20 ms | 5 | #5 |
-| 0x440 | AT_Line1 | TCU | empfängt | - | 1 | #9 |
-| 0x0C0 | SWA | STEER | empfängt | 10 ms | 7 | - |
-| 0x560 | Unknown_560 | INSTR | empfängt | - | 0 | #8 |
+| [0x280](#msg-0x280) | [Engine_1](#msg-0x280) | ECU | von der VCU gesendet (statt DME) | 10 ms | 4 | #6 |
+| [0x289](#msg-0x289) | [Motor_2](#msg-0x289) | ECU | von der VCU gesendet (statt DME) | 10 ms | 23 | #12 |
+| [0x298](#msg-0x298) | [Engine_2](#msg-0x298) | ECU | von der VCU gesendet (statt DME) | 10 ms | 5 | - |
+| [0x4E0](#msg-0x4e0) | [EngineStat](#msg-0x4e0) | ECU | von der VCU gesendet (statt DME) | 10 ms | 17 | - |
+| [0x4F8](#msg-0x4f8) | [Unknown_4F8](#msg-0x4f8) | ECU | von der VCU gesendet (statt DME) | - | 0 | #8 |
+| [0x7A0](#msg-0x7a0) | [Unknown_7A0](#msg-0x7a0) | ECU | von der VCU gesendet (statt DME) | 10 ms | 0 | - |
+| [0x2A8](#msg-0x2a8) | [Vehicle_Speed](#msg-0x2a8) | ABS_PSM | vom Fahrzeug empfangen | 20 ms | 8 | - |
+| [0x1A0](#msg-0x1a0) | [ABS_1](#msg-0x1a0) | ABS_PSM | vom Fahrzeug empfangen | 20 ms | 26 | #1, #12 |
+| [0x4A1](#msg-0x4a1) | [ABS_2](#msg-0x4a1) | ABS_PSM | vom Fahrzeug empfangen | 100 ms | 11 | #2, #3 |
+| [0x510](#msg-0x510) | [InstrCluster_1](#msg-0x510) | INSTR | vom Fahrzeug empfangen | 20 ms | 7 | #4 |
+| [0x520](#msg-0x520) | [InstrCluster_2](#msg-0x520) | INSTR | vom Fahrzeug empfangen | 20 ms | 5 | #5 |
+| [0x440](#msg-0x440) | [AT_Line1](#msg-0x440) | TCU | vom Fahrzeug empfangen | - | 1 | #9 |
+| [0x0C0](#msg-0x0c0) | [SWA](#msg-0x0c0) | STEER | vom Fahrzeug empfangen | 10 ms | 7 | - |
+| [0x560](#msg-0x560) | [Unknown_560](#msg-0x560) | INSTR | vom Fahrzeug empfangen | - | 0 | #8 |
 
 ## Offene Punkte
 
 Arbeitsliste fürs Reverse Engineering (aus den `OPEN`-Kommentaren der DBC).
 
-- **#1** (0x1A0): byte 6 (bits 48-55) counts up by 1 per frame, so BR1_MSR_Mo (and the VCU value itq_pct) is a counter, not a torque; BR1_Zaehler (56|4) low nibble constant 0xD, bits 57-58 toggle.
-- **#2** (0x4A1): bits 13-15 count 0..7 per frame, so ReceiptForACCMessage/DriverBraking/RegulatorError_FDR are a 3-bit counter; find the real driver-braking bit with a braking log.
-- **#3** (0x4A1): bits 45-47 and 61-63 change every frame (checksum or multiplexed content?), bit 29 always 1.
-- **#4** (0x510): bits 40 and 43 always 1 (byte 5 = 0x09), meaning unknown.
-- **#5** (0x520): byte 2 bits 16-20 change slowly (0x4E..0x50; temperature or fuel level?); bits 0 and 22 always 1; Counter_Unknown (byte 5) rotates 0x12, 0x03, 0x30, 0x1D every 100 ms - check whether it carries the odometer multiplexed (VW PQ Kombi_3: Kilometerstand 40|20, Standzeit 24|15).
-- **#6** (0x280): bit 4 toggles, byte 1 = 0x79 and byte 6 = 0x54 constant, not in the DBC; VW PQ Motor_1 reads bit 4 Time_Out_Bremsen_Botschaft, byte 1 inner torque, byte 4 inner torque without intervention, byte 6 mechanical loss torque, byte 7 driver torque request. Clarify bytes 1, 4, 6, 7 with the original DME at different pedal positions.
-- **#8** (0x4F8): not in the stationary log; check whether it exists on this car.
-- **#8** (0x560): not in the stationary log; check whether it exists on this car.
-- **#9** (0x440): not in the stationary log; check whether the car has a Tiptronic control unit.
+- **#1** ([0x1A0](#msg-0x1a0)): byte 6 (bits 48-55) counts up by 1 per frame, so BR1_MSR_Mo (and the VCU value itq_pct) is a counter, not a torque; BR1_Zaehler (56|4) low nibble constant 0xD, bits 57-58 toggle.
+- **#2** ([0x4A1](#msg-0x4a1)): bits 13-15 count 0..7 per frame, so ReceiptForACCMessage/DriverBraking/RegulatorError_FDR are a 3-bit counter; find the real driver-braking bit with a braking log.
+- **#3** ([0x4A1](#msg-0x4a1)): bits 45-47 and 61-63 change every frame (checksum or multiplexed content?), bit 29 always 1.
+- **#4** ([0x510](#msg-0x510)): bits 40 and 43 always 1 (byte 5 = 0x09), meaning unknown.
+- **#5** ([0x520](#msg-0x520)): byte 2 bits 16-20 change slowly (0x4E..0x50; temperature or fuel level?); bits 0 and 22 always 1; Counter_Unknown (byte 5) rotates 0x12, 0x03, 0x30, 0x1D every 100 ms - check whether it carries the odometer multiplexed (VW PQ Kombi_3: Kilometerstand 40|20, Standzeit 24|15).
+- **#6** ([0x280](#msg-0x280)): bit 4 toggles, byte 1 = 0x79 and byte 6 = 0x54 constant, not in the DBC; VW PQ Motor_1 reads bit 4 Time_Out_Bremsen_Botschaft, byte 1 inner torque, byte 4 inner torque without intervention, byte 6 mechanical loss torque, byte 7 driver torque request. Clarify bytes 1, 4, 6, 7 with the original DME at different pedal positions.
+- **#8** ([0x4F8](#msg-0x4f8)): not in the stationary log; check whether it exists on this car.
+- **#8** ([0x560](#msg-0x560)): not in the stationary log; check whether it exists on this car.
+- **#9** ([0x440](#msg-0x440)): not in the stationary log; check whether the car has a Tiptronic control unit.
 - **#10** (allgemein): the original DME sends 0x280/0x289/0x298/0x4E0/0x7A0 every 10 ms, the VCU every 30 ms (5 slots x 6 ms); cluster works on the bench, timeouts in other control units unknown - decision and CAN capture needed.
 - **#11** (allgemein): stationary log only (can_logs/986_log_stand.csv); record a driving log with braking, steering, indicators, cruise buttons and lights.
-- **#12** (0x1A0): BR1_ASRMo_fa and BR1_MSR_Mo_inv share byte 5.
-- **#12** (0x289): bits 0-5 carry four signals selected by MO2_Mp_Code (6|2) without a valid multiplexer declaration; strict DBC tools reject the file.
+- **#12** ([0x289](#msg-0x289)): bits 0-5 carry four signals selected by MO2_Mp_Code (6|2) without a valid multiplexer declaration; strict DBC tools reject the file.
+- **#12** ([0x1A0](#msg-0x1a0)): BR1_ASRMo_fa and BR1_MSR_Mo_inv share byte 5.
 
-## 1. Von der VCU zum Fahrzeug gesendet (DME-Emulation)
+## 1. Von der VCU gesendet (statt DME)
 
+<a id="msg-0x280"></a>
 ### 0x280 Engine_1
 
-Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
+Sender: ECU · DLC 8 · Zyklus 10 ms (Original) · [zur Übersicht](#übersicht)
 
 0x280. Sent by the VCU instead of the DME (original DME 10 ms, VCU 30 ms). RPM scaling matches Teensy (raw = rpm*4).
 
@@ -58,9 +61,10 @@ Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
 | `ThrottlePosition` | 40 | 8 | Intel | U8 | 0.390625 | 0 | 0 … 100 | % | INSTR | - | - |
 | `PedalPosition2` | 56 | 8 | Intel | U8 | 1 | 0 | 0 … 255 | % | UNKNOWN | Not used in Teensy. | - |
 
+<a id="msg-0x289"></a>
 ### 0x289 Motor_2
 
-Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
+Sender: ECU · DLC 8 · Zyklus 10 ms (Original) · [zur Übersicht](#übersicht)
 
 0x289. Sent by the VCU instead of the DME. Layout from VW PQ Motor_2. Bit 24 always 1, bit 25 = speed limiter selected (VCU code).
 
@@ -92,9 +96,10 @@ Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
 | `MO2_Begr_Mo` | 48 | 8 | Intel | U8 | 0.39 | 0 | 0 … 99.06 | % | INSTR | Limited torque. | - |
 | `MO2_Mo_ZWR` | 56 | 8 | Intel | U8 | 0.39 | 0 | 0 … 99.06 | % | INSTR | Min torque with ignition retard. | - |
 
+<a id="msg-0x298"></a>
 ### 0x298 Engine_2
 
-Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
+Sender: ECU · DLC 8 · Zyklus 10 ms (Original) · [zur Übersicht](#übersicht)
 
 0x298. Sent by the VCU instead of the DME. Several signals marked 'Turbo? Unsure' in the notes; Speed_raw scaling unknown.
 
@@ -106,9 +111,10 @@ Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
 | `BarometricPressure` | 40 | 8 | Intel | U8 | 5 | 0 | 0 … 1275 | mbar | UNKNOWN | Turbo? Unsure. | - |
 | `Speed_raw` | 56 | 8 | Intel | U8 | 1 | 0 | 0 … 255 | - | UNKNOWN | Scaling unknown. | - |
 
+<a id="msg-0x4e0"></a>
 ### 0x4E0 EngineStat
 
-Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
+Sender: ECU · DLC 8 · Zyklus 10 ms (Original) · [zur Übersicht](#übersicht)
 
 0x4E0. Sent by the VCU instead of the DME. Byte 0 status/lamp interpretation on bits 0..7 plus MO5 lamp/consumption layout on bits 9..31.
 
@@ -132,9 +138,10 @@ Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
 | `MO5_Verbrauch` | 16 | 15 | Intel | U15 | 1 | 0 | 0 … 32767 | uL | INSTR | Fuel consumption counter (15 bit); the VCU simulates consumption (VCU-REQ-006). | - |
 | `MO5_UeberlVerb` | 31 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | INSTR | Consumption counter overflow. | - |
 
+<a id="msg-0x4f8"></a>
 ### 0x4F8 Unknown_4F8
 
-Sender: ECU · DLC 8 · Zyklus nicht im Mitschnitt
+Sender: ECU · DLC 8 · Zyklus - · [zur Übersicht](#übersicht)
 
 0x4F8. Sent by the VCU (raw bytes). Signals unknown.
 
@@ -142,9 +149,10 @@ Sender: ECU · DLC 8 · Zyklus nicht im Mitschnitt
 
 Keine Signale bekannt (nur Rohbytes).
 
+<a id="msg-0x7a0"></a>
 ### 0x7A0 Unknown_7A0
 
-Sender: ECU · DLC 8 · Zyklus 10 ms (Original)
+Sender: ECU · DLC 8 · Zyklus 10 ms (Original) · [zur Übersicht](#übersicht)
 
 0x7A0. Sent by the VCU instead of the DME (raw bytes). Signals unknown. Standard payload: 85 0C 00 03 00 00 FF 02 (constant in the log).
 
@@ -152,9 +160,10 @@ Keine Signale bekannt (nur Rohbytes).
 
 ## 2. Vom Fahrzeug empfangen
 
+<a id="msg-0x2a8"></a>
 ### 0x2A8 Vehicle_Speed
 
-Sender: ABS_PSM · DLC 8 · Zyklus 20 ms (Original)
+Sender: ABS_PSM · DLC 8 · Zyklus 20 ms (Original) · [zur Übersicht](#übersicht)
 
 0x2A8. Wheel speeds, legacy 15-bit variant. Stationary log only: values not verified while driving.
 
@@ -169,9 +178,10 @@ Sender: ABS_PSM · DLC 8 · Zyklus 20 ms (Original)
 | `Frei_Bremse_3_4` | 48 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | UNKNOWN | - | - |
 | `WheelSpeed_RR_15b_legacy` | 49 | 15 | Intel | U15 | 0.01 | 0 | 0 … 327.67 | km/h | UNKNOWN | - | - |
 
+<a id="msg-0x1a0"></a>
 ### 0x1A0 ABS_1
 
-Sender: ABS_PSM · DLC 8 · Zyklus 20 ms (Original)
+Sender: ABS_PSM · DLC 8 · Zyklus 20 ms (Original) · [zur Übersicht](#übersicht)
 
 0x1A0. Bremse_1 (BR1) mapping.
 
@@ -207,9 +217,10 @@ Sender: ABS_PSM · DLC 8 · Zyklus 20 ms (Original)
 | `BR1_Sta_ESP` | 62 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | INSTR | ESP error status. | - |
 | `BR1_Ersatz_Kmh` | 63 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | INSTR | Substitute speed flag. | - |
 
+<a id="msg-0x4a1"></a>
 ### 0x4A1 ABS_2
 
-Sender: ABS_PSM · DLC 8 · Zyklus 100 ms (Original)
+Sender: ABS_PSM · DLC 8 · Zyklus 100 ms (Original) · [zur Übersicht](#übersicht)
 
 0x4A1. BrakeNormal_or_Offset depends on the multiplex code (bits 30-31).
 
@@ -230,9 +241,10 @@ Sender: ABS_PSM · DLC 8 · Zyklus 100 ms (Original)
 | `Multiplex_Byte4` | 30 | 2 | Intel | U2 | 1 | 0 | 0 … 3 | - | INSTR | - | - |
 | `BrakeNormal_or_Offset` | 32 | 8 | Intel | U8 | 0.1 | 0 | 0 … 25.5 | - | INSTR | - | - |
 
+<a id="msg-0x510"></a>
 ### 0x510 InstrCluster_1
 
-Sender: INSTR · DLC 8 · Zyklus 20 ms (Original)
+Sender: INSTR · DLC 8 · Zyklus 20 ms (Original) · [zur Übersicht](#übersicht)
 
 0x510. VehicleSpeed scaling/offset is a working hypothesis. Bits 24-27 are a 4-bit counter (stationary log).
 
@@ -248,9 +260,10 @@ Sender: INSTR · DLC 8 · Zyklus 20 ms (Original)
 | `SteeringwheelButton_Up` | 48 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | ECU | - | - |
 | `SteeringwheelButton_Dwn` | 49 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | ECU | - | - |
 
+<a id="msg-0x520"></a>
 ### 0x520 InstrCluster_2
 
-Sender: INSTR · DLC 8 · Zyklus 20 ms (Original)
+Sender: INSTR · DLC 8 · Zyklus 20 ms (Original) · [zur Übersicht](#übersicht)
 
 0x520. OilPressure offset assumed 0.
 
@@ -264,9 +277,10 @@ Sender: INSTR · DLC 8 · Zyklus 20 ms (Original)
 | `OilPressure` | 32 | 8 | Intel | U8 | 0.04 | 0 | 0 … 10.2 | bar | ECU | - | - |
 | `Counter_Unknown` | 40 | 8 | Intel | U8 | 1 | 0 | 0 … 255 | - | ECU | Rotates 0x12, 0x03, 0x30, 0x1D every 100 ms; odometer multiplex suspected (986 #5). | - |
 
+<a id="msg-0x440"></a>
 ### 0x440 AT_Line1
 
-Sender: TCU · DLC 8 · Zyklus nicht im Mitschnitt
+Sender: TCU · DLC 8 · Zyklus - · [zur Übersicht](#übersicht)
 
 0x440. PRND mapping from notes: P=128, R=119, N=96, D=81, M=225.
 
@@ -276,9 +290,10 @@ Sender: TCU · DLC 8 · Zyklus nicht im Mitschnitt
 | --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- | --- | --- |
 | `PRND_Pos` | 16 | 8 | Intel | U8 | 1 | 0 | 0 … 255 | - | INSTR | - | 128 = P, 119 = R, 96 = N, 81 = D, 225 = M |
 
+<a id="msg-0x0c0"></a>
 ### 0x0C0 SWA
 
-Sender: STEER · DLC 2 · Zyklus 10 ms (Original)
+Sender: STEER · DLC 2 · Zyklus 10 ms (Original) · [zur Übersicht](#übersicht)
 
 0x0C0. RB Lenkwinkel_1 layout: DLC=2, angle on bits 5..14 (factor 2.5, offset -720) plus sign and status/check bits. Not verified while steering.
 
@@ -292,9 +307,10 @@ Sender: STEER · DLC 2 · Zyklus 10 ms (Original)
 | `Lenkwinkel__RB_` | 5 | 10 | Intel | U10 | 2.5 | -720 | -720 … 1837.5 | - | INSTR | Steering angle raw mapping. | - |
 | `Vorzeichen__RB_` | 15 | 1 | Intel | Bool | 1 | 0 | 0 … 1 | - | INSTR | Sign bit. | - |
 
+<a id="msg-0x560"></a>
 ### 0x560 Unknown_560
 
-Sender: INSTR · DLC 8 · Zyklus nicht im Mitschnitt
+Sender: INSTR · DLC 8 · Zyklus - · [zur Übersicht](#übersicht)
 
 0x560. Signals unknown, raw bytes only.
 

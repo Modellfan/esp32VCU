@@ -7,7 +7,7 @@
 namespace params {
 
 // Tesla SDU and OpenInverter stm32-sine are equivalent names in this project.
-// The decoded CAN signal layout follows documentation/can_signals.md IDs 0x500-0x508.
+// The decoded CAN signal layout follows documentation/can_messages.md IDs 0x500-0x508.
 struct TeslaSduSignals {
     uint8_t opmode = 0;
     uint8_t lasterr = 0;

@@ -17,7 +17,7 @@
 
 ## Porsche 986 (CAN1)
 
-Bitlage, Skalierung, Zykluszeiten und offene Punkte des Reverse Engineering: [porsche_986_can.md](porsche_986_can.md) (Spiegel der DBC [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), Masterquelle). Hier nur die Zuordnung zum Code.
+Bitlage, Skalierung, Zykluszeiten und offene Punkte des Reverse Engineering: [porsche_986_messages.md](porsche_986_messages.md) (Spiegel der DBC [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), Masterquelle). Hier nur die Zuordnung zum Code.
 
 ### Von der VCU gesendet (DME-Emulation)
 

@@ -5,8 +5,8 @@
 - `requirements/REQUIREMENTS.md`: verbindlicher Soll-Zustand der VCU (Requirements `VCU-REQ-…`).
 - `requirements/DECISIONS.md`: Begründungen und Konsequenzen wesentlicher technischer Entscheidungen (`VCU-DEC-…`).
 - `requirements/TESTPLAN.md`: Testfälle je Requirement, Teststufen und Abnahmeregeln für `verified`.
-- DBC-Dateien und `documentation/can_signals.md`: CAN-Signaldefinitionen (maßgeblich für Kodierung und Dekodierung).
-- Porsche 986 (CAN1): Master ist `documentation/porsche_986_996_compiled_working.dbc`. Erkenntnisse aus dem Reverse Engineering (Signale, `CM_`-Kommentare, `OPEN (986 #n)`, Zykluszeiten) immer in der DBC eintragen und danach `python tools/generate_986_can_md.py` ausführen; `documentation/porsche_986_can.md` ist nur der lesbare Spiegel und wird nie von Hand geändert.
+- DBC-Dateien und `documentation/can_messages.md`: CAN-Signaldefinitionen (maßgeblich für Kodierung und Dekodierung).
+- Porsche 986 (CAN1): Master ist `documentation/porsche_986_996_compiled_working.dbc`. Erkenntnisse aus dem Reverse Engineering (Signale, `CM_`-Kommentare, `OPEN (986 #n)`, Zykluszeiten) immer in der DBC eintragen und danach `python tools/generate_can_md.py` ausführen; `documentation/porsche_986_messages.md` ist nur der lesbare Spiegel und wird nie von Hand geändert.
 - Das Projekt ist eigenständig; es gibt keine Abhängigkeit zu anderen Repos (Nutzerentscheidung 2026-10-28).
 
 Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weiteren Spec-, Proposal-, Plan- oder Task-Dateien, außer der Nutzer verlangt dies ausdrücklich.
@@ -17,11 +17,11 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 3. **Architekturentscheidungen:** Dokumentiere nur signifikante Entscheidungen in `requirements/DECISIONS.md`, insbesondere Änderungen von Schnittstellen, CAN-Botschaften, Persistenz, Zeitverhalten, Pinbelegung, Sicherheits- und Hardwaregrenzen.
 4. **Vor riskanten oder größeren Änderungen:** Verwende `/re-review` und untersuche Abhängigkeiten, Widersprüche, Auswirkungen und Testbarkeit. Bei Unsicherheit betroffene Stellen als offen kennzeichnen statt als geklärt auszugeben.
 5. **Implementierung:** Maßgeblich sind bestätigte Anforderungen und Entscheidungen. Verifiziere betroffene Akzeptanzkriterien mit passenden Tests oder beschreibe ehrlich, welche Prüfungen nicht durchgeführt wurden.
-6. **Dokumentation nachziehen:** Aktualisiere nur die betroffenen Abschnitte. Keine Doppelpflege derselben Details in README, Requirements, Decisions und `can_signals.md`.
+6. **Dokumentation nachziehen:** Aktualisiere nur die betroffenen Abschnitte. Keine Doppelpflege derselben Details in README, Requirements, Decisions und `can_messages.md`.
 7. **Abschluss:** Berichte knapp: geändertes Verhalten, betroffene REQ-/DEC-IDs, Tests und offene Fragen.
 
 ## Projektspezifische Grenzen
-- **Fahrzeugsicherheit:** Die VCU sendet auf dem Fahrzeug-CAN anstelle des Motorsteuergeräts. Änderungen an gesendeten Botschaften, Zeitschlitzen oder Standardbits nur mit Bezug auf `can_signals.md`/DBC und mit CAN-Mitschnitt prüfen. Nie ungeprüft auf das Fahrzeug flashen.
+- **Fahrzeugsicherheit:** Die VCU sendet auf dem Fahrzeug-CAN anstelle des Motorsteuergeräts. Änderungen an gesendeten Botschaften, Zeitschlitzen oder Standardbits nur mit Bezug auf `can_messages.md`/DBC und mit CAN-Mitschnitt prüfen. Nie ungeprüft auf das Fahrzeug flashen.
 - **Pinbelegung:** Vor neuen Ausgängen alle belegten GPIOs in `src/board.h` prüfen (dort mit `static_assert` gegen Doppelbelegung).
 - **Hardwarezugriff:** Am Prüfstand (COM10) nach Änderungen selbständig flashen (`--target upload`; nach PWA-Änderungen `python pwa/tools/build.py` und `--target uploadfs`) und mit `tools/vcu_cmd.py`/`vcu_log.py` prüfen, ohne vorher zu fragen (Nutzerentscheidung 2026-11-09). Nie ungeprüft auf das Fahrzeug flashen.
 - **Keine Zugangsdaten im Repo:** WLAN-Passwörter und Schlüssel gehören in `src/secrets.h` (nicht versioniert, VCU-REQ-015).

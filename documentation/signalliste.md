@@ -12,9 +12,9 @@ Arbeitsweise: Spalte **UI Vorschlag** je Signal festlegen (heute **nicht entschi
 
 | Kürzel | Datei | Inhalt |
 |---|---|---|
-| CS | [can_signals.md](can_signals.md) | maßgeblich für CAN2 (OpenInverter) und CAN0-Kurzfassung |
-| P986 | [porsche_986_can.md](porsche_986_can.md) | Spiegel der 986-DBC, offene Punkte des Reverse Engineering |
-| DBC986 | [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), Hintergrund [PQ_messages.md](PQ_messages.md), [vw_pq.dbc](vw_pq.dbc) | 986/996- und PQ-Botschaften |
+| CS | [can_messages.md](can_messages.md) | maßgeblich für CAN2 (OpenInverter) und CAN0-Kurzfassung |
+| P986 | [porsche_986_messages.md](porsche_986_messages.md) | Spiegel der 986-DBC, offene Punkte des Reverse Engineering |
+| DBC986 | [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), Hintergrund [vw_pq_messages.md](vw_pq_messages.md), [vw_pq.dbc](vw_pq.dbc) | 986/996- und PQ-Botschaften |
 | ZS | [ZombieSlave_teensybms_dcdc_mvcu.dbc](ZombieSlave_teensybms_dcdc_mvcu.dbc) (Kopie von Zombie-Slave 205cc7c; Master: [Zombie-Slave/documentation](https://github.com/Modellfan/Zombie-Slave/blob/master/documentation/ZombieSlave_teensybms_dcdc_mvcu.dbc)), Kurzfassung in CS, Abschnitt CAN0 | CAN0: TeensyBMS, Zombie-Slave, Tesla-DC/DC, mVCU-Heizung |
 | BMS | [TeensyVCU/documentation/CAN_Message_Packing.md](https://github.com/Modellfan/TeensyVCU/blob/master/documentation/CAN_Message_Packing.md) | Packing und CRC der TeensyBMS-Botschaften 0x41A–0x41E |
 | mVCU | [Zombie-Slave/docs/mVCU_Integration.md](https://github.com/Modellfan/Zombie-Slave/blob/master/docs/mVCU_Integration.md) | Schnittstelle Zombie-Slave ↔ mVCU (diese VCU), Heizung 0x43A |
@@ -34,7 +34,7 @@ Arbeitsweise: Spalte **UI Vorschlag** je Signal festlegen (heute **nicht entschi
 
 ## 2. CAN1 – Porsche 986
 
-Master: [porsche_986_can.md](porsche_986_can.md) (Spiegel von [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), dieses Repo).
+Master: [porsche_986_messages.md](porsche_986_messages.md) (Spiegel von [porsche_986_996_compiled_working.dbc](porsche_986_996_compiled_working.dbc), dieses Repo).
 
 Mitschnitt `can_logs/986_log_stand.csv` (Stand): 0x0C0, 0x1A0, 0x2A8, 0x4A1, 0x510, 0x520 vorhanden; **0x440 (PRND) und 0x560 fehlen**.
 
@@ -128,11 +128,11 @@ Die VCU ersetzt das Motorsteuergerät; Werte sind Ausgaben ans Kombi. Setzbar ü
 | `msr` | MSR | bool | RX | – | Uhr, Fzg/Fzg |  | Regeleingriff ABS/ASR/MSR/EDS/PSM |
 | `abd` | EDS | bool | RX | – | Uhr, Fzg/Fzg |  | Regeleingriff ABS/ASR/MSR/EDS/PSM |
 | `fdr` | PSM | bool | RX | – | Uhr, Fzg/Fzg |  | Regeleingriff ABS/ASR/MSR/EDS/PSM |
-| `asr_mode` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_can.md#offene-punkte)) | –/% | RX | – | – |  |  |
-| `tcs_slow_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_can.md#offene-punkte)) | –/% | RX | – | – |  |  |
-| `tcs_fast_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_can.md#offene-punkte)) | –/% | RX | – | – |  |  |
-| `msr_inv_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_can.md#offene-punkte)) | –/% | RX | – | – |  |  |
-| `itq_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_can.md#offene-punkte)) | –/% | RX | – | – |  |  |
+| `asr_mode` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_messages.md#offene-punkte)) | –/% | RX | – | – |  |  |
+| `tcs_slow_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_messages.md#offene-punkte)) | –/% | RX | – | – |  |  |
+| `tcs_fast_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_messages.md#offene-punkte)) | –/% | RX | – | – |  |  |
+| `msr_inv_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_messages.md#offene-punkte)) | –/% | RX | – | – |  |  |
+| `itq_pct` | ASR-Modus, Eingriffsmomente (**`itq_pct` ist ein Zähler**, [986 #1](porsche_986_messages.md#offene-punkte)) | –/% | RX | – | – |  |  |
 | `abs_lamp` | Warnlampen | bool | RX | [E]Cluster/Inputs (`fdr_lamp`, `psm_button_lamp`) | Home (Warnsymbol) | ✓ |  |
 | `brake_lamp` | Warnlampen | bool | RX | [E]Cluster/Inputs (`fdr_lamp`, `psm_button_lamp`) | Home (Warnsymbol) | ✓ |  |
 | `fdr_lamp` | Warnlampen | bool | RX | [E]Cluster/Inputs (`fdr_lamp`, `psm_button_lamp`) | Home (Warnsymbol) | ✓ |  |
@@ -166,7 +166,7 @@ Die VCU ersetzt das Motorsteuergerät; Werte sind Ausgaben ans Kombi. Setzbar ü
 | `acceleration` | Längsbeschleunigung | g | RX | Fzg/Fzg; Uhr/Runde (als Ersatz für „Delta“, Fehler) | Uhr |  |  |
 | `yaw_rate` | Gierrate | °/s | RX | – | Uhr |  |  |
 | `yaw_rate_sign` | Gierrate | °/s | RX | – | Uhr |  |  |
-| `driver_braking` | Fahrer bremst (**falsch dekodiert: Zählerbit**, [986 #2](porsche_986_can.md#offene-punkte)) | bool | RX | [E]Adjust/Info, [E]Cluster/Inputs | – |  |  |
+| `driver_braking` | Fahrer bremst (**falsch dekodiert: Zählerbit**, [986 #2](porsche_986_messages.md#offene-punkte)) | bool | RX | [E]Adjust/Info, [E]Cluster/Inputs | – |  |  |
 | `brake_normal_or_offset` | Bremsdruck/Offset | % | RX | [E]Adjust/Drive | – |  |  |
 | `no_actively_built_up_brake_pressure` | Status- und Fehlerbits ABS_2 | – | RX | [E]Adjust/Info, [E]Cluster/Inputs (`receipt_for_acc_message`) | – |  |  |
 | `acc_related_error` | Status- und Fehlerbits ABS_2 | – | RX | [E]Adjust/Info, [E]Cluster/Inputs (`receipt_for_acc_message`) | – |  |  |
@@ -203,7 +203,7 @@ Die VCU ersetzt das Motorsteuergerät; Werte sind Ausgaben ans Kombi. Setzbar ü
 
 ## 3. CAN2 – Tesla SDU (OpenInverter)
 
-Master: [can_signals.md, Abschnitt OpenInverter](can_signals.md#openinverter-stm32-sine) (CAN-Mapping des Umrichters; Firmware [jsphuebner/stm32-sine](https://github.com/jsphuebner/stm32-sine)).
+Master: [can_messages.md, Abschnitt OpenInverter](can_messages.md#openinverter-stm32-sine) (CAN-Mapping des Umrichters; Firmware [jsphuebner/stm32-sine](https://github.com/jsphuebner/stm32-sine)).
 
 Mitschnitt `can_logs/20260419_fahrt_tesla.csv`: 0x500–0x505; **0x506–0x508 fehlen**. Die VCU sendet auf CAN2 nichts.
 
@@ -474,7 +474,7 @@ Referenz README (CAN-Hardware), VCU-DEC-016. Anzeige heute nur auf der Testseite
 | 12-V-Batteriespannung | UI Bordnetz; TCU auxiliaryVoltage | Zombie-Slave `LVDU_12v_battery_voltage` (intern); Ersatz `dcdc_output_v`, `sdu_uaux` | offen |
 | Zündung, Ready-Eingang | Schlaf-/Weckverhalten | Zombie-Slave (intern) | offen |
 | Kühlmittelpumpe, Tesla-Ventil, Vakuumpumpe, EPS-Zustand | UI Kühl, Warnungen | Zombie-Slave (intern) | offen |
-| Kilometerstand | TCU odometer | vielleicht 0x520 Byte 5 (gemultiplext, [986 #5](porsche_986_can.md#offene-punkte)); sonst VCU summiert auf (nicht eichfähig) | offen |
+| Kilometerstand | TCU odometer | vielleicht 0x520 Byte 5 (gemultiplext, [986 #5](porsche_986_messages.md#offene-punkte)); sonst VCU summiert auf (nicht eichfähig) | offen |
 | Reichweite | UI Home, Fzg/Akku | VCU aus `battery_remaining_energy_kwh` und Verbrauch | offen; UI zeigt heute einen Schätzwert 3,05 km je % |
 | Verbrauch kWh/100 km, Fahrtstrecke, Fahrzeit | UI Uhr/Trip | VCU integriert Leistung und Geschwindigkeit | offen; UI zeigt heute Platzhalter (24,2 kWh/100 km, Laufzeit des Umrichters) |
 | Ladeenergie je Ladung | TCU energy | VCU oder TCU integriert `battery_charge_power_w` | offen |

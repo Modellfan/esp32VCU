@@ -5,13 +5,13 @@ Dies ist der **Soll-Zustand** der VCU. Nur Anforderungen dokumentieren, keine Im
 ## Konvention
 - Stabile IDs: `VCU-REQ-001`, `VCU-REQ-002` …; IDs nie wiederverwenden.
 - Status: `draft` (Vorschlag), `approved` (bestätigt), `implemented` (umgesetzt), `verified` (Akzeptanzkriterium nachweislich geprüft).
-- Jede Anforderung beschreibt **was**, nicht detailliert **wie**. CAN-Bitlayouts stehen in `documentation/can_signals.md` und den DBC-Dateien, nicht hier.
+- Jede Anforderung beschreibt **was**, nicht detailliert **wie**. CAN-Bitlayouts stehen in `documentation/can_messages.md` und den DBC-Dateien, nicht hier.
 - Mindestens ein überprüfbares Akzeptanzkriterium pro Requirement.
 - Offene Annahmen und Einschränkungen explizit ausweisen.
 - Bei `verified`: Test/Prüfung mit Pfad oder genauer Fundstelle benennen.
 - **Umsetzung:** Stand des Codes nach dem Architektur-Umbau vom 2026-10-28 (VCU-DEC-002 bis -012). „Umgesetzt“ heißt nicht „verifiziert“; auf Hardware ist nichts davon geprüft.
 
-Quellen: aus Code, dem damaligen Änderungsprotokoll (entfernt 2026-11-14) und `documentation/can_signals.md` rückwirkend abgeleitet am 2026-10-28, ergänzt um Nutzerentscheidungen vom 2026-10-28. Alle Einträge stehen auf `draft`, bis der Nutzer sie bestätigt.
+Quellen: aus Code, dem damaligen Änderungsprotokoll (entfernt 2026-11-14) und `documentation/can_messages.md` rückwirkend abgeleitet am 2026-10-28, ergänzt um Nutzerentscheidungen vom 2026-10-28. Alle Einträge stehen auf `draft`, bis der Nutzer sie bestätigt.
 
 ## Systemkontext
 Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsumrichter (Tesla SDU mit OpenInverter stm32-sine) über einen zweiten CAN-Bus, passt das Kombiinstrument an die E-Maschine an, steuert Kühlmittellüfter und ein Digitalpotentiometer und liefert eine Touch-Oberfläche für das Navi-Display (1024×600). Das Projekt ist eigenständig; es gibt keine Abhängigkeit zu TCU, Backend oder App anderer Projekte (Nutzerentscheidung 2026-10-28).
@@ -24,7 +24,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Typ:** funktional / Sicherheit
 - **Priorität:** must
 - **Status:** draft
-- **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 30 ms gesendet; die Sendezeitpunkte sind gleichmäßig verteilt. Nicht genutzte Bits tragen die in `can_signals.md` dokumentierten Standardwerte.
+- **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 30 ms gesendet; die Sendezeitpunkte sind gleichmäßig verteilt. Nicht genutzte Bits tragen die in `can_messages.md` dokumentierten Standardwerte.
 - **Akzeptanz:** Gegeben eine laufende VCU am Fahrzeug-CAN; wenn 10 s mitgeschnitten werden; dann erscheint jede der fünf IDs mit 30 ms ± 3 ms Abstand, die Inhalte entsprechen der DBC, und das Kombiinstrument zeigt keine Motorsteuergeräte-Störung.
 - **Abhängigkeiten:** keine
 - **Umsetzung:** vorhanden (CAN-Task `canTask()` in `src/main.cpp`, 6-ms-Zeitschlitze; `src/comms/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
@@ -44,7 +44,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Typ:** funktional
 - **Priorität:** must
 - **Status:** draft
-- **Anforderung:** Die VCU muss die Fahrzeugbotschaften 0x1A0 (Bremse_1), 0x2A8 (Raddrehzahlen), 0x4A1, 0x510 und 0x520 (Kombiinstrument), 0x560, 0x440 (Getriebe) und 0x0C0 (Lenkwinkel) gemäß `can_signals.md` dekodieren und als Live-Werte bereitstellen.
+- **Anforderung:** Die VCU muss die Fahrzeugbotschaften 0x1A0 (Bremse_1), 0x2A8 (Raddrehzahlen), 0x4A1, 0x510 und 0x520 (Kombiinstrument), 0x560, 0x440 (Getriebe) und 0x0C0 (Lenkwinkel) gemäß `can_messages.md` dekodieren und als Live-Werte bereitstellen.
 - **Akzeptanz:** Gegeben ein CAN-Mitschnitt mit bekannten Werten; wenn er eingespielt wird; dann liefert `/api/live` für jedes dokumentierte Signal den nach DBC erwarteten Wert.
 - **Abhängigkeiten:** keine
 - **Umsetzung:** vorhanden (`src/comms/986_vehicle_messages.cpp`).
