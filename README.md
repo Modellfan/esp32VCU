@@ -67,7 +67,7 @@ Stand 2026-11-13, nach Priorität. Details in REQUIREMENTS.md, DECISIONS.md und 
 - Rolle von CAN3.
 
 **Akku, Laden, TCU**
-- BMS- und Ladegerät-Botschaften auf CAN0.
+- BMS- und Ladegerät-Botschaften auf CAN0; fehlende Signale (Stecker, Ladezustand, 12 V, Ziel-SoC/AC-Strom an den Zombie-Slave): [eBoxster#57](https://github.com/Modellfan/eBoxster/issues/57).
 - Welche fehlenden Werte der Zombie-Slave sendet und welche die VCU berechnet (Signalliste, Abschnitt 9).
 - Umrechnung Verbrauch.
 - Werte der VCU für die TCU (VCU-REQ-013); ID-Konflikt 0x210 (TCU-Demo-Map `WakeCommand` gegen Tesla-DC/DC).
