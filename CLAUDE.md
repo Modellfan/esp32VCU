@@ -5,7 +5,8 @@
 - `requirements/REQUIREMENTS.md`: verbindlicher Soll-Zustand der VCU (Requirements `VCU-REQ-…`).
 - `requirements/DECISIONS.md`: Begründungen und Konsequenzen wesentlicher technischer Entscheidungen (`VCU-DEC-…`).
 - `requirements/TESTPLAN.md`: Testfälle je Requirement, Teststufen und Abnahmeregeln für `verified`.
-- `documentation/can_signals.md` und die DBC-Dateien: CAN-Signaldefinitionen (maßgeblich für Kodierung und Dekodierung).
+- DBC-Dateien und `documentation/can_signals.md`: CAN-Signaldefinitionen (maßgeblich für Kodierung und Dekodierung).
+- Porsche 986 (CAN1): Master ist `documentation/porsche_986_996_compiled_working.dbc`. Erkenntnisse aus dem Reverse Engineering (Signale, `CM_`-Kommentare, `OPEN (986 #n)`, Zykluszeiten) immer in der DBC eintragen und danach `python tools/generate_986_can_md.py` ausführen; `documentation/porsche_986_can.md` ist nur der lesbare Spiegel und wird nie von Hand geändert.
 - Das Projekt ist eigenständig; es gibt keine Abhängigkeit zu anderen Repos (Nutzerentscheidung 2026-10-28).
 
 Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weiteren Spec-, Proposal-, Plan- oder Task-Dateien, außer der Nutzer verlangt dies ausdrücklich.

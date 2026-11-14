@@ -3,7 +3,7 @@
 Die VCU ersetzt das Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsumrichter (Tesla SDU mit OpenInverter), passt das Kombiinstrument an den E-Antrieb an, steuert Kühlmittellüfter und Tankanzeige und liefert die Touch-Oberfläche für das Navi-Display (1024×600).
 
 - Anforderungen: [requirements/REQUIREMENTS.md](requirements/REQUIREMENTS.md) · Entscheidungen: [requirements/DECISIONS.md](requirements/DECISIONS.md) · Tests: [requirements/TESTPLAN.md](requirements/TESTPLAN.md)
-- Architektur: [documentation/architecture.svg](documentation/architecture.svg) · CAN-Signale: [documentation/can_signals.md](documentation/can_signals.md)
+- Architektur: [documentation/architecture.svg](documentation/architecture.svg) · CAN-Signale: [documentation/can_signals.md](documentation/can_signals.md) · Porsche 986: [documentation/porsche_986_can.md](documentation/porsche_986_can.md) (Spiegel der DBC, `tools/generate_986_can_md.py`)
 
 ## Hardware
 ESP32-S3-DevKitC-1 (8 MB), 3× MCP2515 an einem SPI-Bus (CAN1 Fahrzeug, CAN2 Umrichter, CAN3 Reserve), TWAI als CAN0 (Bus von TeensyBMS, Zombie-Slave und DC/DC, TX GPIO20, RX GPIO19), X9C103S (Tankgeber, zurzeit ohne Pins), AT24C256-EEPROM (I2C, SCL GPIO39, SDA GPIO37, Adresse 0x50; Ladeparameter, Lüftermodus und Bestzeiten bleiben über einen Neustart erhalten, VCU-REQ-020), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).

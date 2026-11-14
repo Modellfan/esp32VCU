@@ -53,6 +53,8 @@ BO_ 649 Motor_2: 8 ECU
    SG_ MO2_Sta_No_Bet : 20|1@1+ (1,0) [0|1] "" INSTR
    SG_ MO2_Status_TSK : 21|1@1+ (1,0) [0|1] "" INSTR
    SG_ MO2_Sta_GRA : 22|2@1+ (1,0) [0|3] "" INSTR
+   SG_ MO2_Bit24_Const : 24|1@1+ (1,0) [0|1] "" UNKNOWN
+   SG_ MO2_SpeedLimiter_Selected : 25|1@1+ (1,0) [0|1] "" INSTR
    SG_ MO2_GRAregelt : 26|1@1+ (1,0) [0|1] "" INSTR
    SG_ MO2_Sport_Error : 27|1@1+ (1,0) [0|1] "" INSTR
    SG_ MO2_OffRoad : 28|1@1+ (1,0) [0|1] "" INSTR
@@ -144,11 +146,13 @@ BO_ 1296 InstrCluster_1: 8 INSTR
    SG_ Indicator_Left : 20|1@1+ (1,0) [0|1] "" ECU
    SG_ Indicator_Right : 21|1@1+ (1,0) [0|1] "" ECU
    SG_ Tempomat_Button : 23|1@1+ (1,0) [0|1] "" ECU
+   SG_ InstrCluster1_Counter : 24|4@1+ (1,0) [0|15] "" UNKNOWN
    SG_ SteeringwheelButton_Up : 48|1@1+ (1,0) [0|1] "" ECU
    SG_ SteeringwheelButton_Dwn : 49|1@1+ (1,0) [0|1] "" ECU
 
 BO_ 1312 InstrCluster_2: 8 INSTR
    SG_ LightDimmer : 8|8@1+ (1,0) [0|255] "" ECU
+   SG_ InstrCluster2_Byte2_Unknown : 16|5@1+ (1,0) [0|31] "" UNKNOWN
    SG_ AmbientTemp : 24|8@1+ (0.5,-40) [-40|87.5] "degC" ECU
    SG_ OilPressure : 32|8@1+ (0.04,0) [0|10.2] "bar" ECU
    SG_ Counter_Unknown : 40|8@1+ (1,0) [0|255] "" ECU
@@ -175,23 +179,109 @@ BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
 BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
 BA_DEF_ BO_ "matchingcriteria" INT 0 0;
 BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
 BA_ "GenMsgForegroundColor" BO_ 640 "#000000";
 BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
 BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
 BA_DEF_DEF_ "matchingcriteria" 0;
 BA_DEF_DEF_ "filterlabeling" 0;
-CM_ BO_ 640 "0x280. Compiled from DBC + 'more infos' notes + Teensy sender. RPM scaling matches Teensy (raw = rpm*4). Time slice: 30ms.";
-CM_ BO_ 649 "0x289. Motor_2 mapped from VW PQ Motor_2 layout; replaces original EngineTemp mapping. Time slice: 30ms.";
-CM_ BO_ 664 "0x298. Several signals marked 'Turbo? Unsure' in notes; Speed_raw scaling unknown. Time slice: 30ms.";
-CM_ BO_ 680 "0x2A8. Using legacy 15-bit wheel-speed variant.";
-CM_ BO_ 416 "0x1A0. Uses Bremse_1 BR1 mapping with ASR/MSR/ABS status bits, 15-bit vehicle speed, torque fields, and message counter/status bits 56..63.";
-CM_ BO_ 1185 "0x4A1. Compiled from DBC notes list. BrakeNormal_or_Offset depends on multiplex code (bits 30-31).";
-CM_ BO_ 1248 "0x4E0. Uses byte0 status/lamp interpretation on bits 0..7 plus MO5 lamp/consumption layout on bits 9..31. Time slice: 30ms.";
-CM_ BO_ 1296 "0x510. VehicleSpeed scaling/offset from notes list appears unusual; treat as working hypothesis.";
-CM_ BO_ 1312 "0x520. AmbientTemp and OilPressure from notes/DBC list. OilPressure offset not specified in notes; assumed 0.";
-CM_ BO_ 1088 "0x440. PRND mapping from notes: P=128, R=119, N=96, D=81, M=225.";
-CM_ BO_ 192 "0x00C0. RB Lenkwinkel_1 layout: DLC=2, angle on bits 5..14 (factor 2.5, offset -720) plus Vorzeichen/LWS status/check bits.";
-CM_ BO_ 1272 "0x4F8. Message observed/listed but signals unknown.";
-CM_ BO_ 1376 "0x560. Message observed/listed but signals unknown.";
-CM_ BO_ 1952 "0x7A0. Message observed/listed but signals unknown. Time slice: 30ms. Standard payload: 85 0C 00 03 00 00 FF 02.";
+BA_ "GenMsgCycleTime" BO_ 640 10;
+BA_ "GenMsgCycleTime" BO_ 649 10;
+BA_ "GenMsgCycleTime" BO_ 664 10;
+BA_ "GenMsgCycleTime" BO_ 1248 10;
+BA_ "GenMsgCycleTime" BO_ 1952 10;
+BA_ "GenMsgCycleTime" BO_ 192 10;
+BA_ "GenMsgCycleTime" BO_ 416 20;
+BA_ "GenMsgCycleTime" BO_ 680 20;
+BA_ "GenMsgCycleTime" BO_ 1296 20;
+BA_ "GenMsgCycleTime" BO_ 1312 20;
+BA_ "GenMsgCycleTime" BO_ 1185 100;
+CM_ "Porsche 986/996 powertrain CAN (CAN1 of the VCU), 500 kbit/s. Reverse engineering master; mirrored by tools/generate_986_can_md.py. OPEN (986 #10): the original DME sends 0x280/0x289/0x298/0x4E0/0x7A0 every 10 ms, the VCU every 30 ms (5 slots x 6 ms); cluster works on the bench, timeouts in other control units unknown - decision and CAN capture needed. OPEN (986 #11): stationary log only (can_logs/986_log_stand.csv); record a driving log with braking, steering, indicators, cruise buttons and lights.";
+CM_ BO_ 640 "0x280. Sent by the VCU instead of the DME (original DME 10 ms, VCU 30 ms). RPM scaling matches Teensy (raw = rpm*4). OPEN (986 #6): bit 4 toggles, byte 1 = 0x79 and byte 6 = 0x54 constant, not in the DBC; VW PQ Motor_1 reads bit 4 Time_Out_Bremsen_Botschaft, byte 1 inner torque, byte 4 inner torque without intervention, byte 6 mechanical loss torque, byte 7 driver torque request. Clarify bytes 1, 4, 6, 7 with the original DME at different pedal positions.";
+CM_ BO_ 649 "0x289. Sent by the VCU instead of the DME. Layout from VW PQ Motor_2. Bit 24 always 1, bit 25 = speed limiter selected (VCU code). OPEN (986 #12): bits 0-5 carry four signals selected by MO2_Mp_Code (6|2) without a valid multiplexer declaration; strict DBC tools reject the file.";
+CM_ BO_ 664 "0x298. Sent by the VCU instead of the DME. Several signals marked 'Turbo? Unsure' in the notes; Speed_raw scaling unknown.";
+CM_ BO_ 680 "0x2A8. Wheel speeds, legacy 15-bit variant. Stationary log only: values not verified while driving.";
+CM_ BO_ 416 "0x1A0. Bremse_1 (BR1) mapping. OPEN (986 #1): byte 6 (bits 48-55) counts up by 1 per frame, so BR1_MSR_Mo (and the VCU value itq_pct) is a counter, not a torque; BR1_Zaehler (56|4) low nibble constant 0xD, bits 57-58 toggle. OPEN (986 #12): BR1_ASRMo_fa and BR1_MSR_Mo_inv share byte 5.";
+CM_ BO_ 1185 "0x4A1. BrakeNormal_or_Offset depends on the multiplex code (bits 30-31). OPEN (986 #2): bits 13-15 count 0..7 per frame, so ReceiptForACCMessage/DriverBraking/RegulatorError_FDR are a 3-bit counter; find the real driver-braking bit with a braking log. OPEN (986 #3): bits 45-47 and 61-63 change every frame (checksum or multiplexed content?), bit 29 always 1.";
+CM_ BO_ 1248 "0x4E0. Sent by the VCU instead of the DME. Byte 0 status/lamp interpretation on bits 0..7 plus MO5 lamp/consumption layout on bits 9..31.";
+CM_ BO_ 1296 "0x510. VehicleSpeed scaling/offset is a working hypothesis. Bits 24-27 are a 4-bit counter (stationary log). OPEN (986 #4): bits 40 and 43 always 1 (byte 5 = 0x09), meaning unknown.";
+CM_ BO_ 1312 "0x520. OilPressure offset assumed 0. OPEN (986 #5): byte 2 bits 16-20 change slowly (0x4E..0x50; temperature or fuel level?); bits 0 and 22 always 1; Counter_Unknown (byte 5) rotates 0x12, 0x03, 0x30, 0x1D every 100 ms - check whether it carries the odometer multiplexed (VW PQ Kombi_3: Kilometerstand 40|20, Standzeit 24|15).";
+CM_ BO_ 1088 "0x440. PRND mapping from notes: P=128, R=119, N=96, D=81, M=225. OPEN (986 #9): not in the stationary log; check whether the car has a Tiptronic control unit.";
+CM_ BO_ 192 "0x0C0. RB Lenkwinkel_1 layout: DLC=2, angle on bits 5..14 (factor 2.5, offset -720) plus sign and status/check bits. Not verified while steering.";
+CM_ BO_ 1272 "0x4F8. Sent by the VCU (raw bytes). Signals unknown. OPEN (986 #8): not in the stationary log; check whether it exists on this car.";
+CM_ BO_ 1376 "0x560. Signals unknown, raw bytes only. OPEN (986 #8): not in the stationary log; check whether it exists on this car.";
+CM_ BO_ 1952 "0x7A0. Sent by the VCU instead of the DME (raw bytes). Signals unknown. Standard payload: 85 0C 00 03 00 00 FF 02 (constant in the log).";
+CM_ SG_ 640 RPM "Engine speed shown by the tachometer; the VCU sends the motor power here (VCU-REQ-005).";
+CM_ SG_ 649 MO2_Kuehlm_T "Coolant temperature gauge; the VCU sends the inverter/motor temperature.";
+CM_ SG_ 649 MO2_BLS "Brake light switch.";
+CM_ SG_ 649 MO2_Sta_GRA "Cruise control status.";
+CM_ SG_ 649 MO2_Bit24_Const "Always 1 in the stationary log; meaning unknown.";
+CM_ SG_ 649 MO2_SpeedLimiter_Selected "Speed limiter selected (VCU field motor2_speed_limiter_selected); not in the original DBC.";
+CM_ SG_ 664 Speed_raw "Scaling unknown.";
+CM_ SG_ 1248 MO5_Heissl "Coolant overheat warning lamp.";
+CM_ SG_ 1248 MO5_Verbrauch "Fuel consumption counter (15 bit); the VCU simulates consumption (VCU-REQ-006).";
+CM_ SG_ 416 BR1_Rad_kmh "Reference vehicle speed (VCU field vref_kmh).";
+CM_ SG_ 416 BR1_MSR_Mo "Is a frame counter in the log, not a torque (986 #1).";
+CM_ SG_ 1185 DriverBraking "Part of a 3-bit frame counter in the log (986 #2).";
+CM_ SG_ 1296 InstrCluster1_Counter "4-bit frame counter, found in the stationary log 2026-11-11.";
+CM_ SG_ 1312 InstrCluster2_Byte2_Unknown "Changes slowly (0x4E..0x50); meaning unknown (986 #5).";
+CM_ SG_ 1312 Counter_Unknown "Rotates 0x12, 0x03, 0x30, 0x1D every 100 ms; odometer multiplex suspected (986 #5).";
+CM_ SG_ 640 PedalPosition1 "Not used in Teensy.";
+CM_ SG_ 640 PedalPosition2 "Not used in Teensy.";
+CM_ SG_ 649 MO2_Mp_Code "Byte0 multiplex selector.";
+CM_ SG_ 649 MO2_CAN_Vers "Active when MO2_Mp_Code=0.";
+CM_ SG_ 649 MO2_Motor_Code "Active when MO2_Mp_Code=1.";
+CM_ SG_ 649 MO2_Getr_Code "Active when MO2_Mp_Code=2.";
+CM_ SG_ 649 MO2_max_Mo "Active when MO2_Mp_Code=3.";
+CM_ SG_ 649 MO2_BTS "Brake test switch.";
+CM_ SG_ 649 MO2_Sta_Kuehlm "Coolant temp status.";
+CM_ SG_ 649 MO2_Sta_Klima "AC compressor status.";
+CM_ SG_ 649 MO2_Sta_No_Bet "Normal operation status.";
+CM_ SG_ 649 MO2_Status_TSK "Drivetrain coordinator status.";
+CM_ SG_ 649 MO2_GRAregelt "Cruise regulating.";
+CM_ SG_ 649 MO2_Sport_Error "Sport error flag.";
+CM_ SG_ 649 MO2_OffRoad "Offroad mode.";
+CM_ SG_ 649 MO2_RME_Gehalt "Biodiesel content.";
+CM_ SG_ 649 MO2_GRA_Soll "Cruise target speed.";
+CM_ SG_ 649 MO2_LL_Solldz "Idle target speed.";
+CM_ SG_ 649 MO2_Begr_Mo "Limited torque.";
+CM_ SG_ 649 MO2_Mo_ZWR "Min torque with ignition retard.";
+CM_ SG_ 664 ThrottlePosition1 "Turbo? Unsure.";
+CM_ SG_ 664 ThrottlePosition2 "Turbo? Unsure.";
+CM_ SG_ 664 BarometricPressure "Turbo? Unsure.";
+CM_ SG_ 1248 MO5_Vorgluehen "Diesel pre-glow lamp.";
+CM_ SG_ 1248 MO5_E_Gas "E-Gas system lamp.";
+CM_ SG_ 1248 MO5_OBD_2 "OBD/MIL lamp control.";
+CM_ SG_ 1248 MO5_KlimaKompr "AC compressor off request.";
+CM_ SG_ 1248 MO5_Feld_kuehl "Map cooling installed and OK.";
+CM_ SG_ 1248 MO5_KliKo_Red "AC compressor power reduction.";
+CM_ SG_ 1248 MO5_UeberlVerb "Consumption counter overflow.";
+CM_ SG_ 416 BR1_ASR_Anf "ASR request.";
+CM_ SG_ 416 BR1_MSR_Anf "MSR request.";
+CM_ SG_ 416 BR1_ABS_Brems "ABS control active.";
+CM_ SG_ 416 BR1_EDS_Ongr "EDS intervention.";
+CM_ SG_ 416 BR1_ESP_Ongr "ESP intervention.";
+CM_ SG_ 416 BR1_ASR_Ongr "ASR switching influence.";
+CM_ SG_ 416 BR1_EBV_Ongr "EBV intervention.";
+CM_ SG_ 416 BR1_Lampe_ABS "ABS warning lamp.";
+CM_ SG_ 416 BR1_Lampe_ASR "ASR/ESP lamp.";
+CM_ SG_ 416 BR1_Lampe_BK "Brake warning lamp.";
+CM_ SG_ 416 BR1_Lichtschalt "Brake switch.";
+CM_ SG_ 416 BR1_StaDruckschw "Brake test switch status.";
+CM_ SG_ 416 BR1_MAD "Rough road suppression.";
+CM_ SG_ 416 BR1_Sta_MAD "Rough road suppression status.";
+CM_ SG_ 416 BR1_Diagnose "ABS diagnosis mode.";
+CM_ SG_ 416 BR1_BKV_active "Active brake booster status.";
+CM_ SG_ 416 BR1_ASRMo_sl "ASR torque slow.";
+CM_ SG_ 416 BR1_ASRMo_fa "ASR torque fast (MSR_Anf=0).";
+CM_ SG_ 416 BR1_MSR_Mo_inv "Inverse MSR torque (MSR_Anf=1).";
+CM_ SG_ 416 BR1_Zaehler "Message counter.";
+CM_ SG_ 416 BR1_ASR_ESP "Control-unit type.";
+CM_ SG_ 416 BR1_ESPASR_passive "ESP/ASR passive.";
+CM_ SG_ 416 BR1_Sta_ESP "ESP error status.";
+CM_ SG_ 416 BR1_Ersatz_Kmh "Substitute speed flag.";
+CM_ SG_ 192 LWS_Abgleich__RB_ "Calibration status.";
+CM_ SG_ 192 LWS_OK__RB_ "Sensor valid flag.";
+CM_ SG_ 192 Lenkwinkel__RB_ "Steering angle raw mapping.";
+CM_ SG_ 192 Vorzeichen__RB_ "Sign bit.";
 VAL_ 1088 PRND_Pos 128 "P" 119 "R" 96 "N" 81 "D" 225 "M";
