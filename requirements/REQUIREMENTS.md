@@ -259,3 +259,12 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Hinweis:** Bezeichnungen und Kategorien folgen `documentation/signalliste.md`; keine CAN-IDs in der Oberfläche.
 - **Umsetzung:** `pwa/src/js/signals.js` (Katalog aus `/api/signals` und einer vollständigen `/api/live`-Abfrage, Kategorie aus der Firmware-Gruppe, Einheit aus dem Namensende), eingehängt in `pwa/src/js/app.js`; Tabs Vehicle/Drive/Battery/VCU, Untertitel = Kategorie, veraltete Werte grau durchgestrichen. Testserver liest die Signaltabelle aus der Firmware-Quelle (`pwa/tools/mock_api.py`).
 
+### VCU-REQ-023 – Verlaufsdiagramm beim Antippen eines Werts
+- **Typ:** funktional / Bedienung
+- **Priorität:** should
+- **Status:** draft (Nutzerwunsch 2026-11-15, Befund Testfahrt 2026-11-14)
+- **Anforderung:** Tippt der Nutzer auf einen Zahlenwert der Touch-Oberfläche, muss ein Diagramm mit dem Verlauf dieses Werts seit dem Öffnen der Seite erscheinen; es aktualisiert sich mit jeder Abfrage und lässt sich wieder schließen. Werte mit Bedienelement (z. B. Regler) öffnen stattdessen ihr Bedienelement.
+- **Akzeptanz:** Gegeben die Touch-Oberfläche auf dem Navi-Display (Chrome) mit laufender VCU; wenn ein Zahlenwert ohne Bedienelement angetippt wird; dann erscheint innerhalb von 1 s ein Diagramm dieses Werts, das bei jeder neuen Abfrage einen Punkt ergänzt, und es schließt sich per Schließen-Schaltfläche.
+- **Befund 2026-11-14:** Auf dem Radio öffnet das Antippen keine Diagramme mehr. Der Diagrammcode ist in `pwa/src/js/app.js` noch vorhanden (`chartKey`, `rowCanOpenChart`); offen ist, ob die neuen Seiten im Porsche-Stil ihn nicht anbinden oder ob es am Radio liegt.
+- **Abhängigkeiten:** VCU-REQ-010, -011
+
