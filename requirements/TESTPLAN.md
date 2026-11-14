@@ -2,7 +2,7 @@
 
 Legt fest, **wie** die Anforderungen aus [REQUIREMENTS.md](REQUIREMENTS.md) nachgewiesen werden. Ein Requirement wird erst `verified`, wenn die zugeordneten Testfälle mit Evidenz (Pfad, Lauf, Datum) bestanden sind.
 
-Stand 2026-10-28: Firmware- und SPIFFS-Build grün; PWA-Suite 28/28 (zwei Läufe). **Kein Test auf Hardware**: Die VCU war nicht angeschlossen.
+Stand 2026-11-14: Firmware- und SPIFFS-Build grün; PWA-Suite 32/32. Prüfstandsnachweise stehen in der Tabelle; im Fahrzeug ist noch nichts geprüft.
 
 ## 1. Teststufen
 
@@ -20,7 +20,7 @@ Firmware-Tests auf dem PC gibt es seit dem Entfernen der SIL-Umgebung (2026-11-1
 
 | REQ | Testfall | Stufe | Stand |
 |---|---|---|---|
-| VCU-REQ-001 | TC-ECU-01: 10 s Mitschnitt, 5 IDs je 30 ms ± 3 ms, Inhalt nach DBC | P | offen |
+| VCU-REQ-001 | TC-ECU-01: 10 s Mitschnitt, 5 IDs je 10 ms ± 3 ms, Inhalt nach DBC | P/F | P bestanden 2026-11-14 (`gvret_listen.py --cycles`, 12 s: Median 10,00 ms, min 7,7, max 12,3 ms); Inhalt und F offen |
 | VCU-REQ-002 | TC-ECU-02: Einschalten ohne Heim-WLAN, erste 0x280 ≤ 1 s | P | offen |
 | VCU-REQ-003 | TC-RX-01: Mitschnitt einspielen, `/api/live` gegen DBC | P | offen |
 | VCU-REQ-004 | TC-RX-02: Umrichter-Mitschnitt, `sdu_*` gegen OpenInverter-Werte | P | offen |

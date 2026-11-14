@@ -6,14 +6,14 @@ Die VCU ersetzt das Motorsteuergerät auf dem Fahrzeug-CAN, liest den Antriebsum
 - Architektur: [documentation/architecture.svg](documentation/architecture.svg) · CAN-Signale: [documentation/can_messages.md](documentation/can_messages.md) · Porsche 986: [documentation/porsche_986_messages.md](documentation/porsche_986_messages.md) (Spiegel der DBC, `tools/generate_can_md.py`)
 
 ## Hardware
-ESP32-S3-DevKitC-1 (8 MB), 3× MCP2515 an einem SPI-Bus (CAN1 Fahrzeug, CAN2 Umrichter, CAN3 Reserve), TWAI als CAN0 (Bus von TeensyBMS, Zombie-Slave und DC/DC, TX GPIO20, RX GPIO19), X9C103S (Tankgeber, zurzeit ohne Pins), AT24C256-EEPROM (I2C, SCL GPIO39, SDA GPIO37, Adresse 0x50; Ladeparameter, Lüftermodus und Bestzeiten bleiben über einen Neustart erhalten, VCU-REQ-020), zwei Lüfterrelais, RGB-LED. Pinbelegung: [src/board.h](src/board.h).
+ESP32-S3-DevKitC-1 (8 MB), 3× MCP2515 an einem SPI-Bus (CAN1 Fahrzeug, CAN2 Umrichter, CAN3 Reserve), TWAI als CAN0 (Bus von TeensyBMS, Zombie-Slave und DC/DC, TX GPIO20, RX GPIO19), X9C103S (Tankgeber, zurzeit ohne Pins), AT24C256-EEPROM (I2C, SCL GPIO39, SDA GPIO37, Adresse 0x50; Ladeparameter, Lüftermodus und Bestzeiten bleiben über einen Neustart erhalten, VCU-REQ-020), zwei Lüfterrelais an DOUT1/DOUT2 (GPIO21/GPIO47), RGB-LED (blinkt grün/gelb/rot nach Zustand). Pinbelegung: [src/board.h](src/board.h).
 
 Terminierung: CAN0 hat **keinen** 120-Ω-Abschlusswiderstand auf der Platine; CAN1 bis CAN3 sind je per Jumper zuschaltbar.
 
 ## Aufbau
 | Ordner | Inhalt |
 |---|---|
-| `src/` | Firmware: `main.cpp` zeigt den Ablauf (Empfang aller Busse in `loop()`, ECU-Task alle 6 ms, VCU-DEC-015); `app/` Kombi, `comms/` CAN-Codecs, `drivers/` Hardware (CAN-Manager mit öffentlicher Schnittstelle `canmanager_api.h`: Empfangsüberwachung, `params::can`), `services/` Webserver, Signaltabelle, GVRET, Log, serielle Befehle |
+| `src/` | Firmware: `main.cpp` zeigt den Ablauf (Empfang aller Busse in `loop()`, ECU-Task alle 10 ms, VCU-DEC-015/-020); `app/` Kombi, `comms/` CAN-Codecs, `drivers/` Hardware (CAN-Manager mit öffentlicher Schnittstelle `canmanager_api.h`: Empfangsüberwachung, `params::can`), `services/` Webserver, Signaltabelle, GVRET, Log, serielle Befehle |
 | `pwa/` | Touch-UI als PWA, Build und Tests ([pwa/README.md](pwa/README.md)) |
 | `documentation/` | CAN-Signale, DBC-Dateien, Architekturbild, Protokoll |
 | `tools/` | `canivore_py_test_tool/` (Submodul: CAN-Tests über den CANable-Stick, Start mit `tools\can_test.cmd`), `vcu_log.py` (Textlog/[DIAG] von COM10), `vcu_cmd.py` (serielle Befehle, Reset über RTS), `gvret_listen.py` (GVRET je Bus mitlesen, Sequenz/CRC), `savvy_csv_to_asc.py` (SavvyCAN-Log → ASC für die Wiedergabe), `pio_build_info.py` (aktuelles Build-Datum), `generate_can_md.py` (DBC → Markdown: Porsche 986 und VW PQ) |
@@ -39,9 +39,9 @@ PlatformIO aus PowerShell oder cmd starten, nicht aus Git Bash: Das Werkzeug-Set
 - `GET /api/signals` – Signalliste mit Typ, Quelle, Schreibrecht
 - `GET /io` – Testseite für Ausgänge: Lüfterstufen, Tankanzeigen-Poti, Heizung per CAN (0x43A an den Zombie-Slave)
 - `GET /can` – schlanke Testseite: Status, Zähler und Einstellungen aller CAN-Busse und der ECU-Task (`params::can`, Felder `can_*`, `can0_…can3_*`, `ecu_*` in `/api/live`)
-- `GET /api/set?…` – Ladeparameter, Heizung (`heater_request=0|1`), Lüfter (`coolant_fan_level`, `coolant_fan_mode=auto|manual`), Poti, `rpm`/`coolant`/`oil` (Overrides)
-- `GET /api/set-ecu?…` – schreibbare Motorsteuergerät-Signale; `auto` hebt einen Override auf
-- `GET /api/set-cluster?activated=0|1`
+- `POST /api/set?…` (Header `X-VCU: 1`, sonst 403; Review B-08) – Ladeparameter, Heizung (`heater_request=0|1`), Lüfter (`coolant_fan_level`, `coolant_fan_mode=auto|manual`), Poti, `rpm`/`coolant`/`oil` (Overrides)
+- `POST /api/set-ecu?…` – schreibbare Motorsteuergerät-Signale; `auto` hebt einen Override auf
+- `POST /api/set-cluster?activated=0|1`; `/api/set?reset_best_times=1` löscht die Bestzeiten
 - WLAN: Zugangspunkt `eboxster` (http://192.168.4.1/) und Heimnetz aus `secrets.h` (Hostname `eboxster-vcu`, IP mit `vcu_cmd.py wifi-status`); Sendeleistung 8,5 dBm (mit voller Leistung scheiterte der Handshake mit dem Heimnetz)
 - UART0 (COM10, 2 000 000 Baud; SavvyCAN und Terminal auf dieselbe Rate stellen): Textlog (`[VERSION]`, `[WIFI]`, `[DIAG]` jede Sekunde) und Befehle `help`, `version`, `wifi-status`, `wifi-scan`, `can0-status`, `can0-send`, `can0-pintest`, `eeprom-test`, `reset` (`tools/vcu_cmd.py`). Sobald SavvyCAN GVRET auf binär schaltet (0xE7), nur noch GVRET bis zum nächsten Reset; SavvyCAN-Bus 0–3 = CAN0–CAN3, Bus 4 = von der VCU gesendet (VCU-DEC-010). Der native USB-Port entfällt (GPIO19/20 = CAN0).
 
@@ -62,7 +62,7 @@ Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requ
 
 **Hardware (Nutzerentscheidung)**
 - Pins der Tankanzeige (X9C103S INC/UD; GPIO5/6 sind jetzt CAN3, die Tankanzeige ist abgeschaltet).
-- Pin Lüfter Stufe 1, Lüfterschwellen.
+- Lüfterschwellen; Zuordnung DOUT1 = Stufe 1, DOUT2 = Stufe 2 am Relais prüfen.
 - Rolle von CAN3.
 
 **Akku, Laden, TCU**
@@ -79,8 +79,10 @@ Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requ
 - Zwei PWA-Tests schlagen sporadisch fehl (`test_rapid_slider_changes_coalesce`, `test_set_command_reaches_vcu`); Ursache unbekannt.
 
 **Sonstiges**
-- WLAN der VCU antwortete am 2026-11-12 zeitweise mit 0,4 bis 2,4 s; Ursache unbekannt.
-- SavvyCAN mit 2 Mbaud und 5 Bussen noch nicht ausprobiert (nur `tools/gvret_listen.py`).
+- WLAN der VCU antwortete am 2026-11-12 zeitweise mit 0,4 bis 2,4 s. Wahrscheinliche Ursachen laut Review: Webserver wartet bis 5 s auf stumme Verbindungen (B-07, nur mit Webserver-Tausch lösbar) und Dauersuche nach dem Heimnetz (B-09, seit 2026-11-14 gedrosselt). Nachmessen.
+- EEPROM (AT24C) antwortet am Prüfstand nicht (I2C-Fehler, 2026-11-14, auch mit älterer Firmware): Verbindung prüfen.
+- SavvyCAN mit 2 Mbaud und 5 Bussen noch nicht ausprobiert (nur `tools/gvret_listen.py`); prüfen, ob SavvyCAN Keepalives sendet (sonst nach 5 s zurück in den Textmodus).
+- Fable-Review ([FABLE_REVIEW.md](FABLE_REVIEW.md)): umgesetzt 2026-11-14 B-01, B-04, B-05, B-06, B-08 bis B-16, U-05, U-06, U-07, P-01. Offen: B-02 (negative SDU-Temperaturen, Mitschnitt bei Kälte), B-03, B-07/A-03, U-01/U-02 (beim GUI-Aufräumen), U-10, A-01 bis A-10, P-02 bis P-08.
 - Zeitgrenze für veraltete Werte (heute 500 ms, 0x41D/0x41E 2,5 s).
 - Doppelte Namen und LTE-Felder in der Signaltabelle aufräumen.
 

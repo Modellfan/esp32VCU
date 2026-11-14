@@ -24,10 +24,10 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Typ:** funktional / Sicherheit
 - **Priorität:** must
 - **Status:** draft
-- **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 30 ms gesendet; die Sendezeitpunkte sind gleichmäßig verteilt. Nicht genutzte Bits tragen die in `can_messages.md` dokumentierten Standardwerte.
-- **Akzeptanz:** Gegeben eine laufende VCU am Fahrzeug-CAN; wenn 10 s mitgeschnitten werden; dann erscheint jede der fünf IDs mit 30 ms ± 3 ms Abstand, die Inhalte entsprechen der DBC, und das Kombiinstrument zeigt keine Motorsteuergeräte-Störung.
+- **Anforderung:** Die VCU muss auf dem Fahrzeug-CAN (500 kbit/s) die Botschaften des Motorsteuergeräts senden, die die übrigen Steuergeräte (Kombiinstrument, ABS/PSM, Getriebe) erwarten: 0x280 (Motor_1), 0x289 (Motor_2), 0x298 (Motor_3), 0x4E0 (MO5) und 0x7A0. Jede Botschaft wird alle 10 ms gesendet, alle fünf als Block wie bei der Original-DME (VCU-DEC-020). Nicht genutzte Bits tragen die in `can_messages.md` dokumentierten Standardwerte.
+- **Akzeptanz:** Gegeben eine laufende VCU am Fahrzeug-CAN; wenn 10 s mitgeschnitten werden; dann erscheint jede der fünf IDs mit 10 ms ± 3 ms Abstand, die Inhalte entsprechen der DBC, und das Kombiinstrument zeigt keine Motorsteuergeräte-Störung.
 - **Abhängigkeiten:** keine
-- **Umsetzung:** vorhanden (CAN-Task `canTask()` in `src/main.cpp`, 6-ms-Zeitschlitze; `src/comms/986_ecu_messages.cpp`). Laut Log am 2026-02-25 geflasht; Zyklus und Fahrzeugreaktion nicht per Mitschnitt belegt.
+- **Umsetzung:** vorhanden (`ecuTask()` in `src/main.cpp`, 10-ms-Block; `src/comms/986_ecu_messages.cpp`). Prüfstand 2026-11-14: Median 10,00 ms je ID. Fahrzeugreaktion nicht belegt.
 - **Offen:** zulässige Zykluszeittoleranz; ob 0x4F8 (definiert, aber nicht gesendet) benötigt wird.
 
 ### VCU-REQ-002 – Schneller Start der Emulation
@@ -93,7 +93,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Akzeptanz:** Gegeben ein Geschwindigkeitsverlauf mit bekannter Zeit bis 50 und 100 km/h; wenn er eingespielt wird; dann weichen die gemeldeten Zeiten höchstens 0,1 s ab, und ein Lauf ohne vorherigen Stillstand wird nicht gewertet.
 - **Abhängigkeiten:** VCU-REQ-003 (Geschwindigkeit aus 0x510)
 - **Umsetzung:** vorhanden (`src/app/cluster_calc.cpp`, Anzeige Touch-UI „Stopwatch“).
-- **Nutzerentscheidung 2026-10-28:** Bestwerte werden vorerst nicht gespeichert.
+- **Nutzerentscheidung 2026-10-28:** Bestwerte werden vorerst nicht gespeichert. Überholt: VCU-REQ-020 speichert sie. Seit 2026-11-14 (Review B-04): Läufe unter 1 s (0–50) bzw. 2 s (0–100) werden verworfen, ein Lauf bricht ab, wenn die Geschwindigkeit 5 km/h unter das Maximum fällt oder 0x510 fehlt; `/api/set?reset_best_times=1` löscht die Bestzeiten.
 - **Nachweis (SIL, 2026-11-05):** TC-SIL-11…13 (Abweichung < 0,01 s gegen das Modell, Bestwert, fliegender Start).
 
 ### Ausgänge
@@ -127,7 +127,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Typ:** Schnittstelle
 - **Priorität:** must
 - **Status:** draft
-- **Anforderung:** Die VCU muss alle dekodierten, berechneten und gesetzten Werte als JSON unter `GET /api/live` bereitstellen; mit `fields=` lässt sich die Antwort auf einzelne Felder beschränken. Sollwerte werden über `/api/set`, `/api/set-ecu` und `/api/set-cluster` gesetzt; die Antwort enthält den neuen Live-Stand.
+- **Anforderung:** Die VCU muss alle dekodierten, berechneten und gesetzten Werte als JSON unter `GET /api/live` bereitstellen; mit `fields=` lässt sich die Antwort auf einzelne Felder beschränken. Sollwerte werden per POST mit Header `X-VCU: 1` über `/api/set`, `/api/set-ecu` und `/api/set-cluster` gesetzt (seit 2026-11-14, Review B-08); die Antwort enthält den neuen Live-Stand (mit `fields=` gekürzt).
 - **Akzeptanz:** Gegeben eine laufende VCU; wenn `/api/live?fields=sdu_udc,rpm` abgerufen wird; dann enthält die Antwort genau diese Felder als gültiges JSON. Wenn `/api/set?coolant_fan_level=1` aufgerufen wird; dann meldet die Antwort `coolant_fan_level` 1.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
 - **Umsetzung:** aus der zentralen Signaltabelle `src/services/signal_table.cpp` erzeugt (VCU-DEC-007); zusätzlich `/api/signals` (Name, Typ, Gruppe, Quelle, schreibbar), `rejected` für ungültige Setzwerte, `null` statt `nan`.
@@ -140,7 +140,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Die VCU muss eine Oberfläche für das Navi-Display mit 1024×600 Pixeln ausliefern; sie ist die einzige Oberfläche der VCU und unter `/` erreichbar. Inhalte: Startseite mit Akku- und Fahrzeugdarstellung, Energiefluss, Fahrzeug (Antrieb, Akku, Lader), Einstellungen (Ziel-Ladestand, AC-Ladestrom, Potentiometer), Belüftung, Kühlung, Kombiinstrument und Stoppuhr. Beim Start läuft ein Intro-Video von etwa 1 s. Elemente ohne Datenquelle sind als Muster gekennzeichnet und schreiben keine Werte.
 - **Akzeptanz:** Gegeben ein Browser mit 1024×600; wenn `/` und jede Hauptseite geöffnet wird; dann passt der Inhalt ohne Scrollbalken, Live-Werte aktualisieren sich, und die PWA-Tests (`pwa/tests`, Playwright 1024×600) laufen ohne Fehler.
 - **Abhängigkeiten:** VCU-REQ-010
-- **Umsetzung:** PWA in `pwa/` (Stand 2026-10-28): Build `pwa/dist` 0,49 MB statt 18 MB, Manifest, Icons, Service Worker (nur HTTPS/localhost), gehärtete Netzwerkschicht; 28 automatische Tests grün (`pwa/tests`). Seit 2026-10-28 ist `pwa/dist` das SPIFFS-Image und die Firmware liefert die PWA unter `/` aus (VCU-DEC-012); auf Hardware nicht geprüft. Handy-UI entfernt. Die frühere Touch-UI in `data/` ist entfernt (2026-11-09); Originalbilder in `pwa/assets-src/`. Die Seite `styleTest` enthält Musterbedienelemente ohne Funktion (Fahrwerkshöhe, Lenkunterstützung, Sound, Simulationsschalter).
+- **Umsetzung:** PWA in `pwa/` (Stand 2026-10-28): Build `pwa/dist` 0,49 MB statt 18 MB, Manifest, Icons, Service Worker (nur HTTPS/localhost), gehärtete Netzwerkschicht; automatische Tests in `pwa/tests` (2026-11-14: 32 grün). Seit 2026-10-28 ist `pwa/dist` das SPIFFS-Image und die Firmware liefert die PWA unter `/` aus (VCU-DEC-012); auf Hardware nicht geprüft. Handy-UI entfernt. Die frühere Touch-UI in `data/` ist entfernt (2026-11-09); Originalbilder in `pwa/assets-src/`. Die Seite `styleTest` enthält Musterbedienelemente ohne Funktion (Fahrwerkshöhe, Lenkunterstützung, Sound, Simulationsschalter).
 - **Offline (Nutzerwunsch 2026-10-29):** Auf dem Android-Radio (Chrome) startet die Oberfläche auch ohne VCU aus dem Cache, mit allen Bildern; Live-Werte zeigen dann den Verbindungsverlust. Akzeptanz: Cache einmal gefüllt, VCU aus, neu laden → alle Seiten ohne fehlendes Bild. Nachweis (emuliert, Chromium mit Flag): `pwa/tests/test_pwa.py::test_android_radio_chrome_flag_offline`. Auf dem Radio nicht geprüft.
 - **Offen:** Welche Musterelemente echte Funktionen werden sollen.
 
