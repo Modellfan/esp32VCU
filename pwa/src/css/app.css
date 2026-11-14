@@ -33,6 +33,7 @@ body {
 body {
   display: grid;
   place-items: center;
+  min-height: 100vh;  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
   min-height: 100dvh;
   width: 100vw;
   overscroll-behavior: none;
@@ -59,6 +60,7 @@ body {
 
 .intro-splash-frame {
   width: min(100vw, 1024px);
+  height: min(100vh, 600px);  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
   height: min(100dvh, 600px);
   display: grid;
   place-items: center;
@@ -82,6 +84,7 @@ body {
 
 .screen {
   width: min(100vw, 1024px);
+  height: min(100vh, 600px);  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
   height: min(100dvh, 600px);
   display: grid;
   grid-template-columns: 76px 1fr;
@@ -2625,6 +2628,7 @@ body {
 @media (max-width: 1024px), (max-height: 600px) {
   .screen {
     width: 100vw;
+    height: 100vh;  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
     height: 100dvh;
   }
 }

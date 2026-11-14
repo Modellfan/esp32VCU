@@ -19,6 +19,7 @@ html, body {
   margin: 0;
   width: 100%;
   height: 100%;
+  min-height: 100vh;  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
   min-height: 100dvh;
   overflow: hidden;
   background: #000000;
@@ -46,6 +47,7 @@ body.is-booting #screenRoot[hidden] {
 
 #introSplash .intro-splash-frame {
   width: min(100vw, 1024px);
+  height: min(100vh, 600px);  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
   height: min(100dvh, 600px);
   display: grid;
   place-items: center;
