@@ -51,7 +51,6 @@ enum GVRET_PROTOCOL {
 // GVRET state variables
 // (Since this header is only included in one file, we define these as static.)
 static volatile bool gvret_binOutput = false;  // read by the CAN tasks on core 1
-static volatile uint32_t gvret_lastHostMs = 0;   // last byte from the host (U-07)
 static GVRET_STATE gvretState = IDLE;
 static int gvretStep = 0;
 
@@ -65,7 +64,6 @@ inline void gvret_loop() {
     
     while (GVRET_PORT.available()) {
         c = GVRET_PORT.read();
-        gvret_lastHostMs = millis();
         // For debugging you can uncomment these lines:
         // Serial.print("Received: 0x");
         // Serial.print(c, HEX);

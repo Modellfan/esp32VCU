@@ -19,7 +19,6 @@ struct ObservedFrame {
 QueueHandle_t gQueue = nullptr;
 volatile uint32_t gDropped = 0;
 portMUX_TYPE gDroppedMux = portMUX_INITIALIZER_UNLOCKED;
-constexpr uint32_t HOST_SILENT_MS = 5000;  // U-07: back to text mode without host traffic
 
 }  // namespace
 
@@ -43,12 +42,9 @@ void gvretBridgeObserve(const CANMessage &frame, int bus) {
 }
 
 void gvretBridgeService() {
+    // Binary mode stays on until the next reset: SavvyCAN sends nothing while it only listens
+    // (2026-11-16: a 5 s host timeout cut every SavvyCAN recording after 5 s).
     gvret_loop();
-    // SavvyCAN sends a keepalive while connected; without host bytes the text log returns.
-    if (gvret_binOutput && millis() - gvret_lastHostMs > HOST_SILENT_MS) {
-        gvret_binOutput = false;
-        VCU_LOG("[GVRET] host silent for %lu ms: text log and commands again\n", (unsigned long)HOST_SILENT_MS);
-    }
     if (gQueue == nullptr) {
         return;
     }
