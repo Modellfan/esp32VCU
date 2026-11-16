@@ -2715,3 +2715,69 @@ body {
   color: rgba(255, 255, 255, 0.38);
   text-decoration: line-through;
 }
+
+/* Engineering tab "Needle" (calibration sliders) */
+.pt-layout-needle {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pt-layout-needle .pt-list {
+  border-right: 0;
+}
+
+.pt-layout-needle .pt-list .pt-row {
+  height: auto;
+  min-height: 84px;
+}
+
+.pt-layout-needle .pt-row.is-no-icon {
+  grid-template-columns: 250px minmax(0, 1fr);
+}
+
+.pt-layout-needle .pt-row-value {
+  min-width: 0;
+  width: 100%;
+  justify-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.pt-needle-control {
+  flex: 1 1 auto;
+  max-width: 680px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px 86px;
+  align-items: center;
+  gap: 12px;
+}
+
+.pt-needle-step,
+.pt-needle-auto {
+  height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font: inherit;
+  font-size: 26px;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.pt-needle-auto {
+  min-width: 96px;
+  padding: 0 14px;
+  font-size: 22px;
+}
+
+.pt-needle-auto:disabled {
+  opacity: 0.35;
+}
+
+.pt-needle-readout {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

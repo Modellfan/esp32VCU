@@ -51,11 +51,7 @@
 #define MO2_KUEHLM_T_MAX_C ((MO2_KUEHLM_T_RAW_MAX * MO2_KUEHLM_T_FACTOR) + MO2_KUEHLM_T_OFFSET)
 
 // Needle values
-#define NEEDLE_REVERSE_VALUE 35
-#define NEEDLE_NEUTRAL_VALUE 822
-#define NEEDLE_OFFSET_VALUE 4100
-#define NEEDLE_DRIVE_MAX_VALUE 7950
-#define NEEDLE_REGEN_MIN_VALUE 1600
+// Needle calibration: params::cluster.needle_* (settable in engineering mode, not stored).
 #define NEEDLE_LAG 30
 
 // Fuel simulation for MO5 consumption.
@@ -207,18 +203,19 @@ float powerPercent(float battVoltage_V, float motorCurrent_A, uint8_t refMode) {
 }
 
 int needleFromPercent(int8_t dir, float percentSigned) {
-    if (dir > 0) return NEEDLE_REVERSE_VALUE;
-    if (dir == 0) return NEEDLE_NEUTRAL_VALUE;
+    const params::ClusterSignals &c = params::cluster;
+    if (dir > 0) return c.needle_reverse;
+    if (dir == 0) return c.needle_neutral;
 
     const float p = clampf(percentSigned, -1.0f, 1.0f);
-    if (fabsf(p) < 0.05f) return NEEDLE_OFFSET_VALUE;
+    if (fabsf(p) < 0.05f) return c.needle_offset;
 
     if (p > 0.0f) {
-        const int base = (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_DRIVE_MAX_VALUE, p));
+        const int base = (int)lroundf(lerpf((float)c.needle_offset, (float)c.needle_drive_max, p));
         const int lagged = base + NEEDLE_LAG;
-        return (lagged > NEEDLE_DRIVE_MAX_VALUE) ? NEEDLE_DRIVE_MAX_VALUE : lagged;
+        return (lagged > c.needle_drive_max) ? c.needle_drive_max : lagged;
     }
-    return (int)lroundf(lerpf((float)NEEDLE_OFFSET_VALUE, (float)NEEDLE_REGEN_MIN_VALUE, -p));
+    return (int)lroundf(lerpf((float)c.needle_offset, (float)c.needle_regen_min, -p));
 }
 
 // Values set through /api/set-ecu win over the calculation above (VCU-DEC-005).

@@ -1166,9 +1166,9 @@
           ]
         },
         {
-          label: "Power",
-          title: "Cluster Power",
-          subtitle: "Cluster power calculations correlated with vehicle and ECU context.",
+          label: "Needle",
+          title: "Needle calibration",
+          subtitle: "Power needle: live value and end points (reset on VCU restart).",
           rows: [
             field("Power Percent Max", fixedField("cluster_power_percent_max", 3, "%")),
             field("Power Percent Dyn", fixedField("cluster_power_percent_dyn", 3, "%")),
@@ -1294,6 +1294,8 @@
     section: "home",
     tabIndex: 0,
     engineeringMode: readEngineeringMode(),
+    needleDraft: {},
+    needleDragUntil: 0,
     batteryControls: {
       acCurrentLimitA: 16,
       digitalPotPct: 0,
@@ -2443,6 +2445,96 @@
     });
   }
 
+  // Engineering tab "Needle": calibration of the power needle (raw 0x280 engine speed).
+  // Values go to /api/set-ecu and are lost on a VCU restart.
+  const NEEDLE_MAX = 9000;
+  const NEEDLE_CAL = [
+    { key: "cluster_needle_reverse", label: "Reverse", detail: "Direction R", def: 35 },
+    { key: "cluster_needle_neutral", label: "Neutral", detail: "Direction N, no data", def: 822 },
+    { key: "cluster_needle_offset", label: "Zero power", detail: "Drive, 0 %", def: 4100 },
+    { key: "cluster_needle_drive_max", label: "Full power", detail: "Drive, 100 %", def: 7950 },
+    { key: "cluster_needle_regen_min", label: "Full regen", detail: "Drive, -100 %", def: 1600 }
+  ];
+  const NEEDLE_TEST_KEY = "engine_speed_rpm";
+  const NEEDLE_LIVE_KEYS = NEEDLE_CAL.map(function (c) { return c.key; }).concat([
+    NEEDLE_TEST_KEY, "rpm_override", "cluster_needle_position", "cluster_sdu_data_ok", "sdu_seldir",
+    "cluster_power_percent_max", "cluster_power_percent_dyn"
+  ]);
+
+  function isNeedleTab() {
+    return state.section === "cluster" && !!currentTab() && currentTab().label === "Needle";
+  }
+
+  function needleDragging() {
+    return state.needleDragUntil > Date.now();
+  }
+
+  function needleValue(key) {
+    if ((needleDragging() || isGuarded(key)) && Object.prototype.hasOwnProperty.call(state.needleDraft, key)) {
+      return state.needleDraft[key];
+    }
+    const value = Number((state.live || {})[key]);
+    return Number.isFinite(value) ? Math.round(value) : null;
+  }
+
+  function needleControl(key, value, fallback) {
+    const shown = value === null ? fallback : value;
+    const fill = Math.round(clampNumber(shown, 0, NEEDLE_MAX, 0) / NEEDLE_MAX * 100);
+    return "<div class=\"pt-needle-control\">" +
+      "<button type=\"button\" class=\"pt-needle-step\" data-needle-key=\"" + key + "\" data-needle-step=\"-10\" aria-label=\"minus 10\">&minus;</button>" +
+      "<input class=\"pt-slider pt-needle-slider\" type=\"range\" min=\"0\" max=\"" + NEEDLE_MAX + "\" step=\"5\" value=\"" +
+        escapeHtml(String(shown)) + "\" style=\"--pt-slider-fill: " + fill + "%\" data-needle-key=\"" + key + "\" aria-label=\"" + key + "\">" +
+      "<button type=\"button\" class=\"pt-needle-step\" data-needle-key=\"" + key + "\" data-needle-step=\"10\" aria-label=\"plus 10\">+</button>" +
+      "<strong class=\"pt-needle-readout\" data-needle-readout=\"" + key + "\">" + escapeHtml(value === null ? "--" : String(value)) + "</strong>" +
+    "</div>";
+  }
+
+  function needlePageMarkup() {
+    const live = state.live || {};
+    const dir = Number(live.sdu_seldir);
+    const mode = live.cluster_sdu_data_ok !== true ? "No inverter data"
+      : dir > 0 ? "Reverse" : dir === 0 ? "Neutral" : dir < 0 ? "Drive" : "--";
+    const now = needleValue("cluster_needle_position");
+    const testActive = live.rpm_override === true;
+    const testValue = testActive ? needleValue(NEEDLE_TEST_KEY) : null;
+    function percent(key) {
+      const value = Number(live[key]);
+      return Number.isFinite(value) ? String(Math.round(value * 100)) : "--";
+    }
+    const rows = [
+      { label: "Needle now", detail: mode, control: "<span class=\"pt-live-value\"><strong>" +
+        escapeHtml(now === null ? "--" : String(now)) + "</strong></span>" },
+      { label: "Power", detail: "Max / dynamic reference", control: "<span class=\"pt-live-value\"><strong>" +
+        escapeHtml(percent("cluster_power_percent_max") + " / " + percent("cluster_power_percent_dyn")) + "</strong><small>%</small></span>" },
+      { label: "Needle test", detail: testActive ? "Override active" : "Off, calculated",
+        control: needleControl(NEEDLE_TEST_KEY, testValue, now === null ? 0 : now) +
+          "<button type=\"button\" class=\"pt-needle-auto\" data-needle-auto=\"1\"" + (testActive ? "" : " disabled") + ">Auto</button>" }
+    ].concat(NEEDLE_CAL.map(function (c) {
+      return { label: c.label, detail: c.detail + " (" + c.def + ")", control: needleControl(c.key, needleValue(c.key), c.def) };
+    })).concat([
+      { label: "Defaults", detail: "Restore all five", control: "<button type=\"button\" class=\"pt-needle-auto\" data-needle-defaults=\"1\">Reset</button>" }
+    ]).map(function (row) {
+      row.engineeringOnly = true;
+      return row;
+    });
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-needle\"><section class=\"pt-list\">" +
+      porscheRows(rows) +
+      "</section></div>";
+  }
+
+  function sendNeedle(key, value) {
+    const rounded = Math.round(clampNumber(value, 0, NEEDLE_MAX, 0));
+    state.needleDraft[key] = rounded;
+    state.live = Object.assign({}, state.live || {});
+    state.live[key] = rounded;
+    if (key === NEEDLE_TEST_KEY) {
+      state.live.rpm_override = true;
+    }
+    guardSetKey(key);
+    net.set(key, rounded, "/api/set-ecu");
+    return rounded;
+  }
+
   function signalsPageMarkup() {
     const signalsApi = window.VcuSignals;
     if (!signalsApi.loaded()) {
@@ -3250,10 +3342,15 @@
     if (!styleTestStage) {
       return;
     }
+    if (isNeedleTab() && needleDragging()) {
+      return;  // a re-render would drop the slider under the finger
+    }
     const tab = currentTab().label;
     const scrollKey = styleTestScrollKey();
     rememberStyleTestScroll();
-    const content = state.section === "ventilation"
+    const content = isNeedleTab()
+      ? needlePageMarkup()
+      : state.section === "ventilation"
       ? energyFlowMarkup()
       : state.section === "signals"
       ? signalsPageMarkup()
@@ -3422,7 +3519,7 @@
     }
 
     styleTestStage.addEventListener("pointerdown", function (event) {
-      if (event.target.closest("button, [data-pt-checkbox], .pt-vertical-slider, .pt-row[data-pt-chart-key], .pt-row[data-pt-menu-key]")) {
+      if (event.target.closest("button, input, [data-pt-checkbox], .pt-vertical-slider, .pt-row[data-pt-chart-key], .pt-row[data-pt-menu-key]")) {
         return;
       }
       if (state.styleTestPopup) {
@@ -3600,6 +3697,52 @@
       state.styleTestControls[key] = !state.styleTestControls[key];
       renderStyleTestStage();
       updateTopbarTime();
+    });
+    styleTestStage.addEventListener("input", function (event) {
+      const needleSlider = event.target.closest(".pt-needle-slider[data-needle-key]");
+      if (!needleSlider) {
+        return;
+      }
+      const key = needleSlider.getAttribute("data-needle-key");
+      state.needleDragUntil = Date.now() + 1500;
+      const value = sendNeedle(key, Number(needleSlider.value));
+      needleSlider.style.setProperty("--pt-slider-fill", String(Math.round(value / NEEDLE_MAX * 100)) + "%");
+      const readout = styleTestStage.querySelector("[data-needle-readout=\"" + key + "\"]");
+      if (readout) {
+        readout.textContent = String(value);
+      }
+    });
+    styleTestStage.addEventListener("change", function (event) {
+      if (event.target.closest(".pt-needle-slider")) {
+        state.needleDragUntil = 0;
+        renderStyleTestStage();
+      }
+    });
+    styleTestStage.addEventListener("click", function (event) {
+      const step = event.target.closest("[data-needle-step]");
+      if (step) {
+        const key = step.getAttribute("data-needle-key");
+        const current = needleValue(key);
+        const base = current === null
+          ? (NEEDLE_CAL.filter(function (c) { return c.key === key; })[0] || { def: 0 }).def
+          : current;
+        sendNeedle(key, base + Number(step.getAttribute("data-needle-step")));
+        renderStyleTestStage();
+        return;
+      }
+      if (event.target.closest("[data-needle-auto]")) {
+        state.live = Object.assign({}, state.live || {}, { rpm_override: false });
+        delete state.needleDraft[NEEDLE_TEST_KEY];
+        net.set(NEEDLE_TEST_KEY, "auto", "/api/set-ecu");
+        renderStyleTestStage();
+        return;
+      }
+      if (event.target.closest("[data-needle-defaults]")) {
+        NEEDLE_CAL.forEach(function (c) {
+          sendNeedle(c.key, c.def);
+        });
+        renderStyleTestStage();
+      }
     });
     styleTestStage.addEventListener("input", function (event) {
       const slider = event.target.closest(".pt-slider[data-pt-slider-key]");
@@ -3878,7 +4021,7 @@
     const isHome = state.section === "home";
     const isCoolant = state.section === "coolant";
     const isStyleTest = state.section === "styleTest";
-    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation" || state.section === "signals";
+    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation" || state.section === "signals" || isNeedleTab();
     const activeSection = currentSection();
     const activeTab = currentTab();
     const isTileBoard = isCurrentTabTileBoard();
@@ -4202,6 +4345,10 @@
         "charger_connected",
         "charge_port_connected"
       );
+    } else if (isNeedleTab()) {
+      NEEDLE_LIVE_KEYS.forEach(function (key) {
+        keys.push(key);
+      });
     } else if (state.section === "signals") {
       window.VcuSignals.keysFor(state.tabIndex).forEach(function (key) {
         keys.push(key);

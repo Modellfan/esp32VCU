@@ -22,6 +22,12 @@ struct ClusterSignals {
     bool acceleration_0_50_valid = false;
     bool acceleration_0_100_valid = false;
     bool sdu_data_ok = false;  // 0x500 and 0x504 fresh; otherwise the cluster shows the fallback
+    // Needle calibration (raw 0x280 engine speed); set in engineering mode, reset on restart.
+    uint16_t needle_reverse = 35;       // direction reverse
+    uint16_t needle_neutral = 822;      // direction neutral, also when SDU data is stale
+    uint16_t needle_offset = 4100;      // drive, no power
+    uint16_t needle_drive_max = 7950;   // drive, full power
+    uint16_t needle_regen_min = 1600;   // drive, full regeneration
 };
 
 extern ClusterSignals cluster;

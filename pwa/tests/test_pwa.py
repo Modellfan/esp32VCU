@@ -600,3 +600,32 @@ def test_android_radio_chrome_flag_offline(browser, tmp_path, api):
     finally:
         serve.FAULT["mode"] = "ok"
         srv.shutdown()
+
+def test_needle_calibration_sliders(page, server, api):
+    """Engineering tab "Needle": sliders and +/- send the calibration to /api/set-ecu."""
+    open_app(page, server)
+    enable_engineering(page)
+    goto_section(page, "cluster")
+    tab = page.evaluate("() => Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('Needle')).dataset.tabIndex")
+    page.click(f".tab[data-tab-index='{tab}']")
+    page.wait_for_selector(".pt-layout-needle .pt-needle-slider[data-needle-key='cluster_needle_neutral']")
+    sliders = page.evaluate("() => Array.from(document.querySelectorAll('.pt-needle-slider')).map(s => s.dataset.needleKey)")
+    assert sliders == ["engine_speed_rpm", "cluster_needle_reverse", "cluster_needle_neutral", "cluster_needle_offset",
+                       "cluster_needle_drive_max", "cluster_needle_regen_min"], sliders
+    page.evaluate(
+        "() => { const s = document.querySelector(\".pt-needle-slider[data-needle-key='cluster_needle_neutral']\");"
+        " s.value = '900'; s.dispatchEvent(new Event('input', {bubbles: true}));"
+        " s.dispatchEvent(new Event('change', {bubbles: true})); }")
+    assert wait_until(lambda: any(s["path"] == "/api/set-ecu" and s["key"] == "cluster_needle_neutral" and s["value"] == "900"
+                                  for s in api.stats()["sets"]), 5)
+    page.click(".pt-needle-step[data-needle-key='cluster_needle_neutral'][data-needle-step='10']")
+    assert wait_until(lambda: any(s["key"] == "cluster_needle_neutral" and s["value"] == "910"
+                                  for s in api.stats()["sets"]), 5)
+    page.wait_for_timeout(1500)  # several polls: the value must not jump back
+    readout = page.inner_text("[data-needle-readout='cluster_needle_neutral']")
+    assert readout == "910", readout
+    page.click("[data-needle-defaults]")
+    assert wait_until(lambda: any(s["key"] == "cluster_needle_neutral" and s["value"] == "822"
+                                  for s in api.stats()["sets"]), 5)
+    screenshot(page, "signals-needle")
+    assert not page.probe.errors
