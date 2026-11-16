@@ -29,13 +29,9 @@ bool eepromBegin() {
                 board::GPIO_EEPROM_SCL);
         return false;
     }
-    I2C_eeprom probe(gAddress, &Wire);
-    probe.begin();
-    gSize = probe.determineSizeNoWrite();
-    if (gSize == 0) {
-        VCU_LOG("[EEPROM] AT24C at 0x%02X, size unknown\n", gAddress);
-        return false;
-    }
+    // Fixed size: determineSizeNoWrite() returns 1 when the first 32 bytes are all 0xFF/0x00
+    // (empty chip), which broke every access (bench 2026-11-16).
+    gSize = I2C_DEVICESIZE_24LC256;  // AT24C256 (README, board.h)
     gChip = new (gStorage) I2C_eeprom(gAddress, gSize, &Wire);
     gChip->begin();
     VCU_LOG("[EEPROM] AT24C at 0x%02X, %lu bytes, page %u\n", gAddress, (unsigned long)gSize, gChip->getPageSize());

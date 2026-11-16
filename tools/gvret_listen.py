@@ -51,11 +51,7 @@ def main() -> None:
     gaps: dict[tuple[int, int], list[int]] = collections.defaultdict(list)
     buf = bytearray()
     end = time.time() + args.duration
-    next_keepalive = 0.0
-    while time.time() < end:
-        if time.time() >= next_keepalive:  # the VCU leaves binary mode after 5 s without host bytes
-            ser.write(bytes([0xF1, 0x09]))
-            next_keepalive = time.time() + 1.0
+    while time.time() < end:  # no host bytes after 0xE7, like SavvyCAN while it only listens
         buf += ser.read(4096)
         while True:
             start = buf.find(0xF1)

@@ -80,8 +80,7 @@ Stand 2026-11-13, nach Priorität. Details in requirements/REQUIREMENTS.md, requ
 
 **Sonstiges**
 - WLAN der VCU antwortete am 2026-11-12 zeitweise mit 0,4 bis 2,4 s. Wahrscheinliche Ursachen laut Review: Webserver wartet bis 5 s auf stumme Verbindungen (B-07, nur mit Webserver-Tausch lösbar) und Dauersuche nach dem Heimnetz (B-09, seit 2026-11-14 gedrosselt). Nachmessen.
-- EEPROM (AT24C) antwortet am Prüfstand nicht (I2C-Fehler, 2026-11-14, auch mit älterer Firmware): Verbindung prüfen.
-- SavvyCAN mit 1 Mbaud und 5 Bussen: Verbindung geht (2026-11-15); Aufzeichnung brach nach 5 s ab (Host-Timeout, 2026-11-16 entfernt), Dauermitschnitt erneut prüfen.
+- SavvyCAN mit 1 Mbaud und 5 Bussen: Verbindung geht (2026-11-15); Aufzeichnung brach nach 5 s ab (Host-Timeout, 2026-11-16 entfernt); `gvret_listen.py` ohne Host-Bytes 40 s ohne Abbruch, mit SavvyCAN erneut prüfen.
 - Fable-Review ([FABLE_REVIEW.md](FABLE_REVIEW.md)): umgesetzt 2026-11-14 B-01, B-04, B-05, B-06, B-08 bis B-16, U-05, U-06, U-07, P-01. Offen: B-02 (negative SDU-Temperaturen, Mitschnitt bei Kälte), B-03, B-07/A-03, U-01/U-02 (beim GUI-Aufräumen), U-10, A-01 bis A-10, P-02 bis P-08.
 - Zeitgrenze für veraltete Werte (heute 500 ms, 0x41D/0x41E 2,5 s).
 - Doppelte Namen und LTE-Felder in der Signaltabelle aufräumen.
