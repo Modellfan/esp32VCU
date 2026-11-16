@@ -2773,3 +2773,83 @@ body {
   flex: 0 0 140px;
   font-size: 22px;
 }
+
+/* Engineering page "Flow": Simulink-like live block diagrams (js/flow.js) */
+.fl-page {
+  width: 100%;
+  height: 100%;
+  background: #000000;
+}
+
+.fl-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+}
+
+.fl-block rect {
+  fill: #0d1114;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 1.5;
+}
+
+.fl-block.is-port rect {
+  fill: #0a1a22;
+  stroke: rgba(24, 202, 255, 0.55);
+}
+
+.fl-block.is-active rect {
+  stroke: #18caff;
+  stroke-width: 2;
+}
+
+.fl-block text {
+  text-anchor: middle;
+  fill: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+.fl-block .fl-title {
+  fill: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fl-block .fl-big {
+  fill: #b6ff00;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.fl-block .is-on {
+  fill: #18caff;
+  font-weight: 600;
+}
+
+.fl-block .is-warn {
+  fill: #ffb020;
+}
+
+.fl-wire {
+  fill: none;
+  stroke: #8a9399;
+  stroke-width: 1.6;
+}
+
+.fl-wire.is-active {
+  stroke: #18caff;
+  stroke-width: 2.2;
+}
+
+.fl-value {
+  text-anchor: middle;
+  fill: #b6ff00;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fl-note {
+  fill: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+}

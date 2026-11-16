@@ -174,7 +174,7 @@ const SignalDef kSignals[] = {
     SIG("cluster_power_percent_max", G_CLUSTER, params::ClusterSignals, power_percent_max, F_NUM, 3, RX_NONE, 0),
     SIG("cluster_power_percent_dyn", G_CLUSTER, params::ClusterSignals, power_percent_dyn, F_NUM, 3, RX_NONE, 0),
     SIG("cluster_needle_position", G_CLUSTER, params::ClusterSignals, needle_position, F_INT, 0, RX_NONE, 0),
-    SIG("cluster_total_fuel_l", G_CLUSTER, params::ClusterSignals, total_fuel, F_NUM, 3, RX_NONE, 0),
+    SIG("cluster_total_fuel_l", G_CLUSTER, params::ClusterSignals, total_fuel, F_NUM, 6, RX_NONE, 0),
     SIG("cluster_heatsink_temp_critical", G_CLUSTER, params::ClusterSignals, heatsink_temp_critical, F_BOOL, 0, RX_NONE, 0),
     SIG("cluster_motor_temp_critical", G_CLUSTER, params::ClusterSignals, motor_temp_critical, F_BOOL, 0, RX_NONE, 0),
     SIG("cluster_acceleration_run_active", G_CLUSTER, params::ClusterSignals, acceleration_run_active, F_BOOL, 0, RX_NONE, 0),

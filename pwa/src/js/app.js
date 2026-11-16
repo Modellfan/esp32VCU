@@ -42,7 +42,7 @@
   let coolantStageView = null;
   let batterySettingsModal = null;
   const ENGINEERING_STORAGE_KEY = "touchEngineeringMode";
-  const ENGINEERING_SECTIONS = ["ecu", "devices"];
+  const ENGINEERING_SECTIONS = ["ecu", "devices", "flow"];
   const bootState = {
     introElapsed: false,
     windowLoaded: document.readyState === "complete",
@@ -1131,6 +1131,13 @@
       { label: "Emulation", title: "Emulation", subtitle: "Engine (DME) values sent to the vehicle.", rows: [], hero: [] },
       { label: "Needle", title: "Needle", subtitle: "Power needle and critical temperatures (stored).", rows: [], hero: [] },
       { label: "CAN bus", title: "CAN bus", subtitle: "Bus state, counters and timing.", rows: [], hero: [] }
+    ]
+  };
+  sections.flow = {
+    image: "a/i_cluster.svg",
+    tabs: [
+      { label: "Needle", title: "Needle calculation", subtitle: "Live block diagram of the power needle.", rows: [], hero: [] },
+      { label: "Fuel", title: "Fuel calculation", subtitle: "Live block diagram of the fuel counter.", rows: [], hero: [] }
     ]
   };
   sections.devices = {
@@ -3469,7 +3476,9 @@
     const tab = currentTab().label;
     const scrollKey = styleTestScrollKey();
     rememberStyleTestScroll();
-    const content = state.section === "ecu" || state.section === "devices"
+    const content = state.section === "flow"
+      ? window.VcuFlow.markup(tab, state.live || {})
+      : state.section === "ecu" || state.section === "devices"
       ? ecuSectionMarkup()
       : state.section === "ventilation"
       ? energyFlowMarkup()
@@ -4157,7 +4166,7 @@
     const isHome = state.section === "home";
     const isCoolant = state.section === "coolant";
     const isStyleTest = state.section === "styleTest";
-    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation" || state.section === "ecu" || state.section === "devices";
+    const isPorscheStage = isStyleTest || state.section === "stopwatch" || state.section === "vehicle" || state.section === "ventilation" || state.section === "ecu" || state.section === "devices" || state.section === "flow";
     const activeSection = currentSection();
     const activeTab = currentTab();
     const isTileBoard = isCurrentTabTileBoard();
@@ -4489,6 +4498,10 @@
         "charger_connected",
         "charge_port_connected"
       );
+    } else if (state.section === "flow") {
+      window.VcuFlow.keys(currentTab().label).forEach(function (key) {
+        keys.push(key);
+      });
     } else if (state.section === "ecu" || state.section === "devices") {
       ecuPollKeys().forEach(function (key) {
         keys.push(key);

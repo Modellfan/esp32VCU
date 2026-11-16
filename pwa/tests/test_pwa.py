@@ -19,7 +19,7 @@ from conftest import PWA, VIEWPORT, enable_engineering, open_app, screenshot
 import build
 from urllib.parse import parse_qs, urlsplit
 
-SECTIONS = ["home", "vehicle", "coolant", "ventilation", "stopwatch", "ecu", "devices"]
+SECTIONS = ["home", "vehicle", "coolant", "ventilation", "stopwatch", "ecu", "devices", "flow"]
 
 VIEW_CHECK_JS = """
 () => {
