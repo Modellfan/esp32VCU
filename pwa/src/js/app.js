@@ -147,9 +147,11 @@
 
   function resolveBatteryLevel(live) {
     return firstNumericField(live, [
+      "battery_soc_pct",
       "battery_level",
       "battery_percent",
       "battery_soc",
+      "battery_soc_pct",
       "soc",
       "hv_soc",
       "state_of_charge"
@@ -179,8 +181,10 @@
 
   function resolveBatteryPowerKw(live, batteryLevel) {
     const powerKw = firstNumericField(live, [
+      "battery_pack_power_kw",
       "charge_power_kw",
       "battery_power_kw",
+      "battery_pack_power_kw",
       "hv_power_kw"
     ]);
     if (powerKw !== null) {
@@ -2284,6 +2288,40 @@
     return porscheValue(text, unit || "");
   }
 
+  // "35 - 42" from two live fields (min/max), e.g. cell temperatures.
+  function porscheLiveRange(minKey, maxKey, digits, unit) {
+    const live = state.live || {};
+    const low = firstNumericField(live, [minKey]);
+    const high = firstNumericField(live, [maxKey]);
+    if (low === null || high === null) {
+      return porscheValue("--", "");
+    }
+    return porscheValue(low.toFixed(digits) + " \u2013 " + high.toFixed(digits), unit);
+  }
+
+  // TeensyBMS BMS_ContactorState (ZombieSlave_teensybms_dcdc_mvcu.dbc, VAL_ 1052)
+  const CONTACTOR_STATES = {
+    0: "Init", 1: "Open", 2: "Precharging", 3: "Closing", 4: "Closed", 5: "Opening", 6: "Opening precharge", 7: "Fault"
+  };
+
+  function porscheContactorValue() {
+    const value = firstNumericField(state.live || {}, ["battery_contactor_state"]);
+    if (value === null) {
+      return porscheStatusValue("--");
+    }
+    return porscheStatusValue(CONTACTOR_STATES[value] || ("State " + value));
+  }
+
+  // Yaw rate: magnitude plus sign bit (986 DBC YawRate/YawRateSign; sign 1 shown as negative).
+  function porscheYawRateValue() {
+    const live = state.live || {};
+    const value = firstNumericField(live, ["yaw_rate"]);
+    if (value === null) {
+      return porscheValue("--", "");
+    }
+    return porscheValue((live.yaw_rate_sign ? -value : value).toFixed(3), "rad/s");
+  }
+
   function porscheSduUptimeValue() {
     const live = state.live || {};
     const seconds = firstNumericField(live, ["sdu_uptime_s"]);
@@ -2330,6 +2368,7 @@
     return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
       "<section class=\"pt-list\">" +
         porscheRows([
+          { label: "Motor power", detail: "Inverter DC power", control: porscheLiveNumber(["sdu_power_kw"], 1, "kW") },
           { label: "DC voltage", detail: "Bus voltage", control: porscheLiveNumber(["sdu_udc"], 1, "V") },
           { label: "DC current", detail: "Bus current", control: porscheLiveNumber(["sdu_idc"], 1, "A") },
           { label: "Motor speed", detail: "Rotor speed", control: porscheLiveInteger(["sdu_speed"], "rpm") },
@@ -2384,10 +2423,12 @@
     return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
       "<section class=\"pt-list\">" +
         porscheRows([
-          { label: "Battery power", detail: "Live value", control: porscheValue(power === null ? "--" : power.toFixed(1), "kW") },
-          { label: "DC voltage", detail: "Bus voltage", control: porscheLiveNumber(["sdu_udc"], 1, "V") },
-          { label: "DC current", detail: "Bus current", control: porscheLiveNumber(["sdu_idc"], 1, "A") },
-          { label: "Aux voltage", detail: "Low voltage", control: porscheLiveNumber(["sdu_uaux"], 1, "V") },
+          { label: "Battery power", detail: "Pack power", control: porscheValue(power === null ? "--" : power.toFixed(1), "kW") },
+          { label: "Pack voltage", detail: "Battery pack", control: porscheLiveNumber(["battery_pack_voltage_v"], 1, "V") },
+          { label: "Pack current", detail: "Battery pack", control: porscheLiveNumber(["battery_pack_current_a"], 1, "A") },
+          { label: "Cell voltage", detail: "Min \u2013 max", control: porscheLiveRange("battery_cell_v_min", "battery_cell_v_max", 2, "V") },
+          { label: "Cell temperature", detail: "Min \u2013 max", control: porscheLiveRange("battery_cell_t_min_c", "battery_cell_t_max_c", 0, "\u00B0C") },
+          { label: "Contactors", detail: "Contactor state", control: porscheContactorValue() },
           { label: "Battery charge", detail: "State level", control: porscheValue(level === null ? "--" : String(Math.round(level)), level === null ? "" : "%") },
           { label: "Range", detail: "Estimated range", control: porscheLiveInteger(["battery_range_km"], "km", String(Math.round(resolveBatteryRangeKm(state.live || {}, level) || 0))) }
         ]) +
@@ -2396,33 +2437,35 @@
     "</div>";
   }
 
+  // Charger page empty for now: the Zombie slave forwards no charger values (2026-11-16).
   function porscheVehicleChargerMarkup() {
-    const finish = estimateChargeFinishTimestamp(state.live || {}, resolveBatteryLevel(state.live || {}));
     return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
       "<section class=\"pt-list\">" +
         porscheRows([
-          { label: "Plug", detail: "Cable status", control: porscheLiveBool(["plug_connected", "charger_connected", "charge_port_connected"], "Connected", "Open", "Open") },
-          { label: "Charge power", detail: "Input power", control: porscheLiveNumber(["charge_power_kw", "ac_charge_power_kw", "charger_power_kw"], 1, "kW") },
-          { label: "Target charge", detail: "Charge target", control: porscheStatusValue(String(Math.round(state.batteryControls.targetChargePct)) + "%") },
-          { label: "AC current", detail: "Current limit", control: porscheStatusValue(String(Math.round(state.batteryControls.acCurrentLimitA)) + " A") },
-          { label: "Digital pot", detail: "Pilot output", control: porscheStatusValue(String(Math.round(state.batteryControls.digitalPotPct)) + "%") },
-          { label: "Finish time", detail: "Charge estimate", control: porscheStatusValue(finish ? porscheTime(finish) : "--") }
+          { label: "No charger data", detail: "Not sent on the bus", control: porscheStatusValue("--") }
         ]) +
       "</section>" +
       porscheReferencePhoto("i/charger.webp", "Charger reference") +
     "</div>";
   }
 
+
   function porscheVehicleVehicleMarkup() {
     return "<div class=\"pt-layout pt-layout-drive pt-layout-reference\">" +
       "<section class=\"pt-list\">" +
         porscheRows([
-          { label: "Vehicle speed", detail: "Wheel speed", control: porscheLiveNumber(["vehicle_speed_510", "vref_kmh"], 1, "km/h") },
-          { label: "Acceleration", detail: "Body sensor", control: porscheLiveNumber(["acceleration"], 3, "g") },
-          { label: "Gear position", detail: "Drive state", control: porscheStatusValue(formatPrndValue((state.live || {}).prnd_pos)) },
+          { label: "Vehicle speed", detail: "Wheel speed", control: porscheLiveNumber(["vehicle_speed_510"], 1, "km/h") },
           { label: "Steering angle", detail: "Wheel angle", control: porscheLiveNumber(["lenkwinkel_rb"], 1, "deg") },
-          { label: "Indicator left", detail: "Lamp state", control: porscheLiveBool(["indicator_left"], "On", "Off", "Off") },
-          { label: "Indicator right", detail: "Lamp state", control: porscheLiveBool(["indicator_right"], "On", "Off", "Off") }
+          { label: "Acceleration", detail: "Body sensor", control: porscheLiveNumber(["acceleration"], 3, "g") },
+          { label: "Yaw rate", detail: "Body sensor", control: porscheYawRateValue() },
+          { label: "Brake light switch", detail: "Brake pedal", control: porscheLiveBool(["brake_sw"], "On", "Off", "--") },
+          { label: "Handbrake", detail: "Parking brake", control: porscheLiveBool(["handbrake"], "On", "Off", "--") },
+          { label: "PSM lamp", detail: "Stability control", control: porscheLiveBool(["psm_button_lamp"], "On", "Off", "--") },
+          { label: "Indicator left", detail: "Lamp state", control: porscheLiveBool(["indicator_left"], "On", "Off", "--") },
+          { label: "Indicator right", detail: "Lamp state", control: porscheLiveBool(["indicator_right"], "On", "Off", "--") },
+          { label: "Outside temperature", detail: "Ambient air", control: porscheLiveNumber(["ambient_c"], 1, "\u00B0C") },
+          { label: "Light dimmer", detail: "Instrument lighting", control: porscheLiveInteger(["light_dimmer"], "") },
+          { label: "Gear position", detail: "Drive state", control: porscheStatusValue(formatPrndValue((state.live || {}).prnd_pos)) }
         ]) +
       "</section>" +
       porscheReferencePhoto("i/front.webp", "Vehicle reference") +
@@ -4168,6 +4211,7 @@
 
   function porscheVehicleEnginePollKeys() {
     const keys = [
+      "sdu_power_kw",
       "sdu_udc",
       "sdu_idc",
       "sdu_speed",
@@ -4227,8 +4271,16 @@
       }
       if (tab === "Battery") {
         return [
+          "battery_pack_voltage_v",
+          "battery_pack_current_a",
+          "battery_cell_v_min",
+          "battery_cell_v_max",
+          "battery_cell_t_min_c",
+          "battery_cell_t_max_c",
+          "battery_contactor_state",
           "charge_power_kw",
           "battery_power_kw",
+          "battery_pack_power_kw",
           "hv_power_kw",
           "sdu_udc",
           "sdu_idc",
@@ -4236,37 +4288,27 @@
           "battery_level",
           "battery_percent",
           "battery_soc",
+          "battery_soc_pct",
           "battery_range_km"
         ];
       }
       if (tab === "Charger") {
-        return [
-          "plug_connected",
-          "charger_connected",
-          "charge_port_connected",
-          "charging_active",
-          "is_charging",
-          "charge_power_kw",
-          "ac_charge_power_kw",
-          "charger_power_kw",
-          "target_charge_pct",
-          "ac_current_limit_a",
-          "digital_pot_pct",
-          "battery_level",
-          "battery_percent",
-          "battery_soc",
-          "battery_capacity_kwh",
-          "hv_battery_capacity_kwh"
-        ];
+        return [];
       }
       return [
         "vehicle_speed_510",
-        "vref_kmh",
-        "acceleration",
-        "prnd_pos",
         "lenkwinkel_rb",
+        "acceleration",
+        "yaw_rate",
+        "yaw_rate_sign",
+        "brake_sw",
+        "handbrake",
+        "psm_button_lamp",
         "indicator_left",
-        "indicator_right"
+        "indicator_right",
+        "ambient_c",
+        "light_dimmer",
+        "prnd_pos"
       ];
     }
     if (state.section === "stopwatch") {
@@ -4275,6 +4317,7 @@
         "vehicle_speed_510",
         "vref_kmh",
         "battery_power_kw",
+        "battery_pack_power_kw",
         "hv_power_kw",
         "sdu_udc",
         "sdu_idc",
@@ -4291,6 +4334,7 @@
     if (state.section === "styleTest") {
       return [
         "battery_power_kw",
+        "battery_pack_power_kw",
         "hv_power_kw",
         "sdu_udc",
         "sdu_idc",
@@ -4320,10 +4364,12 @@
         "battery_level",
         "battery_percent",
         "battery_soc",
+        "battery_soc_pct",
         "battery_range_km",
         "battery_range_mi",
         "charge_power_kw",
         "battery_power_kw",
+        "battery_pack_power_kw",
         "hv_power_kw",
         "sdu_udc",
         "sdu_idc",

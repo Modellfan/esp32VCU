@@ -47,6 +47,7 @@ bool decodeTeslaSdu0x500(const CANMessage &frame) {
 
     params::tesla_sdu.udc = (float)readBitsLE(frame.data, 0, 16) * 0.1f;
     params::tesla_sdu.idc = (float)(int16_t)readSigned(frame.data, 16, 16) * 0.1f;
+    params::tesla_sdu.power_kw = params::tesla_sdu.udc * params::tesla_sdu.idc * 0.001f;  // VCU, not on the bus
     params::tesla_sdu.il1 = (float)(int16_t)readSigned(frame.data, 32, 16) * 0.1f;
     params::tesla_sdu.il2 = (float)(int16_t)readSigned(frame.data, 48, 16) * 0.1f;
     return true;

@@ -15,6 +15,7 @@ struct TeslaSduSignals {
 
     float udc = 0.0f;
     float idc = 0.0f;
+    float power_kw = 0.0f;  // udc * idc, calculated by the VCU (motor power)
     float il1 = 0.0f;
     float il2 = 0.0f;
     float fstat = 0.0f;

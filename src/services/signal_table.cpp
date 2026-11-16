@@ -126,6 +126,7 @@ const SignalDef kSignals[] = {
     SIG("sdu_status", G_SDU, params::TeslaSduSignals, status, F_UINT, 0, RX_SDU_505, 0),
     SIG("sdu_udc", G_SDU, params::TeslaSduSignals, udc, F_NUM, 3, RX_SDU_500, 0),
     SIG("sdu_idc", G_SDU, params::TeslaSduSignals, idc, F_NUM, 3, RX_SDU_500, 0),
+    SIG("sdu_power_kw", G_SDU, params::TeslaSduSignals, power_kw, F_NUM, 2, RX_SDU_500, 0),
     SIG("sdu_il1", G_SDU, params::TeslaSduSignals, il1, F_NUM, 2, RX_SDU_500, 0),
     SIG("sdu_il2", G_SDU, params::TeslaSduSignals, il2, F_NUM, 2, RX_SDU_500, 0),
     SIG("sdu_fstat", G_SDU, params::TeslaSduSignals, fstat, F_NUM, 2, RX_SDU_501, 0),
