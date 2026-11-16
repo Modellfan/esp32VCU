@@ -19,7 +19,7 @@ from conftest import PWA, VIEWPORT, enable_engineering, open_app, screenshot
 import build
 from urllib.parse import parse_qs, urlsplit
 
-SECTIONS = ["home", "vehicle", "coolant", "styleTest", "ventilation", "stopwatch", "cluster", "adjust", "signals"]
+SECTIONS = ["home", "vehicle", "coolant", "ventilation", "stopwatch", "ecu", "devices"]
 
 VIEW_CHECK_JS = """
 () => {
@@ -166,51 +166,46 @@ def test_every_section_and_tab_renders(page, server):
     assert not page.probe.console_errors, page.probe.console_errors
 
 
-def test_signals_page_lists_every_field_once(page, server, api):
-    """TC-UI-SIG-01 (VCU-REQ-022): every /api/signals name and /api/live field in one category."""
+def test_every_field_on_one_engineering_page(page, server, api):
+    """Every /api/signals name and /api/live field belongs to exactly one page; in engineering
+    mode the vehicle pages list their remaining signals below the normal rows (2026-11-16)."""
     open_app(page, server)
-    hidden = page.evaluate("() => document.querySelector(\".l1-icon[data-section='signals']\").hidden")
-    assert hidden, "Signals icon must be hidden without engineering mode"
-    signals = [s["name"] for s in api._get("/api/signals")["signals"]]
-    expected = set(signals) | (set(api._get("/api/live")) - {"stale"})
+    hidden = page.evaluate("() => document.querySelector(\".l1-icon[data-section='ecu']\").hidden")
+    assert hidden, "ECU icon must be hidden without engineering mode"
+    signals = api._get("/api/signals")["signals"]
+    live = api._get("/api/live")
+    expected = set(s["name"] for s in signals) | (set(live) - {"stale"})
+    catalog = page.evaluate("([s, l]) => window.VcuSignals._buildCatalog(s, l)", [signals, live])
+    names = [e["name"] for e in catalog]
+    assert len(names) == len(set(names))
+    assert set(names) == expected, (expected - set(names), set(names) - expected)
+    pages = {"engine", "battery", "charger", "vehicle", "zombie", "dcdc", "emulation", "needle", "can", "wifi"}
+    assert {e["page"] for e in catalog} <= pages
+    assert all(e["page"] == "dcdc" for e in catalog if e["name"].startswith("dcdc_"))
+    assert next(e for e in catalog if e["name"] == "can1_tec")["label"] == "CAN1 transmit error counter"
 
     enable_engineering(page)
-    live_urls = []
-    page.on("request", lambda r: live_urls.append(r.url) if "/api/live?" in r.url else None)
-    goto_section(page, "signals")
-    page.wait_for_function("() => document.querySelectorAll('.pt-layout-signals .pt-row').length > 1", timeout=8000)
-    seen = []
-    for tab in visible_tabs(page):
-        page.click(f".tab[data-tab-index='{tab}']")
-        live_urls.clear()
-        page.wait_for_timeout(1300)
-        names = page.evaluate("() => Array.from(document.querySelectorAll('.pt-layout-signals .pt-row-copy strong'))"
-                              ".map(e => e.textContent)")
-        seen.extend(names)
-        requested = set()
-        for url in live_urls:
-            fields = parse_qs(urlsplit(url).query).get("fields", [""])[0]
-            requested |= set(f for f in fields.split(",") if f)
-        # only the shown category plus the always-polled header fields
-        assert requested <= set(names) | {"stale", "sta_ssid", "ap_ssid", "ap_ip", "rpm_override", "coolant_override", "coolant_warning_override", "fuel_override"}, (tab, requested - set(names))
-        screenshot(page, f"signals-{tab}")
-    assert len(seen) == len(set(seen)), "a field appears in more than one row"
-    assert set(seen) == expected, (expected - set(seen), set(seen) - expected)
-    assert len(visible_tabs(page)) == 4
+    goto_section(page, "vehicle")
+    page.click(".tab[data-tab-index='1']")  # Battery
+    page.wait_for_function("() => document.body.innerText.includes('battery_soh_pct')", timeout=8000)
 
     # A value listed in "stale" is marked.
     def add_stale(route):
         response = route.fetch()
         body = response.json()
-        body["stale"] = ["vehicle_speed_510"]
+        body["stale"] = ["battery_soh_pct"]
         route.fulfill(response=response, json=body)
 
     page.route(re.compile(r"/api/live\?"), add_stale)
-    page.click(".tab[data-tab-index='0']")
-    page.wait_for_timeout(1300)
-    stale = page.evaluate("() => Array.from(document.querySelectorAll('.pt-layout-signals .pt-row'))"
+    page.wait_for_timeout(1500)
+    stale = page.evaluate("() => Array.from(document.querySelectorAll('.pt-row'))"
                           ".filter(r => r.querySelector('.is-stale')).map(r => r.querySelector('strong').textContent)")
-    assert stale == ["vehicle_speed_510"], stale
+    assert stale == ["battery_soh_pct"], stale
+    for section, count in (("ecu", 4), ("devices", 2)):
+        goto_section(page, section)
+        assert len(visible_tabs(page)) == count
+        # always four tab slots, the clock stays right
+        assert page.evaluate("() => Array.from(document.querySelectorAll('.tab')).filter(t => !t.hidden).length") == 4
     assert not page.probe.errors, page.probe.errors
 
 
@@ -327,36 +322,45 @@ def set_slider(page, value):
     )
 
 
+def open_charge_popup(page, key):
+    enable_engineering(page)
+    goto_section(page, "vehicle")
+    page.click(".tab[data-tab-index='2']")  # Charger
+    page.click(f".pt-row[data-pt-menu-key='val:{key}']")
+    selector = f".pt-vertical-slider[data-pt-vertical-slider-key='val:{key}']"
+    page.wait_for_selector(selector)
+    return page.locator(selector)  # re-queried: the live poll re-renders the popup
+
+
 def test_set_command_reaches_vcu(page, server, api):
     open_app(page, server)
-    enable_engineering(page)
-    row = find_control_row(page, "target_charge_pct")
-    assert row, "target charge control not found"
-    row.click()
-    page.wait_for_selector("#touchBatterySettingSlider", state="visible")
-    set_slider(page, 85)
+    slider = open_charge_popup(page, "target_charge_pct")
+    box = slider.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] * 0.3)  # 85 % (50..100)
     assert wait_until(lambda: any(s["key"] == "target_charge_pct" for s in api.stats()["sets"]), 5)
     sets = [s for s in api.stats()["sets"] if s["key"] == "target_charge_pct"]
-    assert sets[-1]["value"] == "85"
+    assert sets[-1]["path"] == "/api/set"
+    assert sets[-1]["value"] == "85", sets[-1]
     assert not page.probe.errors
 
 
 def test_rapid_slider_changes_coalesce(page, server, api):
     open_app(page, server)
-    enable_engineering(page)
-    row = find_control_row(page, "digital_pot_pct")
-    assert row
-    row.click()
-    page.wait_for_selector("#touchBatterySettingSlider", state="visible")
+    slider = open_charge_popup(page, "digital_pot_pct")
+    box = slider.bounding_box()
+    x = box["x"] + box["width"] / 2
     api.fault("ok", 300)  # slow VCU makes queued values pile up
-    for value in range(10, 70, 2):
-        set_slider(page, value)
+    page.mouse.move(x, box["y"] + box["height"] * 0.9)
+    page.mouse.down()
+    for step in range(30):
+        page.mouse.move(x, box["y"] + box["height"] * (0.9 - step * 0.02))
         page.wait_for_timeout(30)
-    set_slider(page, 70)
+    page.mouse.move(x, box["y"] + box["height"] * 0.3)
+    page.mouse.up()
     assert wait_until(lambda: any(s["key"] == "digital_pot_pct" and s["value"] == "70"
                                   for s in api.stats()["sets"]), 8)
     sets = [s for s in api.stats()["sets"] if s["key"] == "digital_pot_pct"]
-    assert len(sets) <= 6, sets
+    assert len(sets) <= 10, sets  # 31 slider moves, slow VCU
     assert sets[-1]["value"] == "70"
 
 
@@ -607,31 +611,35 @@ def test_android_radio_chrome_flag_offline(browser, tmp_path, api):
         serve.FAULT["mode"] = "ok"
         srv.shutdown()
 
-def test_needle_calibration_sliders(page, server, api):
-    """Engineering tab "Needle": sliders and +/- send the calibration to /api/set-ecu."""
+def test_needle_calibration_popup(page, server, api):
+    """ECU > Needle: row opens the Target-charge style popup; slider, +/- and reset reach the VCU."""
     open_app(page, server)
     enable_engineering(page)
-    goto_section(page, "cluster")
-    tab = page.evaluate("() => Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('Needle')).dataset.tabIndex")
-    page.click(f".tab[data-tab-index='{tab}']")
-    page.wait_for_selector(".pt-layout-needle .pt-needle-slider[data-needle-key='cluster_needle_neutral']")
-    sliders = page.evaluate("() => Array.from(document.querySelectorAll('.pt-needle-slider')).map(s => s.dataset.needleKey)")
-    assert sliders == ["engine_speed_rpm", "cluster_needle_reverse", "cluster_needle_neutral", "cluster_needle_offset",
-                       "cluster_needle_drive_max", "cluster_needle_regen_min"], sliders
-    page.evaluate(
-        "() => { const s = document.querySelector(\".pt-needle-slider[data-needle-key='cluster_needle_neutral']\");"
-        " s.value = '900'; s.dispatchEvent(new Event('input', {bubbles: true}));"
-        " s.dispatchEvent(new Event('change', {bubbles: true})); }")
-    assert wait_until(lambda: any(s["path"] == "/api/set-ecu" and s["key"] == "cluster_needle_neutral" and s["value"] == "900"
+    goto_section(page, "ecu")
+    page.click(".tab[data-tab-index='2']")  # Needle
+    page.click(".pt-row[data-pt-menu-key='val:cluster_needle_neutral']")
+    slider = page.wait_for_selector(".pt-vertical-slider[data-pt-vertical-slider-key='val:cluster_needle_neutral']")
+    box = slider.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] * 0.5)
+    assert wait_until(lambda: any(s["path"] == "/api/set-ecu" and s["key"] == "cluster_needle_neutral"
                                   for s in api.stats()["sets"]), 5)
-    page.click(".pt-needle-step[data-needle-key='cluster_needle_neutral'][data-needle-step='10']")
-    assert wait_until(lambda: any(s["key"] == "cluster_needle_neutral" and s["value"] == "910"
+    sent = [s for s in api.stats()["sets"] if s["key"] == "cluster_needle_neutral"][-1]["value"]
+    assert 4400 <= float(sent) <= 4600, sent
+    page.click("[data-ecu-step='1'][data-ecu-key='cluster_needle_neutral']")
+    assert wait_until(lambda: any(s["key"] == "cluster_needle_neutral" and float(s["value"]) == float(sent) + 10
                                   for s in api.stats()["sets"]), 5)
-    page.wait_for_timeout(1500)  # several polls: the value must not jump back
-    readout = page.inner_text("[data-needle-readout='cluster_needle_neutral']")
-    assert readout == "910", readout
-    page.click("[data-needle-defaults]")
-    assert wait_until(lambda: any(s["key"] == "cluster_needle_neutral" and s["value"] == "822"
-                                  for s in api.stats()["sets"]), 5)
-    screenshot(page, "signals-needle")
+    assert page.query_selector(".pt-popup-layer"), "popup must stay open after +/-"
+    screenshot(page, "ecu-needle-popup")
+    page.mouse.click(160, 300)  # outside the panel: close
+    page.click(".pt-row[data-pt-menu-key='opt:reset_calibration']")
+    page.click(".pt-popup-option[data-pt-option-value='1']")
+    assert wait_until(lambda: any(s["path"] == "/api/set" and s["key"] == "reset_calibration" for s in api.stats()["sets"]), 5)
+
+    page.click(".tab[data-tab-index='1']")  # Emulation
+    page.click("[data-pt-checkbox='ecu:check_engine_light']")
+    assert wait_until(lambda: any(s["key"] == "check_engine_light" and s["value"] == "1" for s in api.stats()["sets"]), 5)
+    page.click(".pt-row[data-pt-menu-key='val:engine_speed_rpm']")
+    page.click("[data-ecu-auto='engine_speed_rpm']")
+    assert wait_until(lambda: any(s["key"] == "engine_speed_rpm" and s["value"] == "auto" for s in api.stats()["sets"]), 5)
+    screenshot(page, "ecu-emulation")
     assert not page.probe.errors

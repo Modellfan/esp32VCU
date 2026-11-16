@@ -40,7 +40,7 @@ Firmware-Tests auf dem PC gibt es seit dem Entfernen der SIL-Umgebung (2026-11-1
 | VCU-REQ-018 | TC-BAT-01: BMS-/Zombie-Frames mit gültiger CRC über den Stick einspielen → Werte in `/api/live` mit gültigem Alter; Frame mit falscher CRC wird verworfen | P | bestanden 2026-11-10 (Stick-Wiedergabe mit erzeugten Frames; ohne echtes BMS/Zombie-Slave; Stecker nicht auf dem Bus) |
 | VCU-REQ-019 | TC-LED-01: Sichtprüfung 1 Hz grün | P | offen |
 | VCU-REQ-021 | TC-HEAT-01: `heater_request` 0/1 → 0x43A alle 100 ms, CRC gültig, Byte 0 folgt; Zombie-Slave meldet die Anforderung in 0x439 | P | teilweise: Senden bestanden 2026-11-10, Zombie-Slave nicht am Prüfstand |
-| VCU-REQ-020 | TC-PERS-01: Werte setzen, Reset, Werte wieder da; 17 Änderungen (Slot-Umlauf), Reset lädt den neuesten Datensatz; 4 s ohne Änderung kein Schreibvorgang | P | bestanden 2026-11-10 (über seriellen Testbefehl, nicht über die Weboberfläche) |
+| VCU-REQ-020 | TC-PERS-01: Werte setzen, Reset, Werte wieder da; 17 Änderungen (Slot-Umlauf), Reset lädt den neuesten Datensatz; 4 s ohne Änderung kein Schreibvorgang | P | bestanden 2026-11-10 (über seriellen Testbefehl, nicht über die Weboberfläche); 2026-11-16 Nadel/Temperatur über `/api/set-ecu` gesetzt, über Neustart erhalten, `reset_calibration` stellt Standard her |
 | VCU-REQ-022 | TC-UI-SIG-01: Engineering-Modus, Seite „Signals“: jedes Feld aus `/api/signals` und `/api/live` genau einmal in einer Kategorie; `stale` markiert; nur Felder der Kategorie abgefragt; ohne Engineering-Modus ausgeblendet | W/P | W bestanden 2026-11-12 (`pwa/tests/test_pwa.py::test_signals_page_lists_every_field_once`); P: 301 Felder je einmal, `stale` markiert (Prüfstand 2026-11-12) |
 
 ## 3. Abnahmeregeln

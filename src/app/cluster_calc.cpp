@@ -27,8 +27,6 @@
 #define DYN_REGEN_CURRENT_A 100.0f
 
 // Critical temperature limits
-#define MAX_HEATSINK_TEMP_C 80.0f
-#define MAX_MOTOR_TEMP_C 160.0f
 
 // Automatic acceleration timing. Separate stop/start thresholds prevent a
 // noisy speed signal around 0 km/h from repeatedly starting a new run.
@@ -157,12 +155,6 @@ static void updateAccelerationTiming(float vehicleSpeedKmh, bool speedFresh) {
     }
 }
 
-static void resetMo5FuelOverflowState() {
-    s_mo5LastOverflowCount = 0U;
-    s_mo5OverflowFlagTicksRemaining = 0U;
-    params::ecu.mo5_ueberlverb = false;
-}
-
 static void updateMo5FuelFromTotalFuel(float totalFuelL) {
     const float fuelL = (totalFuelL < 0.0f) ? 0.0f : totalFuelL;
     const uint32_t totalFuel_uL = (uint32_t)lroundf(fuelL * 1000000.0f);
@@ -251,34 +243,41 @@ void updateCluster() {
     params::cluster.power_percent_max = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_MAX_POWER);
     params::cluster.power_percent_dyn = powerPercent(battVoltage_V, motorCurrent_A, REF_MODE_DYN_POWER);
     params::cluster.needle_position = needleFromPercent(direction, params::cluster.power_percent_max);
-    params::cluster.heatsink_temp_critical = sduOk && params::tesla_sdu.tmphs >= (float)MAX_HEATSINK_TEMP_C;
-    params::cluster.motor_temp_critical = sduOk && params::tesla_sdu.tmpm >= (float)MAX_MOTOR_TEMP_C;
+    params::cluster.heatsink_temp_critical = sduOk && params::tesla_sdu.tmphs >= (float)params::cluster.heatsink_critical_c;
+    params::cluster.motor_temp_critical = sduOk && params::tesla_sdu.tmpm >= (float)params::cluster.motor_critical_c;
 
-    if (params::cluster.activated) {
-        // Cluster mode intentionally overwrites ECU values; UI reflects this through /api/live.
-        params::ecu.engine_speed_rpm = (float)params::cluster.needle_position;
-        params::ecu.motor2_coolant_temperature = sduOk
-            ? clampf(params::tesla_sdu.tmpm, (float)MO2_KUEHLM_T_MIN_C, (float)MO2_KUEHLM_T_MAX_C)
-            : (float)MO2_KUEHLM_T_MIN_C;
-        params::ecu.motor2_coolant_temp_not_ok =
-            !sduOk || params::cluster.heatsink_temp_critical || params::cluster.motor_temp_critical;
+    // Engine emulation always runs; single values are fixed with overrides (/api/set-ecu,
+    // value "auto" releases them), applied below (2026-11-16: switch 'activated' removed).
+    params::ecu.engine_speed_rpm = (float)params::cluster.needle_position;
+    params::ecu.motor2_coolant_temperature = sduOk
+        ? clampf(params::tesla_sdu.tmpm, (float)MO2_KUEHLM_T_MIN_C, (float)MO2_KUEHLM_T_MAX_C)
+        : (float)MO2_KUEHLM_T_MIN_C;
+    params::ecu.motor2_coolant_temp_not_ok =
+        !sduOk || params::cluster.heatsink_temp_critical || params::cluster.motor_temp_critical;
 
-        if (nowMs - s_lastFuelMs >= FUEL_SLICE_MS) {
-            s_lastFuelMs = nowMs;
-            if (params::cluster.total_fuel < (float)FUEL_MAX_L) {
-                params::cluster.total_fuel += ((float)FUEL_STEP_UL) * 0.000001f;
-                if (params::cluster.total_fuel > (float)FUEL_MAX_L) {
-                    params::cluster.total_fuel = (float)FUEL_MAX_L;
-                }
-            }
-            updateMo5FuelFromTotalFuel(params::cluster.total_fuel);
-        }
-    } else {
+    if (nowMs - s_lastFuelMs >= FUEL_SLICE_MS) {
         s_lastFuelMs = nowMs;
-        resetMo5FuelOverflowState();
+        if (params::cluster.total_fuel < (float)FUEL_MAX_L) {
+            params::cluster.total_fuel += ((float)FUEL_STEP_UL) * 0.000001f;
+            if (params::cluster.total_fuel > (float)FUEL_MAX_L) {
+                params::cluster.total_fuel = (float)FUEL_MAX_L;
+            }
+        }
+        updateMo5FuelFromTotalFuel(params::cluster.total_fuel);
     }
 
     applyEcuOverrides();
+}
+
+void clusterResetCalibration() {
+    const params::ClusterSignals defaults;
+    params::cluster.needle_reverse = defaults.needle_reverse;
+    params::cluster.needle_neutral = defaults.needle_neutral;
+    params::cluster.needle_offset = defaults.needle_offset;
+    params::cluster.needle_drive_max = defaults.needle_drive_max;
+    params::cluster.needle_regen_min = defaults.needle_regen_min;
+    params::cluster.heatsink_critical_c = defaults.heatsink_critical_c;
+    params::cluster.motor_critical_c = defaults.motor_critical_c;
 }
 
 void clusterResetBestTimes() {

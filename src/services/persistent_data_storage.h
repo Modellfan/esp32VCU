@@ -24,8 +24,18 @@ public:
         uint8_t acceleration_0_50_valid = 0;
         uint8_t acceleration_0_100_valid = 0;
         uint8_t reserved[2] = {0, 0};
+        // version 2 (2026-11-16): calibration; the first 16 bytes are the version-1 record
+        uint16_t needle_reverse = 35;
+        uint16_t needle_neutral = 822;
+        uint16_t needle_offset = 4100;
+        uint16_t needle_drive_max = 7950;
+        uint16_t needle_regen_min = 1600;
+        int16_t heatsink_critical_c = 80;
+        int16_t motor_critical_c = 160;
+        uint16_t reserved2 = 0;
     };
-    static_assert(sizeof(PersistentData) == 16, "PersistentData must not contain padding");
+    static_assert(sizeof(PersistentData) == 32, "PersistentData must not contain padding");
+    static constexpr size_t kV1PayloadSize = 16U;
 
     // false when no valid record was found (defaults are used).
     bool begin() {
@@ -68,9 +78,10 @@ private:
     };
 
     static constexpr uint32_t kMagic = 0x45564355UL;  // 'EVCU'
-    static constexpr uint16_t kVersion = 1U;
+    static constexpr uint16_t kVersion = 2U;
     static constexpr size_t kSlotCount = 16U;
-    static constexpr uint32_t kBaseAddress = 0U;      // EEPROM start; 16 slots use 512 bytes
+    static constexpr uint32_t kBaseAddress = 1024U;   // version 2: 16 slots of 48 bytes
+    static constexpr uint32_t kV1BaseAddress = 0U;    // version 1: 16 slots of 32 bytes, read once
 
     bool initialized = false;
     bool has_valid_data = false;
@@ -98,9 +109,39 @@ private:
                 cached_data = data;
             }
         }
+        if (!has_valid_data) {
+            scan_v1_slots();  // migration: the first save writes version 2
+        }
     }
 
-    static uint32_t compute_crc(const RecordHeader &header, const PersistentData &data) {
+    // Version-1 records (before 2026-11-16): payload = first 16 bytes, calibration defaults.
+    void scan_v1_slots() {
+        uint32_t best = 0U;
+        bool found = false;
+        for (size_t i = 0; i < kSlotCount; ++i) {
+            const uint32_t base = kV1BaseAddress + i * (sizeof(RecordHeader) + kV1PayloadSize);
+            RecordHeader header;
+            PersistentData data;
+            if (!eepromRead(base, &header, sizeof header) || header.magic != kMagic || header.version != 1U ||
+                header.payload_size != kV1PayloadSize ||
+                !eepromRead(base + sizeof(RecordHeader), &data, kV1PayloadSize) ||
+                compute_crc(header, data, kV1PayloadSize) != header.crc) {
+                continue;
+            }
+            if (!found || header.sequence > best) {
+                found = true;
+                best = header.sequence;
+                cached_data = data;  // bytes 16.. keep the defaults
+            }
+        }
+        if (found) {
+            has_valid_data = true;
+            last_sequence = best;
+            last_slot = kSlotCount - 1U;  // next save goes to version-2 slot 0
+        }
+    }
+
+    static uint32_t compute_crc(const RecordHeader &header, const PersistentData &data, size_t size = sizeof(PersistentData)) {
         uint32_t hash = 2166136261UL;
         auto update = [&hash](const uint8_t *bytes, size_t len) {
             for (size_t i = 0; i < len; ++i) {
@@ -111,7 +152,7 @@ private:
         RecordHeader header_copy = header;
         header_copy.crc = 0U;
         update(reinterpret_cast<const uint8_t *>(&header_copy), sizeof(header_copy));
-        update(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
+        update(reinterpret_cast<const uint8_t *>(&data), size);
         return hash;
     }
 

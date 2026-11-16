@@ -1,30 +1,26 @@
-// Engineering page "Signals" (VCU-REQ-022): every /api/live value by category.
-// The catalog comes from the firmware: /api/signals (name, group, type) plus every other
-// /api/live field. New firmware signals appear without a UI change.
+// Signal catalog for the engineering rows (2026-11-16): every /api/signals name and every other
+// /api/live field belongs to exactly one page. In engineering mode each page lists its remaining
+// signals below the normal rows. New firmware signals appear without a UI change.
 (function () {
-  const TABS = [
-    { label: "Vehicle", title: "Vehicle signals", subtitle: "Vehicle bus and engine emulation." },
-    { label: "Drive", title: "Drive signals", subtitle: "Inverter values." },
-    { label: "Battery", title: "Battery signals", subtitle: "Battery, heater and DC/DC." },
-    { label: "VCU", title: "VCU signals", subtitle: "Internal functions, CAN and system." }
-  ];
-
-  // Firmware signal group -> tab index and row subtitle (max. 3 words, no CAN IDs).
-  const GROUPS = {
-    vehicle: [0, "Vehicle bus"],
-    ecu: [0, "Engine emulation"],
-    ecu_override: [0, "Engine override"],
-    tesla_sdu: [1, "Inverter"],
-    battery: [2, "Battery BMS"],
-    heater: [2, "Heater request"],
-    cluster: [3, "Cluster calculation"],
-    fan: [3, "Coolant fan"],
-    digipot: [3, "Fuel gauge"],
-    charging: [3, "Charge settings"],
-    can: [3, "CAN diagnostics"]
+  // Battery-group signals that come from the Zombie slave (0x437..0x439) or the battery plug.
+  const ZOMBIE = {
+    battery_vehicle_state: true, battery_force_shutdown: true, battery_hv_request: true,
+    battery_charging_active: true, battery_charge_power_w: true, battery_charge_power_max_w: true,
+    battery_plug_connected: true
   };
-  const BATTERY_PREFIXES = [["heater_", "Heater status"], ["dcdc_", "DC/DC converter"]];
-  const OTHER = [3, "System status"];
+  const GROUP_PAGES = {
+    tesla_sdu: "engine",
+    vehicle: "vehicle",
+    battery: "battery",
+    charging: "charger",
+    heater: "zombie",
+    ecu: "emulation",
+    ecu_override: "emulation",
+    fan: "emulation",
+    digipot: "emulation",
+    cluster: "needle",
+    can: "can"
+  };
 
   const EXACT_UNITS = {
     rpm: "rpm", sdu_udc: "V", sdu_idc: "A", sdu_il1: "A", sdu_il2: "A", sdu_ilmax: "A",
@@ -33,7 +29,7 @@
     sdu_tmpm: "°C", sdu_temp_heatsink: "°C", sdu_temp_heatsink74: "°C",
     sdu_potnom: "%", sdu_regenpreset: "%", sdu_angle: "deg", sdu_cpuload: "%",
     can_bitrate: "bit/s", lenkwinkel_rb: "deg", lat_g: "g", acceleration: "g",
-    battery_cell_v_min: "V", battery_cell_v_max: "V"
+    battery_cell_v_min: "V", battery_cell_v_max: "V", free_heap: "B"
   };
   // Longest suffix first.
   const SUFFIX_UNITS = [
@@ -44,7 +40,24 @@
   ];
   const SKIP = { stale: true };
 
-  let catalog = null;  // [{ name, tab, subtitle, type, unit }]
+  // Readable names for the CAN diagnostics (all other rows show the signal name).
+  const CAN_BUS_FIELDS = {
+    up: "bus up", error: "error", rx_frames: "frames received", tec: "transmit error counter",
+    rec: "receive error counter", eflg: "error flags", bus_off: "bus off", rx_peak: "receive queue peak",
+    rx_overflow: "receive overflows"
+  };
+  const LABELS = {
+    can_bitrate: "CAN bitrate", can_spi_clock_hz: "SPI clock", can_mcp2515_quartz_hz: "MCP2515 crystal",
+    can_mcp2515_rx_buffer: "MCP2515 receive buffer", can_mcp2515_tx_buffer: "MCP2515 transmit buffer",
+    can_can0_rx_buffer: "CAN0 receive buffer", can_can0_tx_buffer: "CAN0 transmit buffer",
+    can_rx_budget_per_bus: "Receive budget per bus", can_ecu_period_ms: "ECU task period",
+    can_error_refresh_ms: "Error status refresh", can_ecu_task_priority: "ECU task priority",
+    can_web_task_priority: "Web task priority", ecu_cycles: "ECU cycles", ecu_overruns: "ECU cycle overruns",
+    ecu_max_cycle_us: "ECU longest cycle", ecu_tx_failed: "ECU send failures", ecu_started_ms: "ECU task start",
+    gvret_dropped: "GVRET dropped frames"
+  };
+
+  let catalog = null;  // [{ name, label, page, type, unit }]
   let loading = null;
 
   function unitFor(name) {
@@ -60,22 +73,35 @@
     return "";
   }
 
-  function categoryFor(name, group) {
-    if (group === "battery") {
-      for (let i = 0; i < BATTERY_PREFIXES.length; i += 1) {
-        if (name.indexOf(BATTERY_PREFIXES[i][0]) === 0) {
-          return [2, BATTERY_PREFIXES[i][1]];
-        }
-      }
+  function labelFor(name) {
+    if (Object.prototype.hasOwnProperty.call(LABELS, name)) {
+      return LABELS[name];
     }
-    if (group && Object.prototype.hasOwnProperty.call(GROUPS, group)) {
-      return GROUPS[group];
+    const bus = /^can(\d)_(.+)$/.exec(name);
+    if (bus && CAN_BUS_FIELDS[bus[2]]) {
+      return "CAN" + bus[1] + " " + CAN_BUS_FIELDS[bus[2]];
     }
-    // Live fields outside the signal table: override flags belong to the engine emulation.
+    return name;
+  }
+
+  function pageFor(name, group) {
+    if (/^dcdc_/.test(name)) {
+      return "dcdc";
+    }
+    if (/^heater_/.test(name) || ZOMBIE[name]) {
+      return "zombie";
+    }
+    if (group && Object.prototype.hasOwnProperty.call(GROUP_PAGES, group)) {
+      return GROUP_PAGES[group];
+    }
+    // Live fields outside the signal table.
     if (/_override$/.test(name) || /^set_.*_active$/.test(name)) {
-      return GROUPS.ecu_override;
+      return "emulation";
     }
-    return OTHER;
+    if (name === "gvret_dropped") {
+      return "can";
+    }
+    return "wifi";  // network and system status
   }
 
   function buildCatalog(signalList, liveSample) {
@@ -86,8 +112,7 @@
         return;
       }
       seen[name] = true;
-      const category = categoryFor(name, group);
-      entries.push({ name: name, tab: category[0], subtitle: category[1], type: type || "", unit: unitFor(name) });
+      entries.push({ name: name, label: labelFor(name), page: pageFor(name, group), type: type || "", unit: unitFor(name) });
     }
     (signalList || []).forEach(function (signal) {
       if (signal && typeof signal.name === "string") {
@@ -98,23 +123,7 @@
       const value = liveSample[name];
       add(name, null, typeof value === "boolean" ? "bool" : typeof value === "string" ? "text" : "");
     });
-    // Stable order: tab, category order of first appearance, then firmware order.
-    const categoryRank = {};
-    entries.forEach(function (entry) {
-      const key = entry.tab + "|" + entry.subtitle;
-      if (!Object.prototype.hasOwnProperty.call(categoryRank, key)) {
-        categoryRank[key] = Object.keys(categoryRank).length;
-      }
-    });
-    return entries.map(function (entry, index) {
-      return { entry: entry, index: index };
-    }).sort(function (a, b) {
-      return (a.entry.tab - b.entry.tab) ||
-        (categoryRank[a.entry.tab + "|" + a.entry.subtitle] - categoryRank[b.entry.tab + "|" + b.entry.subtitle]) ||
-        (a.index - b.index);
-    }).map(function (item) {
-      return item.entry;
-    });
+    return entries;
   }
 
   // getJson(url) -> Promise of parsed JSON (net.getJson of the app).
@@ -135,15 +144,12 @@
     return loading;
   }
 
-  function entriesFor(tabIndex) {
+  // Entries of a page, without the names in `exclude` (already shown in the normal rows).
+  function entriesFor(page, exclude) {
+    const skip = {};
+    (exclude || []).forEach(function (name) { skip[name] = true; });
     return (catalog || []).filter(function (entry) {
-      return entry.tab === tabIndex;
-    });
-  }
-
-  function keysFor(tabIndex) {
-    return entriesFor(tabIndex).map(function (entry) {
-      return entry.name;
+      return entry.page === page && !skip[entry.name];
     });
   }
 
@@ -169,13 +175,12 @@
   }
 
   window.VcuSignals = {
-    TABS: TABS,
     load: load,
     loaded: function () { return !!catalog; },
     entriesFor: entriesFor,
-    keysFor: keysFor,
     formatValue: formatValue,
     isStale: isStale,
+    labelFor: labelFor,
     _buildCatalog: buildCatalog,
     _unitFor: unitFor
   };

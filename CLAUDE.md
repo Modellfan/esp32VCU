@@ -24,6 +24,7 @@ Lies gezielt nur die für die Aufgabe benötigten Abschnitte. Erzeuge keine weit
 - **Fahrzeugsicherheit:** Die VCU sendet auf dem Fahrzeug-CAN anstelle des Motorsteuergeräts. Änderungen an gesendeten Botschaften, Zeitschlitzen oder Standardbits nur mit Bezug auf `can_messages.md`/DBC und mit CAN-Mitschnitt prüfen. Nie ungeprüft auf das Fahrzeug flashen.
 - **Pinbelegung:** Vor neuen Ausgängen alle belegten GPIOs in `src/board.h` prüfen (dort mit `static_assert` gegen Doppelbelegung).
 - **Hardwarezugriff:** Am Prüfstand (COM10) nach Änderungen selbständig flashen (`--target upload`; nach PWA-Änderungen `python pwa/tools/build.py` und `--target uploadfs`) und mit `tools/vcu_cmd.py`/`vcu_log.py` prüfen, ohne vorher zu fragen (Nutzerentscheidung 2026-11-09). Nie ungeprüft auf das Fahrzeug flashen.
+- **PWA auf die VCU:** Nach jeder PWA-Änderung vor dem Bericht `python pwa/tools/build.py`, dann `--target uploadfs`, dann prüfen, dass die VCU den neuen Stand ausliefert: `curl --compressed http://<VCU-IP>/` muss dieselbe `js/app.js?v=…`-Kennung zeigen wie `pwa/dist/index.html.gz` (Nutzerwunsch 2026-11-16).
 - **Keine Zugangsdaten im Repo:** WLAN-Passwörter und Schlüssel gehören in `src/secrets.h` (nicht versioniert, VCU-REQ-015).
 - **Nur Referenz:** `documentation/touch-ui-reference/` und Bildmaterial von Porsche nur als Gestaltungsreferenz; geschützte Icon-Sätze bleiben außerhalb von Git (`.gitignore`).
 

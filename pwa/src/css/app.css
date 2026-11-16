@@ -2713,47 +2713,52 @@ body {
   text-decoration: line-through;
 }
 
-/* Engineering tab "Needle" (calibration sliders) */
-.pt-layout-needle {
+/* Engineering pages ECU / Devices (2026-11-16): one list over the full width,
+   settable values open the Porsche popups (vertical slider, radio options). */
+.pt-layout-engineering {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.pt-layout-needle .pt-list {
+.pt-layout-engineering .pt-list {
   border-right: 0;
 }
 
-.pt-layout-needle .pt-list .pt-row {
-  height: auto;
-  min-height: 84px;
-}
-
-.pt-layout-needle .pt-row.is-no-icon {
-  grid-template-columns: 250px minmax(0, 1fr);
-}
-
-.pt-layout-needle .pt-row-value {
+.pt-layout-engineering .pt-row-copy {
   min-width: 0;
-  width: 100%;
-  justify-self: stretch;
+}
+
+.pt-layout-engineering .pt-row-copy strong,
+.pt-layout-engineering .pt-row-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-layout-engineering .pt-row.is-no-icon {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.pt-layout-engineering .pt-row-value {
+  min-width: 0;
   display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: 14px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.pt-needle-control {
-  flex: 1 1 auto;
-  max-width: 680px;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 52px 86px;
-  align-items: center;
+.pt-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 150px;
   gap: 12px;
+  margin-top: 24px;
 }
 
-.pt-needle-step,
-.pt-needle-auto {
-  height: 52px;
+.pt-popup-action {
+  min-width: 64px;
+  height: 56px;
+  padding: 0 16px;
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.06);
@@ -2764,17 +2769,7 @@ body {
   user-select: none;
 }
 
-.pt-needle-auto {
-  min-width: 96px;
-  padding: 0 14px;
+.pt-popup-action.is-wide {
+  flex: 0 0 140px;
   font-size: 22px;
-}
-
-.pt-needle-auto:disabled {
-  opacity: 0.35;
-}
-
-.pt-needle-readout {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }

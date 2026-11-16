@@ -381,6 +381,8 @@ void handleSet() {
             } else if (key == "oil" && setOverride(OVR_FUEL, value)) {
             } else if (key == "reset_best_times" && value == "1") {
                 clusterResetBestTimes();  // review B-04
+            } else if (key == "reset_calibration" && value == "1") {
+                clusterResetCalibration();  // needle and critical temperatures to the defaults
             } else {
                 addRejected(rejected, key);
             }
@@ -431,23 +433,6 @@ void handleSetEcu() {
         }
         if (outputs) {
             refreshOutputState();
-        }
-    }
-    sendLive(rejectedJson(rejected));
-}
-
-void handleSetCluster() {
-    if (!writeAllowed()) {
-        return;
-    }
-    String rejected;
-    if (server.hasArg("activated")) {
-        bool value;
-        if (parseSignalBool(server.arg("activated"), value)) {
-            ParamsGuard guard;
-            params::cluster.activated = value;
-        } else {
-            addRejected(rejected, "activated");
         }
     }
     sendLive(rejectedJson(rejected));
@@ -628,7 +613,6 @@ void startServer() {
     server.on("/api/signals", HTTP_GET, handleSignals);
     server.on("/api/set", HTTP_POST, handleSet);  // POST + X-VCU header (review B-08)
     server.on("/api/set-ecu", HTTP_POST, handleSetEcu);
-    server.on("/api/set-cluster", HTTP_POST, handleSetCluster);
     const char *headers[] = {"X-VCU"};
     server.collectHeaders(headers, 1);
     server.on("/can", HTTP_GET, [] {  // CAN test page (can_page.h), independent of SPIFFS

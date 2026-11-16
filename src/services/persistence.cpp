@@ -28,6 +28,13 @@ PersistentDataStorage::PersistentData collect() {
     d.acceleration_0_100_valid = params::cluster.acceleration_0_100_valid ? 1U : 0U;
     d.acceleration_0_50_best_s = params::cluster.acceleration_0_50_best_s;
     d.acceleration_0_100_best_s = params::cluster.acceleration_0_100_best_s;
+    d.needle_reverse = params::cluster.needle_reverse;
+    d.needle_neutral = params::cluster.needle_neutral;
+    d.needle_offset = params::cluster.needle_offset;
+    d.needle_drive_max = params::cluster.needle_drive_max;
+    d.needle_regen_min = params::cluster.needle_regen_min;
+    d.heatsink_critical_c = params::cluster.heatsink_critical_c;
+    d.motor_critical_c = params::cluster.motor_critical_c;
     return d;
 }
 
@@ -50,6 +57,22 @@ void apply(const PersistentDataStorage::PersistentData &d) {
     if (d.acceleration_0_100_valid && d.acceleration_0_100_best_s > 0.0f) {
         params::cluster.acceleration_0_100_best_s = d.acceleration_0_100_best_s;
         params::cluster.acceleration_0_100_valid = true;
+    }
+    const uint16_t needle[] = {d.needle_reverse, d.needle_neutral, d.needle_offset, d.needle_drive_max, d.needle_regen_min};
+    bool needleOk = true;
+    for (uint16_t v : needle) {
+        needleOk = needleOk && v <= 16000U;  // 0x280 engine speed range
+    }
+    if (needleOk) {
+        params::cluster.needle_reverse = d.needle_reverse;
+        params::cluster.needle_neutral = d.needle_neutral;
+        params::cluster.needle_offset = d.needle_offset;
+        params::cluster.needle_drive_max = d.needle_drive_max;
+        params::cluster.needle_regen_min = d.needle_regen_min;
+    }
+    if (d.heatsink_critical_c >= 20 && d.heatsink_critical_c <= 150 && d.motor_critical_c >= 20 && d.motor_critical_c <= 250) {
+        params::cluster.heatsink_critical_c = d.heatsink_critical_c;
+        params::cluster.motor_critical_c = d.motor_critical_c;
     }
 }
 }  // namespace
@@ -74,6 +97,9 @@ void persistenceBegin() {
             gSaved.target_charge_pct, gSaved.ac_current_limit_a, gSaved.fan_mode, gSaved.fan_level_manual,
             gSaved.acceleration_0_50_valid ? gSaved.acceleration_0_50_best_s : 0.0f,
             gSaved.acceleration_0_100_valid ? gSaved.acceleration_0_100_best_s : 0.0f);
+    VCU_LOG("[PERSIST] needle R %u N %u 0 %u max %u regen %u, critical heatsink %d C motor %d C\n",
+            gSaved.needle_reverse, gSaved.needle_neutral, gSaved.needle_offset, gSaved.needle_drive_max,
+            gSaved.needle_regen_min, gSaved.heatsink_critical_c, gSaved.motor_critical_c);
 }
 
 void persistenceService(uint32_t nowMs) {

@@ -233,11 +233,11 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Typ:** funktional
 - **Priorität:** should
 - **Status:** implemented
-- **Anforderung:** Die VCU muss Ziel-Ladestand, AC-Ladestromlimit, Lüftermodus mit manueller Stufe und die Bestzeiten 0–50 und 0–100 km/h im EEPROM speichern und nach einem Neustart wiederherstellen. Gespeichert wird nur bei einer Änderung; ein beschädigter Datensatz darf nicht geladen werden.
+- **Anforderung:** Die VCU muss Ziel-Ladestand, AC-Ladestromlimit, Lüftermodus mit manueller Stufe, die Bestzeiten 0–50 und 0–100 km/h sowie die Nadelkalibrierung und die kritischen Temperaturen (seit 2026-11-16) im EEPROM speichern und nach einem Neustart wiederherstellen. Gespeichert wird nur bei einer Änderung; ein beschädigter Datensatz darf nicht geladen werden.
 - **Akzeptanz:** Gegeben geänderte Werte; wenn die VCU neu startet; dann gelten die geänderten Werte. Ohne Änderung schreibt die VCU nicht ins EEPROM. Ohne gültigen Datensatz gelten die Standardwerte.
 - **Abhängigkeiten:** VCU-REQ-008, VCU-REQ-017; VCU-DEC-017
 - **Umsetzung:** `src/services/persistence.cpp` mit `persistent_data_storage.h` (aus TeensyVCU) auf dem AT24C256 (`src/drivers/eeprom_at24c.cpp`). Prüfstand 2026-11-10: Speichern, Laden nach Reset, Umlauf über 16 Slots, kein Schreiben ohne Änderung.
-- **Nutzerentscheidung 2026-11-10:** Inhalt Ladeparameter, Bestzeiten, Lüftermodus.
+- **Nutzerentscheidung 2026-11-10:** Inhalt Ladeparameter, Bestzeiten, Lüftermodus. 2026-11-16: dazu Nadel- und Temperaturkalibrierung; „Auf Standard zurücksetzen“ stellt die Firmware-Werte wieder her.
 
 ### VCU-REQ-021 – Heizung per CAN
 - **Typ:** funktional
@@ -253,6 +253,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Typ:** funktional / Bedienung
 - **Priorität:** should
 - **Status:** implemented (Nutzerwunsch 2026-11-12)
+- **Geändert 2026-11-16 (Nutzer):** Die Seite „Signals“ ist aufgelöst. Im Engineering-Modus zeigen Engine, Battery, Charger und Vehicle unter den normalen Zeilen alle übrigen Signale ihrer Gruppe; Zombie-Slave (inkl. Heizung, Stecker) und DC-DC haben eine eigene Seite (Steckersymbol); CAN-Diagnose (mit Klartextnamen), Wi-Fi/System, Emulation und Nadel liegen auf der Seite ECU (Brain-Symbol). Jeder Wert erscheint auf genau einer Seite (`pwa/src/js/signals.js`, Test `test_every_field_on_one_engineering_page`). Einstellwerte (Nadel, Emulation, Ladeparameter) öffnen Popups im Stil von „Target charge“.
 - **Anforderung:** Im Engineering-Modus muss die Touch-Oberfläche eine Seite „Signals“ anbieten, die jeden Wert der Live-Schnittstelle mit seinem API-Namen, Wert und Einheit zeigt, nach Kategorien gegliedert: Fahrzeug (CAN1 und DME-Sendung), Antrieb (CAN2), Akku (CAN0 einschließlich Heizung) und VCU (interne Funktionen, CAN-Diagnose, Systemstatus). Neue Signale der Firmware erscheinen ohne Änderung der Oberfläche. Ohne Engineering-Modus ist die Seite nicht erreichbar.
 - **Akzeptanz:** Gegeben die VCU (oder der Testserver) und der Engineering-Modus; wenn die Seite „Signals“ geöffnet wird; dann erscheint jeder Name aus `/api/signals` und jedes weitere Feld aus `/api/live` genau einmal in genau einer Kategorie, ein veralteter Wert (in `stale`) ist erkennbar markiert, abgefragt werden nur die Werte der angezeigten Kategorie, und ohne Engineering-Modus ist das Symbol ausgeblendet.
 - **Abhängigkeiten:** VCU-REQ-010, -011, -013

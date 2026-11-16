@@ -38,6 +38,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Betroffene Requirements:** VCU-REQ-005, VCU-REQ-010
 - **Kontext:** Kombi-Rechnung und `/api/set-ecu` schrieben dieselben Felder; Vorgaben aus der Oberfläche wurden alle 6 ms überschrieben.
 - **Entscheidung:** Drehzahl, Kühlmitteltemperatur, Kühlmittelwarnung und Verbrauchszähler werden über `params::ecu_override` gesetzt. Vorrang: Override vor Rechnung vor Standardwert. Der Wert `auto` hebt den Override auf. Status in `/api/live` (`rpm_override` usw.).
+- **Geändert 2026-11-16 (Nutzer):** Der Hauptschalter `cluster.activated` (`/api/set-cluster`) ist entfernt: Ausgeschaltet fror er die vier Werte auf dem letzten Stand ein. Die Rechnung läuft immer; einzelne Werte werden nur noch per Override festgesetzt (Engineering-Seite ECU > Emulation, je Wert „Auto“).
 
 ## VCU-DEC-006 – Gültigkeit über Empfangszeitpunkte
 - **Status:** accepted im Mechanismus (Vorschlag 4, Nutzer 2026-10-28); Zeitgrenze `proposed`
@@ -119,6 +120,7 @@ Status: `proposed` (Vorschlag), `accepted` (vom Nutzer bestätigt oder bestehend
 - **Betroffene Requirements:** VCU-REQ-017, -020
 - **Kontext:** Auf der Platine sitzt ein AT24C256 (I2C, SCL GPIO39, SDA GPIO37). TeensyVCU hat bereits eine erprobte Speicherlogik (`src/persistent_data_storage.h`).
 - **Entscheidung:** Die Logik wird übernommen: Datensatz mit Magic `EVCU`, Version, Länge, Sequenznummer und FNV-1a-Prüfsumme in 16 Slots ab Adresse 0 (je 32 Byte), reihum beschrieben; beim Start gilt der gültige Datensatz mit der höchsten Sequenz. Erst die Daten, dann der Kopf schreiben. Der Dienst prüft in der Web-Task einmal pro Sekunde auf Änderungen und schreibt nur dann. Bibliothek `robtillaart/I2C_EEPROM`; nach dem Schreiben 6 ms warten, weil das ACK-Polling der Bibliothek am ESP32-S3 zu früh „bereit“ meldet.
+- **Geändert 2026-11-16 (Nutzer):** Version 2 speichert zusätzlich die fünf Nadelwerte und die kritischen Temperaturen (Kühlkörper, Motor); 16 Slots zu 48 Byte ab Adresse 1024. Ohne Version-2-Datensatz wird der Version-1-Datensatz (ab Adresse 0) übernommen, Kalibrierung = Standardwerte. Standardwerte stehen in der Firmware (`params::ClusterSignals`); `/api/set?reset_calibration=1` setzt sie wieder (und speichert sie). Prüfstand 2026-11-16: Übernahme aus Version 1, Werte über Neustart erhalten, Zurücksetzen.
 - **Konsequenzen:** Layout-Änderung → `kVersion` erhöhen, alte Datensätze gelten dann als ungültig (Standardwerte). Ein Schreibvorgang dauert etwa 15 ms in der Web-Task, nicht in der CAN-Task. Bei 16 Slots und Schreiben nur bei Änderung ist die Lebensdauer (1 Mio. Zyklen je Zelle) unkritisch.
 
 ## VCU-DEC-018 – CAN0 am Bus von TeensyBMS und Zombie-Slave
