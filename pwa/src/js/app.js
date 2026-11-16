@@ -909,7 +909,7 @@
       ]
     },
     vehicle: {
-      image: "a/car.svg",
+      image: "a/i_ecu.svg",
       tabs: [
         {
           label: "Engine",
@@ -1008,10 +1008,11 @@
       ]
     },
     coolant: {
-      image: "a/i_ecu.svg",
+      image: "a/i_car.svg",
       tabs: [
+        { label: "Energy Flow", title: "Energy Flow", subtitle: "", rows: [], hero: [], link: "ventilation", linkTab: 0 },
         {
-          label: "",
+          label: "Coolant",
           title: "Coolant System",
           subtitle: "Animated coolant loop overview for the touch display.",
           rows: [
@@ -1029,27 +1030,6 @@
         {
           label: "Drive",
           title: "Porsche Drive Reference",
-          subtitle: "Reference recreation test page.",
-          rows: [],
-          hero: []
-        },
-        {
-          label: "Assistance",
-          title: "Porsche Assistance Reference",
-          subtitle: "Reference recreation test page.",
-          rows: [],
-          hero: []
-        },
-        {
-          label: "Trip",
-          title: "Porsche Trip Reference",
-          subtitle: "Reference recreation test page.",
-          rows: [],
-          hero: []
-        },
-        {
-          label: "Comfort",
-          title: "Porsche Comfort Reference",
           subtitle: "Reference recreation test page.",
           rows: [],
           hero: []
@@ -1250,7 +1230,7 @@
 
   sections.adjust = SDU_ENUMS.adjust;
   sections.ventilation = {
-    image: "a/vent.svg",
+    image: "a/i_car.svg",
     tabs: [
       {
         label: "Energy Flow",
@@ -1258,7 +1238,9 @@
         subtitle: "Energy flow visualization.",
         rows: [],
         hero: []
-      }
+      },
+      // own section with its own stage; the tab switches to it (and back via its first tab)
+      { label: "Coolant", title: "Coolant System", subtitle: "", rows: [], hero: [], link: "coolant", linkTab: 1 }
     ]
   };
   sections.stopwatch = SDU_ENUMS.stopwatch;
@@ -1403,13 +1385,14 @@
       const visible = !engineeringOnly || state.engineeringMode;
       button.hidden = !visible;
       button.disabled = !visible;
-      button.classList.toggle("active", visible && button.dataset.section === state.section);
+      const navSection = state.section === "coolant" ? "ventilation" : state.section;  // coolant is a tab of Energy Flow
+      button.classList.toggle("active", visible && button.dataset.section === navSection);
     });
   }
 
   function updateTabs() {
     const activeSection = currentSection();
-    const keepEmptySlots = state.section === "ventilation";
+    const keepEmptySlots = false;  // Energy Flow has real tabs now (Coolant)
     tabs.forEach(function (button, index) {
       const tab = activeSection.tabs[index];
       const hasTab = !!tab;
@@ -2730,20 +2713,11 @@
   }
 
   function porscheStopwatchTripMarkup() {
-    const live = state.live || {};
-    const tripSeconds = stopwatchUptimeSeconds();
-    const distanceKm = stopwatchTripDistanceKm();
-    const speed = firstNumericField(live, ["vehicle_speed_510", "vref_kmh"]);
-    const batteryPower = resolveBatteryPowerKw(live, resolveBatteryLevel(live));
-    const consumption = firstNumericField(live, ["average_consumption_kwh_100km", "consumption_kwh_100km"]);
+    // Trip page empty for now (2026-11-16): no trip computer in the VCU yet.
     return "<div class=\"pt-layout pt-layout-drive pt-layout-stopwatch\">" +
       "<section class=\"pt-list\">" +
         porscheRows([
-          { label: "Trip time", detail: "Driving time", control: porscheStopwatchValue(porscheSeconds(tripSeconds, 1), "s") },
-          { label: "Trip distance", detail: "Distance", control: porscheStopwatchValue(distanceKm.toFixed(1), "km") },
-          { label: "Average speed", detail: "Speed average", control: porscheStopwatchValue(speed === null ? "--" : speed.toFixed(1), "km/h") },
-          { label: "Battery power", detail: "Live value", control: porscheStopwatchValue(batteryPower === null ? "--" : batteryPower.toFixed(1), "kW") },
-          { label: "Consumption", detail: "Energy use", control: porscheStopwatchValue(consumption === null ? "24.2" : consumption.toFixed(1), "kWh/100") }
+          { label: "No trip data", detail: "Not available yet", control: porscheStopwatchValue("--", "") }
         ]) +
       "</section>" +
       porscheStopwatchGraphic("trip") +
@@ -2757,35 +2731,36 @@
       "<section class=\"pt-list\">" +
         porscheRows([
           { label: "Current run", detail: "Live timer", control: porscheStopwatchValue(currentRun === null ? "--" : currentRun.toFixed(2), "s") },
-          { label: "Last 0-50", detail: "Previous run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_50_last_s", "cluster_acceleration_0_50_valid", "3.84"), "s") },
-          { label: "Best 0-50", detail: "Fastest run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_50_best_s", "cluster_acceleration_0_50_valid", "3.62"), "s") },
-          { label: "Last 0-100", detail: "Previous run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_100_last_s", "cluster_acceleration_0_100_valid", "9.24"), "s") },
-          { label: "Best 0-100", detail: "Fastest run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_100_best_s", "cluster_acceleration_0_100_valid", "8.91"), "s") }
+          { label: "Last 0-50", detail: "Previous run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_50_last_s", "cluster_acceleration_0_50_valid", "--"), "s") },
+          { label: "Best 0-50", detail: "Fastest run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_50_best_s", "cluster_acceleration_0_50_valid", "--"), "s") },
+          { label: "Last 0-100", detail: "Previous run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_100_last_s", "cluster_acceleration_0_100_valid", "--"), "s") },
+          { label: "Best 0-100", detail: "Fastest run", control: porscheStopwatchValue(stopwatchFormattedAccelerationTime("cluster_acceleration_0_100_best_s", "cluster_acceleration_0_100_valid", "--"), "s") }
         ]) +
       "</section>" +
-      porscheStopwatchGraphic("acceleration") +
+      porscheTrackPhoto() +
     "</div>";
   }
 
   function porscheStopwatchLapMarkup() {
-    const live = state.live || {};
-    const current = stopwatchUptimeSeconds() % 120;
-    const count = firstNumericField(live, ["lap_count", "cluster_counter"]);
-    const delta = firstNumericField(live, ["lap_delta_s", "acceleration"]);
+    // No lap detection yet: rows without values (2026-11-16).
     return "<div class=\"pt-layout pt-layout-drive pt-layout-stopwatch\">" +
       "<section class=\"pt-list\">" +
         porscheRows([
-          { label: "Current lap", detail: "Live timer", control: porscheStopwatchValue(current.toFixed(2), "s") },
-          { label: "Last lap", detail: "Previous lap", control: porscheStopwatchValue(firstNumericField(live, ["last_lap_s"]) === null ? "72.48" : firstNumericField(live, ["last_lap_s"]).toFixed(2), "s") },
-          { label: "Best lap", detail: "Fastest lap", control: porscheStopwatchValue(firstNumericField(live, ["best_lap_s"]) === null ? "70.31" : firstNumericField(live, ["best_lap_s"]).toFixed(2), "s") },
-          { label: "Lap count", detail: "Session laps", control: porscheStopwatchValue(count === null ? "--" : String(Math.round(count)), "") },
-          { label: "Delta", detail: "Lap delta", control: porscheStopwatchValue(delta === null ? "+0.00" : (delta >= 0 ? "+" : "") + delta.toFixed(2), "s") }
+          { label: "Current lap", detail: "Live timer", control: porscheStopwatchValue("--", "s") },
+          { label: "Last lap", detail: "Previous lap", control: porscheStopwatchValue("--", "s") },
+          { label: "Best lap", detail: "Fastest lap", control: porscheStopwatchValue("--", "s") },
+          { label: "Lap count", detail: "Session laps", control: porscheStopwatchValue("--", "") },
+          { label: "Delta", detail: "Lap delta", control: porscheStopwatchValue("--", "s") }
         ]) +
       "</section>" +
-      "<section class=\"pt-stopwatch-visual pt-stopwatch-photo\" aria-label=\"Race track\">" +
-        "<img src=\"i/track.webp\" alt=\"Boxster on the race track\">" +
-      "</section>" +
+      porscheTrackPhoto() +
     "</div>";
+  }
+
+  function porscheTrackPhoto() {
+    return "<section class=\"pt-stopwatch-visual pt-stopwatch-photo\" aria-label=\"Race track\">" +
+      "<img src=\"i/track.webp\" alt=\"Boxster on the race track\">" +
+    "</section>";
   }
 
   function porscheStopwatchMarkup() {
@@ -4133,6 +4108,11 @@
 
   function setTab(index) {
     if (index < 0 || index >= currentSection().tabs.length) {
+      return;
+    }
+    const linked = currentSection().tabs[index];
+    if (linked && linked.link) {
+      setSection(linked.link, linked.linkTab);
       return;
     }
     if (currentSection().tabs[index] && currentSection().tabs[index].placeholder) {

@@ -190,8 +190,7 @@ body {
 }
 
 .screen.is-coolant .main-area {
-  grid-template-rows: 1fr;
-  background: #000000;
+  background: #000000;  /* with the tab bar: Coolant is a tab of Energy Flow */
 }
 
 .screen.is-style-test .main-area {
@@ -411,14 +410,6 @@ body {
   display: none;
 }
 
-.screen.is-coolant .topbar {
-  display: none;
-}
-
-.screen.is-energy-flow .tab {
-  pointer-events: none;
-  cursor: default;
-}
 
 .tab {
   height: 100%;
@@ -1894,7 +1885,13 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 62%;
+  object-position: 59% 66%;
+  transform: scale(1.5);
+  transform-origin: 59% 66%;
+}
+
+.pt-stopwatch-photo {
+  overflow: hidden;
 }
 
 .pt-stopwatch-photo::after {

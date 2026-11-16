@@ -51,7 +51,12 @@ def visible_tabs(page):
 
 
 def goto_section(page, section):
-    page.click(f".l1-icon[data-section='{section}']")
+    if section == "coolant":  # tab "Coolant" of the Energy Flow page
+        page.click(".l1-icon[data-section='ventilation']")
+        page.wait_for_timeout(250)
+        page.click(".tab[data-tab-index='1']")
+    else:
+        page.click(f".l1-icon[data-section='{section}']")
     page.wait_for_timeout(250)
 
 
@@ -151,7 +156,8 @@ def test_every_section_and_tab_renders(page, server):
             result = page.evaluate(VIEW_CHECK_JS)
             label = f"{section}-{tab}"
             screenshot(page, f"view-{label}")
-            assert result["section"] == section, label
+            linked = {"ventilation": "coolant", "coolant": "ventilation"}  # tabs that switch the page
+            assert result["section"] in (section, linked.get(section)), label
             assert not result["bad"], (label, result["bad"])
             assert not result["brokenImages"], (label, result["brokenImages"])
             assert result["scrollW"] <= VIEWPORT["width"], (label, result)
@@ -582,7 +588,7 @@ def test_android_radio_chrome_flag_offline(browser, tmp_path, api):
 
             broken = {}
             for section in SECTIONS:
-                page.click(f".l1-icon[data-section='{section}']")
+                goto_section(page, section)
                 for tab in visible_tabs(page) or [None]:
                     if tab is not None:
                         page.click(f".tab[data-tab-index='{tab}']")
