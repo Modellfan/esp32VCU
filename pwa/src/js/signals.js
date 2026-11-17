@@ -91,6 +91,11 @@
     if (/^heater_/.test(name) || ZOMBIE[name]) {
       return "zombie";
     }
+    // Needle tab: only what the needle position is calculated from (2026-11-17); every other
+    // cluster value (temperatures, fuel, acceleration) belongs to Emulation.
+    if (group === "cluster" && !/^cluster_(needle_|power_percent_max$|sdu_data_ok$)/.test(name)) {
+      return "emulation";
+    }
     if (group && Object.prototype.hasOwnProperty.call(GROUP_PAGES, group)) {
       return GROUP_PAGES[group];
     }
