@@ -87,7 +87,7 @@ body {
   height: 100vh;  /* fallback: Chrome < 108 (radio: Chrome 87) has no dvh */
   height: 100dvh;  /* fill the radio screen (was capped at 600 px) */
   display: grid;
-  grid-template-columns: 76px 1fr;
+  grid-template-columns: 91px 1fr;  /* navigation +20 % (2026-11-17, was 76 px) */
   border: 1px solid #0d131b;
   background: #000000;
   overflow: hidden;
@@ -121,8 +121,8 @@ body {
 
 .l1-icon {
   position: relative;
-  width: 68px;
-  height: 66px;
+  width: 82px;
+  height: 76px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -147,8 +147,8 @@ body {
 }
 
 .l1-icon img {
-  width: 48px;
-  height: 48px;
+  width: 58px;
+  height: 58px;
   filter: brightness(0) invert(1);
   opacity: 0.82;
 }
@@ -1495,7 +1495,10 @@ body {
   padding-top: 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  touch-action: none;  /* JS drag: snapping only after the finger is lifted (2026-11-17) */
+  touch-action: pan-y;
+  /* Native scrolling; rows snap only after the finger is lifted (2026-11-17). The mouse drag
+     in app.js switches snapping off while it animates (.screen.is-js-scrolling). */
+  scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   cursor: grab;
@@ -2668,8 +2671,8 @@ body {
 }
 
 .screen.is-engineering-mode .l1-icon img {
-  width: 44px;
-  height: 44px;
+  width: 53px;
+  height: 53px;
 }
 
 /* Engineering page "Signals" (VCU-REQ-022): one full-width list, API names as titles. */
@@ -2715,14 +2718,6 @@ body {
 
 /* Engineering pages ECU / Devices (2026-11-16): one list over the full width,
    settable values open the Porsche popups (vertical slider, radio options). */
-.pt-layout-engineering {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.pt-layout-engineering .pt-list {
-  border-right: 0;
-}
-
 .pt-layout-engineering .pt-row-copy {
   min-width: 0;
 }
@@ -2853,4 +2848,15 @@ body {
 .fl-note {
   fill: rgba(255, 255, 255, 0.5);
   font-size: 13px;
+}
+
+.pt-list > .pt-row {
+  scroll-snap-align: start;
+}
+
+.screen.is-js-scrolling .pt-list,
+.screen.is-js-scrolling .pt-option-panel,
+.screen.is-js-scrolling .pt-cardless-panel,
+.screen.is-js-scrolling .pt-trip-list {
+  scroll-snap-type: none;
 }

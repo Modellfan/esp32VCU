@@ -1207,6 +1207,8 @@
     emulationManual: null,
     scrollActiveSince: 0,
     renderPending: false,
+    touching: false,
+    lastScrollAt: 0,
     batteryControls: {
       acCurrentLimitA: 16,
       digitalPotPct: 0,
@@ -2762,8 +2764,10 @@
     const popup = state.styleTestPopup || "";
     const popupMarkup = popup.indexOf("val:") === 0 && ECU_VALUES[popup.slice(4)] ? ecuValuePopupMarkup(popup.slice(4))
       : popup.indexOf("opt:") === 0 && ECU_OPTIONS[popup.slice(4)] ? ecuOptionPopupMarkup(popup.slice(4)) : "";
-    return "<div class=\"pt-layout pt-layout-drive pt-layout-engineering" + (popupMarkup ? " has-popup" : "") + "\">" +
+    // same split as the vehicle pages: list left, black picture area right (picture to come)
+    return "<div class=\"pt-layout pt-layout-drive pt-layout-reference pt-layout-engineering" + (popupMarkup ? " has-popup" : "") + "\">" +
       "<section class=\"pt-list\">" + porscheRows(ecuRows(tab)) + "</section>" +
+      "<section class=\"pt-front-stage pt-reference-stage\" aria-hidden=\"true\"></section>" +
       popupMarkup +
     "</div>";
   }
@@ -3618,6 +3622,7 @@
 
     function markStyleScrollActive(active) {
       state.scrollActiveSince = active ? Date.now() : 0;
+      screenRoot.classList.toggle("is-js-scrolling", active);
       if (!active && state.renderPending) {
         state.renderPending = false;
         renderStyleTestStage();
@@ -3762,8 +3767,8 @@
     }
 
     styleTestStage.addEventListener("pointerdown", function (event) {
-      if (event.target.closest("input, .pt-vertical-slider, .pt-slider")) {
-        return;
+      if (event.pointerType !== "mouse" || event.target.closest("input, .pt-vertical-slider, .pt-slider")) {
+        return;  // touch and pen scroll natively (CSS scroll snap)
       }
       if (state.styleTestPopup) {
         return;
@@ -3879,16 +3884,13 @@
         return;
       }
       state.styleTestScroll[styleTestScrollKey()] = scrollTarget.scrollTop;
-      if (!dragState && kineticFrame === null && snapFrame === null) {
-        if (wheelSnapTimer !== null) {
-          window.clearTimeout(wheelSnapTimer);
-        }
-        wheelSnapTimer = window.setTimeout(function () {
-          wheelSnapTimer = null;
-          snapStyleTestScroll(scrollTarget);
-        }, 180);
-      }
+      state.lastScrollAt = Date.now();
     }, true);
+    // A finger on the screen or a list still rolling: the live poll does not redraw the list
+    // (a new DOM under the finger ends the native scroll gesture).
+    document.addEventListener("touchstart", function () { state.touching = true; }, { passive: true, capture: true });
+    document.addEventListener("touchend", function (event) { state.touching = event.touches.length > 0; }, { passive: true, capture: true });
+    document.addEventListener("touchcancel", function () { state.touching = false; }, { passive: true, capture: true });
     styleTestStage.addEventListener("click", function (event) {
       if (state.styleTestPopup && !event.target.closest(".pt-popup-panel")) {
         state.styleTestPopup = null;
@@ -3972,10 +3974,16 @@
       if (emuOverride) {
         event.stopPropagation();
         state.emulationManual = !emulationManual();
-        if (!state.emulationManual) {
-          Object.keys(OVERRIDE_FLAGS).forEach(function (key) { sendEcu(key, "auto"); });
-          state.styleTestPopup = null;
-        }
+        state.styleTestPopup = null;
+        Object.keys(OVERRIDE_FLAGS).forEach(function (key) {
+          if (!state.emulationManual) {
+            sendEcu(key, "auto");
+            return;
+          }
+          // on: the calculated values become the fixed start values, no row shows "Auto"
+          const now = (state.live || {})[key];
+          sendEcu(key, typeof now === "boolean" ? (now ? 1 : 0) : Number.isFinite(Number(now)) ? Math.round(Number(now)) : 0);
+        });
         renderStyleTestStage();
         return;
       }
@@ -4692,7 +4700,8 @@
         state.error = message;
       }
     }
-    const scrolling = state.scrollActiveSince > 0 && Date.now() - state.scrollActiveSince < 3000;
+    const scrolling = state.touching || Date.now() - state.lastScrollAt < 700 ||
+      (state.scrollActiveSince > 0 && Date.now() - state.scrollActiveSince < 3000);
     if (scrolling) {
       state.renderPending = true;  // drawn when the list has settled
     } else if (!(energyFlowEditorEnabled && state.section === "ventilation") && !state.energyFlowEditorDrag) {
