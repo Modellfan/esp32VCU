@@ -28,6 +28,7 @@ struct ClusterSignals {
     uint16_t needle_offset = 4100;      // drive, no power
     uint16_t needle_drive_max = 7950;   // drive, full power
     uint16_t needle_regen_min = 1600;   // drive, full regeneration
+    int16_t needle_drive_offset = 30;   // drive with power: added to the needle (was NEEDLE_LAG)
     int16_t heatsink_critical_c = 80;   // inverter heatsink: coolant warning from here
     int16_t motor_critical_c = 160;     // motor: coolant warning from here
 };

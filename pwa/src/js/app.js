@@ -128,13 +128,17 @@
     }
   }
 
+  function isStaleField(live, key) {
+    return !!(live && Array.isArray(live.stale) && live.stale.indexOf(key) !== -1);
+  }
+
   function firstNumericField(live, keys) {
     if (!live) {
       return null;
     }
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index];
-      if (!Object.prototype.hasOwnProperty.call(live, key)) {
+      if (!Object.prototype.hasOwnProperty.call(live, key) || isStaleField(live, key)) {
         continue;
       }
       const numeric = toNumber(live[key]);
@@ -1134,14 +1138,14 @@
     ]
   };
   sections.flow = {
-    image: "a/i_cluster.svg",
+    image: "a/i_calc.svg",
     tabs: [
       { label: "Needle", title: "Needle calculation", subtitle: "Live block diagram of the power needle.", rows: [], hero: [] },
       { label: "Fuel", title: "Fuel calculation", subtitle: "Live block diagram of the fuel counter.", rows: [], hero: [] }
     ]
   };
   sections.devices = {
-    image: "a/plug.svg",
+    image: "a/zombie.svg",
     tabs: [
       { label: "Zombie VCU", title: "Zombie VCU", subtitle: "Zombie slave, heater and plug.", rows: [], hero: [] },
       { label: "DC-DC", title: "DC-DC", subtitle: "DC/DC converter.", rows: [], hero: [] }
@@ -1200,6 +1204,9 @@
     engineeringMode: readEngineeringMode(),
     valueDraft: {},
     valueDragUntil: 0,
+    emulationManual: null,
+    scrollActiveSince: 0,
+    renderPending: false,
     batteryControls: {
       acCurrentLimitA: 16,
       digitalPotPct: 0,
@@ -1461,6 +1468,29 @@
     if (state.chart.samples.length > 240) {
       state.chart.samples.splice(0, state.chart.samples.length - 240);
     }
+  }
+
+  // Live graph of one value of a Porsche-style page (row tap, VCU-REQ-023).
+  function openValueChart(chartKey, label, unit) {
+    state.chart.tile = {
+      chartKey: chartKey,
+      chartUnit: unit,
+      label: label,
+      source: "styleTest",
+      generic: true,
+      chartValue: function (live) {
+        const value = firstNumericField(live || {}, [chartKey]);
+        return value === null ? NaN : value;
+      },
+      render: function (live) {
+        const value = firstNumericField(live || {}, [chartKey]);
+        return (value === null ? "--" : String(Math.round(value * 100) / 100)) + (unit ? " " + unit : "");
+      }
+    };
+    state.chart.samples = [];
+    state.chart.hover = null;
+    appendChartSample();
+    renderView();
   }
 
   function closeMetricChart() {
@@ -1937,8 +1967,10 @@
     return "<span class=\"pt-seat-icon\"><span></span><span></span></span>";
   }
 
-  function porscheValue(value, unit) {
-    return "<span class=\"pt-live-value\"><strong>" + escapeHtml(value) + "</strong>" +
+  // chartKey: tapping the row opens the live graph of this value (VCU-REQ-023).
+  function porscheValue(value, unit, chartKey) {
+    return "<span class=\"pt-live-value\"" + (chartKey ? " data-chart-key=\"" + escapeHtml(chartKey) + "\" data-chart-unit=\"" + escapeHtml(unit || "") + "\"" : "") +
+      "><strong>" + escapeHtml(value) + "</strong>" +
       (unit ? "<small>" + escapeHtml(unit) + "</small>" : "") +
       "</span>";
   }
@@ -1977,11 +2009,13 @@
   }
 
   function porscheEnumValue(key, enumDef) {
-    return porscheStatusValue(enumText(enumDef, state.live ? state.live[key] : null));
+    const live = state.live || {};
+    return porscheStatusValue(isStaleField(live, key) ? "--" : enumText(enumDef, live[key]));
   }
 
   function porscheBitfieldValue(key, bitfieldDef) {
-    return porscheStatusValue(bitfieldText(bitfieldDef, state.live ? state.live[key] : null));
+    const live = state.live || {};
+    return porscheStatusValue(isStaleField(live, key) ? "--" : bitfieldText(bitfieldDef, live[key]));
   }
 
   function porscheRows(rows) {
@@ -2048,6 +2082,7 @@
         "<div class=\"metric-chart-head\">" +
           "<div class=\"metric-chart-label\">" + escapeHtml(tile.label) + "</div>" +
           "<div class=\"metric-chart-latest\">" + escapeHtml(latest) + "</div>" +
+          "<button type=\"button\" class=\"pt-chart-close\" data-chart-close=\"1\" aria-label=\"Close graph\">&times;</button>" +
         "</div>" +
         "<canvas class=\"metric-chart-canvas\" id=\"metricChartCanvas\"></canvas>" +
       "</div>" +
@@ -2180,14 +2215,16 @@
 
   function porscheLiveNumber(keys, digits, unit, fallback) {
     const value = firstNumericField(state.live || {}, keys);
-    const text = value === null ? (fallback || "--") : value.toFixed(digits).replace(/\.?0+$/, "");
-    return porscheValue(text, unit || "");
+    // only trailing zeros after a decimal point (before: 100 km/h became "1")
+    const fixed = value === null ? "" : value.toFixed(digits);
+    const text = value === null ? (fallback || "--") : (fixed.indexOf(".") === -1 ? fixed : fixed.replace(/0+$/, "").replace(/\.$/, ""));
+    return porscheValue(text, unit || "", keys[0]);
   }
 
   function porscheLiveInteger(keys, unit, fallback) {
     const value = firstNumericField(state.live || {}, keys);
     const text = value === null ? (fallback || "--") : String(Math.round(value));
-    return porscheValue(text, unit || "");
+    return porscheValue(text, unit || "", keys[0]);
   }
 
   // "35 - 42" from two live fields (min/max), e.g. cell temperatures.
@@ -2196,7 +2233,7 @@
     const low = firstNumericField(live, [minKey]);
     const high = firstNumericField(live, [maxKey]);
     if (low === null || high === null) {
-      return porscheValue("--", "");
+      return porscheValue("--", unit);
     }
     return porscheValue(low.toFixed(digits) + " \u2013 " + high.toFixed(digits), unit);
   }
@@ -2219,7 +2256,7 @@
     const live = state.live || {};
     const value = firstNumericField(live, ["yaw_rate"]);
     if (value === null) {
-      return porscheValue("--", "");
+      return porscheValue("--", "rad/s");
     }
     return porscheValue((live.yaw_rate_sign ? -value : value).toFixed(3), "rad/s");
   }
@@ -2242,7 +2279,7 @@
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index];
       if (Object.prototype.hasOwnProperty.call(live, key)) {
-        return porscheStatusValue(live[key] ? onLabel : offLabel);
+        return porscheStatusValue(isStaleField(live, key) ? "--" : live[key] ? onLabel : offLabel);
       }
     }
     return porscheMenuValue(fallback || "--");
@@ -2390,6 +2427,7 @@
     cluster_needle_offset: { label: "Zero power", detail: "Drive, 0 %", min: 0, max: 9000, step: 10, unit: "", text: "Needle position in drive without power." },
     cluster_needle_drive_max: { label: "Full power", detail: "Drive, 100 %", min: 0, max: 9000, step: 10, unit: "", text: "Needle position at full drive power." },
     cluster_needle_regen_min: { label: "Full regen", detail: "Drive, -100 %", min: 0, max: 9000, step: 10, unit: "", text: "Needle position at full regeneration." },
+    cluster_needle_drive_offset: { label: "Drive offset", detail: "Added in drive with power", min: -500, max: 500, step: 5, unit: "", text: "Added to the needle in drive with power (limited to full power). Firmware value before: 30." },
     cluster_heatsink_critical_c: { label: "Heatsink critical", detail: "Coolant warning from", min: 40, max: 120, step: 1, unit: "°C", text: "Inverter heatsink temperature that switches the coolant warning on." },
     cluster_motor_critical_c: { label: "Motor critical", detail: "Coolant warning from", min: 60, max: 200, step: 1, unit: "°C", text: "Motor temperature that switches the coolant warning on." },
     engine_speed_rpm: { label: "Engine speed", detail: "Needle value", min: 0, max: 9000, step: 10, unit: "rpm", override: "rpm_override", text: "Fixed needle value. Auto: calculated from the power." },
@@ -2429,7 +2467,10 @@
     ["motor2_sport_error", "Sport error"], ["motor2_offroad_mode_active", "Offroad mode"]
   ];
   const NEEDLE_KEYS = ["cluster_needle_reverse", "cluster_needle_neutral", "cluster_needle_offset",
-    "cluster_needle_drive_max", "cluster_needle_regen_min", "cluster_heatsink_critical_c", "cluster_motor_critical_c"];
+    "cluster_needle_drive_max", "cluster_needle_regen_min", "cluster_needle_drive_offset"];
+  const CRITICAL_KEYS = ["cluster_heatsink_critical_c", "cluster_motor_critical_c"];
+  const OVERRIDE_FLAGS = { engine_speed_rpm: "rpm_override", motor2_coolant_temperature: "coolant_override",
+    motor2_coolant_temp_not_ok: "coolant_warning_override", mo5_verbrauch_ul: "fuel_override" };
   const EMULATION_VALUE_KEYS = ["engine_speed_rpm", "motor2_coolant_temperature", "mo5_verbrauch_ul", "inlet_air_temperature",
     "throttle_position_280", "pedal_position_1", "pedal_position_2", "barometric_pressure_mbar",
     "motor2_cruise_target_speed_kmh", "motor2_idle_target_speed_rpm", "motor2_limited_torque_percent",
@@ -2510,7 +2551,8 @@
     if (key === "reset_calibration") {
       text = "";
     } else if (def.override && live[def.override] !== true) {
-      text = "Auto";
+      const now = live[key];
+      text = "Auto" + (typeof now === "boolean" ? (now ? " (On)" : " (Off)") : "");
     } else {
       const value = live[key];
       const code = value === true ? "1" : value === false ? "0" : String(value);
@@ -2519,6 +2561,29 @@
     }
     return { label: def.label, detail: def.detail, control: porscheMenuValue(text, true), menuKey: menuKey,
       active: state.styleTestPopup === menuKey, engineeringOnly: true };
+  }
+
+  function emulationManual() {
+    if (state.emulationManual === null) {
+      const live = state.live || {};
+      state.emulationManual = ["rpm_override", "coolant_override", "coolant_warning_override", "fuel_override"]
+        .some(function (key) { return live[key] === true; });
+    }
+    return state.emulationManual;
+  }
+
+  // Read-only row (Override off): the calculated / current value.
+  function ecuReadRow(key, boolLabel) {
+    const live = state.live || {};
+    const def = ECU_VALUES[key] || ECU_OPTIONS[key] || { label: boolLabel || key, detail: key };
+    let text = "--";
+    const value = live[key];
+    if (typeof value === "boolean") {
+      text = value ? "On" : "Off";
+    } else if (Number.isFinite(Number(value)) && value !== null && value !== "") {
+      text = String(Math.round(Number(value))) + (def.unit ? " " + def.unit : "");
+    }
+    return { label: def.label, detail: OVERRIDE_FLAGS[key] ? "Auto" : def.detail, control: porscheStatusValue(text), engineeringOnly: true };
   }
 
   function ecuBoolRow(item) {
@@ -2542,13 +2607,13 @@
     }
     const live = state.live || {};
     return window.VcuSignals.entriesFor(page, shownKeys).map(function (entry) {
-      const formatted = window.VcuSignals.formatValue(entry, live);
       const stale = window.VcuSignals.isStale(entry, live);
+      const formatted = stale ? { text: "--", unit: entry.unit } : window.VcuSignals.formatValue(entry, live);
       return {
         label: entry.label,
         detail: entry.label === entry.name ? "" : entry.name,
-        control: "<span class=\"pt-live-value" + (stale ? " is-stale" : "") + "\"><strong>" + escapeHtml(formatted.text) + "</strong>" +
-          (formatted.unit ? "<small>" + escapeHtml(formatted.unit) + "</small>" : "") + "</span>",
+        control: porscheValue(formatted.text, formatted.unit,
+          entry.type === "bool" || entry.type === "text" ? "" : entry.name),
         engineeringOnly: true
       };
     });
@@ -2571,11 +2636,11 @@
       return WIFI_ROWS.map(function (r) { return r[0]; });
     }
     if (tab === "Emulation") {
-      return EMULATION_VALUE_KEYS.concat(["motor2_coolant_temp_not_ok", "motor2_cruise_control_status"],
+      return EMULATION_VALUE_KEYS.concat(["motor2_coolant_temp_not_ok", "motor2_cruise_control_status"], CRITICAL_KEYS,
         ECU_BOOLS.map(function (b) { return b[0]; }), ["rpm_override", "coolant_override", "coolant_warning_override", "fuel_override"]);
     }
     if (tab === "Needle") {
-      return NEEDLE_KEYS.concat(["cluster_needle_position", "cluster_power_percent_max", "cluster_power_percent_dyn", "cluster_sdu_data_ok", "sdu_seldir"]);
+      return NEEDLE_KEYS.concat(["cluster_needle_position", "cluster_power_percent_max", "cluster_sdu_data_ok", "sdu_seldir"]);
     }
     return [];
   }
@@ -2605,11 +2670,25 @@
         return readoutRow(r[1], r[2], text);
       });
     } else if (tab === "Emulation") {
-      rows = ["engine_speed_rpm", "motor2_coolant_temperature"].map(ecuValueRow)
-        .concat([ecuOptionRow("motor2_coolant_temp_not_ok")])
-        .concat(EMULATION_VALUE_KEYS.slice(2).map(ecuValueRow))
-        .concat([ecuOptionRow("motor2_cruise_control_status")])
-        .concat(ECU_BOOLS.map(ecuBoolRow));
+      // "Override" off: every value is calculated (or the firmware default) and only shown;
+      // on: each value opens its menu and is fixed until "Override" is switched off again.
+      const manual = emulationManual();
+      rows = [{ label: "Override", detail: manual ? "Values set by hand" : "Values calculated (auto)",
+        control: porscheCheckbox("emu:override", manual), engineeringOnly: true }];
+      if (manual) {
+        rows = rows.concat(["engine_speed_rpm", "motor2_coolant_temperature"].map(ecuValueRow))
+          .concat([ecuOptionRow("motor2_coolant_temp_not_ok")])
+          .concat(EMULATION_VALUE_KEYS.slice(2).map(ecuValueRow))
+          .concat([ecuOptionRow("motor2_cruise_control_status")])
+          .concat(ECU_BOOLS.map(ecuBoolRow));
+      } else {
+        rows = rows.concat(["engine_speed_rpm", "motor2_coolant_temperature"].map(ecuReadRow))
+          .concat([ecuReadRow("motor2_coolant_temp_not_ok")])
+          .concat(EMULATION_VALUE_KEYS.slice(2).map(ecuReadRow))
+          .concat([ecuReadRow("motor2_cruise_control_status")])
+          .concat(ECU_BOOLS.map(function (b) { return ecuReadRow(b[0], b[1]); }));
+      }
+      rows = rows.concat(CRITICAL_KEYS.map(ecuValueRow), [ecuOptionRow("reset_calibration")]);
     } else if (tab === "Needle") {
       const dir = Number(live.sdu_seldir);
       const mode = live.cluster_sdu_data_ok !== true ? "No inverter data"
@@ -2621,7 +2700,7 @@
       };
       rows = [
         readoutRow("Needle now", mode, needle === null ? "--" : String(Math.round(needle))),
-        readoutRow("Power", "Max / dynamic reference", percent("cluster_power_percent_max") + " / " + percent("cluster_power_percent_dyn"), "%")
+        readoutRow("Power share", "Of " + (348 * 300 / 1000).toFixed(1) + " kW drive / " + (348 * 100 / 1000).toFixed(1) + " kW regen", percent("cluster_power_percent_max"), "%")
       ].concat(NEEDLE_KEYS.map(ecuValueRow), [ecuOptionRow("reset_calibration")]);
     }
     return rows.concat(engineeringSignalRows(ecuPage(tab), ecuShownKeys(tab)));
@@ -2639,11 +2718,7 @@
           "<div class=\"pt-vertical-slider-copy\">" +
             "<strong>" + escapeHtml(def.detail) + "</strong>" +
             "<p>" + escapeHtml(def.text) + "</p>" +
-            "<div class=\"pt-popup-actions\">" +
-              "<button type=\"button\" class=\"pt-popup-action\" data-ecu-step=\"-1\" data-ecu-key=\"" + key + "\">&minus;</button>" +
-              "<button type=\"button\" class=\"pt-popup-action\" data-ecu-step=\"1\" data-ecu-key=\"" + key + "\">+</button>" +
-              (def.override ? "<button type=\"button\" class=\"pt-popup-action is-wide\" data-ecu-auto=\"" + key + "\">Auto</button>" : "") +
-            "</div>" +
+            "<p class=\"pt-vertical-slider-range\">" + def.min + " \u2013 " + def.max + (def.unit ? " " + escapeHtml(def.unit) : "") + "</p>" +
           "</div>" +
           "<div class=\"pt-vertical-slider-wrap\">" +
             "<div class=\"pt-vertical-slider\" role=\"slider\" tabindex=\"0\" aria-label=\"" + escapeHtml(def.label) +
@@ -2830,7 +2905,7 @@
           { label: "No trip data", detail: "Not available yet", control: porscheStopwatchValue("--", "") }
         ]) +
       "</section>" +
-      porscheTrackPhoto() +
+      porscheTrackPhoto("trip") +
     "</div>";
   }
 
@@ -2863,13 +2938,22 @@
           { label: "Delta", detail: "Lap delta", control: porscheStopwatchValue("--", "s") }
         ]) +
       "</section>" +
-      porscheTrackPhoto() +
+      porscheTrackPhoto("lap") +
     "</div>";
   }
 
-  function porscheTrackPhoto() {
-    return "<section class=\"pt-stopwatch-visual pt-stopwatch-photo\" aria-label=\"Race track\">" +
-      "<img src=\"i/track.webp\" alt=\"Boxster on the race track\">" +
+  // Photo beside the stopwatch lists, zoomed on the car (focus = car centre in the image, %).
+  const STOPWATCH_PHOTOS = {
+    track: { src: "i/track.webp", alt: "Boxster on the race track", focus: "59% 66%", zoom: 1.5 },
+    trip: { src: "i/mountain_front.webp", alt: "Boxster on a mountain pass", focus: "53% 68%", zoom: 1 },
+    lap: { src: "i/city_night.webp", alt: "Boxster in the city at night", focus: "64% 56%", zoom: 1 }
+  };
+
+  function porscheTrackPhoto(which) {
+    const photo = STOPWATCH_PHOTOS[which] || STOPWATCH_PHOTOS.track;
+    return "<section class=\"pt-stopwatch-visual pt-stopwatch-photo\" aria-label=\"" + escapeHtml(photo.alt) + "\">" +
+      "<img src=\"" + photo.src + "\" alt=\"" + escapeHtml(photo.alt) + "\" style=\"object-position: " + photo.focus +
+        "; transform-origin: " + photo.focus + "; transform: scale(" + photo.zoom + ")\">" +
     "</section>";
   }
 
@@ -3493,9 +3577,11 @@
           : tab === "Comfort"
             ? porscheComfortMarkup()
             : porscheDriveMarkup();
+    const genericChart = state.chart.tile && state.chart.tile.generic ? porscheStyleChartMarkup(state.chart.tile, "is-full") : "";
     styleTestStage.innerHTML =
       "<div class=\"pt-shell\">" +
         content +
+        genericChart +
       "</div>";
     const chartCanvas = document.getElementById("metricChartCanvas");
     if (chartCanvas && state.chart.tile && state.chart.tile.source === "styleTest") {
@@ -3527,6 +3613,14 @@
       if (wheelSnapTimer !== null) {
         window.clearTimeout(wheelSnapTimer);
         wheelSnapTimer = null;
+      }
+    }
+
+    function markStyleScrollActive(active) {
+      state.scrollActiveSince = active ? Date.now() : 0;
+      if (!active && state.renderPending) {
+        state.renderPending = false;
+        renderStyleTestStage();
       }
     }
 
@@ -3564,6 +3658,7 @@
       const distance = target - start;
       if (Math.abs(distance) < 0.5) {
         setStyleTestScroll(targetScroller, target);
+        markStyleScrollActive(false);
         return;
       }
       const startedAt = performance.now();
@@ -3583,6 +3678,7 @@
         } else {
           snapFrame = null;
           setStyleTestScroll(targetScroller, target);
+          markStyleScrollActive(false);
         }
       }
 
@@ -3666,7 +3762,7 @@
     }
 
     styleTestStage.addEventListener("pointerdown", function (event) {
-      if (event.target.closest("button, input, [data-pt-checkbox], .pt-vertical-slider, .pt-row[data-pt-chart-key], .pt-row[data-pt-menu-key]")) {
+      if (event.target.closest("input, .pt-vertical-slider, .pt-slider")) {
         return;
       }
       if (state.styleTestPopup) {
@@ -3688,8 +3784,6 @@
         velocity: 0,
         moved: false
       };
-      scrollTarget.classList.add("is-drag-scrolling");
-      scrollTarget.setPointerCapture(event.pointerId);
     });
 
     styleTestStage.addEventListener("pointermove", function (event) {
@@ -3697,8 +3791,16 @@
         return;
       }
       const deltaY = event.clientY - dragState.startY;
-      if (Math.abs(deltaY) > 3) {
+      if (!dragState.moved) {
+        if (Math.abs(deltaY) < 8) {
+          return;  // still a tap
+        }
         dragState.moved = true;
+        dragState.startY = event.clientY;
+        markStyleScrollActive(true);
+        dragState.target.classList.add("is-drag-scrolling");
+        dragState.target.setPointerCapture(event.pointerId);
+        return;
       }
       const now = performance.now();
       const previousTop = dragState.target.scrollTop;
@@ -3852,8 +3954,40 @@
       const step = event.target.closest("[data-ecu-step]");
       const auto = event.target.closest("[data-ecu-auto]");
       const option = event.target.closest(".pt-popup-option[data-pt-option-key^='opt:']");
-      const checkbox = event.target.closest("[data-pt-checkbox^='ecu:']");
+      // the whole row toggles its checkbox (Porsche style)
+      const tappedRow = state.styleTestPopup ? null : event.target.closest(".pt-row");
+      const checkbox = event.target.closest("[data-pt-checkbox^='ecu:']") ||
+        (tappedRow ? tappedRow.querySelector("[data-pt-checkbox^='ecu:']") : null);
+      const emuOverride = event.target.closest("[data-pt-checkbox='emu:override']") ||
+        (tappedRow ? tappedRow.querySelector("[data-pt-checkbox='emu:override']") : null);
+      const chartClose = event.target.closest("[data-chart-close]");
+      if (chartClose || (state.chart.tile && state.chart.tile.generic)) {
+        if (chartClose) {
+          event.stopPropagation();
+          closeMetricChart();
+          renderStyleTestStage();
+        }
+        return;
+      }
+      if (emuOverride) {
+        event.stopPropagation();
+        state.emulationManual = !emulationManual();
+        if (!state.emulationManual) {
+          Object.keys(OVERRIDE_FLAGS).forEach(function (key) { sendEcu(key, "auto"); });
+          state.styleTestPopup = null;
+        }
+        renderStyleTestStage();
+        return;
+      }
       if (!step && !auto && !option && !checkbox) {
+        const row = event.target.closest(".pt-row");
+        const chartValue = row && !state.styleTestPopup && !row.hasAttribute("data-pt-menu-key") &&
+          !row.querySelector("[data-pt-checkbox]") ? row.querySelector("[data-chart-key]") : null;
+        if (chartValue) {
+          event.stopPropagation();
+          const label = (row.querySelector(".pt-row-copy strong") || {}).textContent || chartValue.getAttribute("data-chart-key");
+          openValueChart(chartValue.getAttribute("data-chart-key"), label, chartValue.getAttribute("data-chart-unit") || "");
+        }
         return;
       }
       event.stopPropagation();
@@ -4462,6 +4596,7 @@
 
   function visibleLiveFields() {
     const keys = [
+      "stale",
       "sta_ssid",
       "ap_ssid",
       "ap_ip"
@@ -4557,7 +4692,10 @@
         state.error = message;
       }
     }
-    if (!(energyFlowEditorEnabled && state.section === "ventilation") && !state.energyFlowEditorDrag) {
+    const scrolling = state.scrollActiveSince > 0 && Date.now() - state.scrollActiveSince < 3000;
+    if (scrolling) {
+      state.renderPending = true;  // drawn when the list has settled
+    } else if (!(energyFlowEditorEnabled && state.section === "ventilation") && !state.energyFlowEditorDrag) {
       try {
         renderView();
       } catch (error) {

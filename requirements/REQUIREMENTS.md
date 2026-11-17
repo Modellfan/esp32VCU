@@ -160,7 +160,7 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 - **Anforderung:** Für jedes CAN-Signal muss die VCU erkennen, ob es innerhalb einer festgelegten Zeit empfangen wurde. Fehlende oder veraltete Werte werden als ungültig gekennzeichnet und weder als 0 noch als letzter Wert ausgegeben.
 - **Akzeptanz:** Gegeben der Umrichter-CAN ist getrennt; wenn 1 s vergeht; dann kennzeichnet `/api/live` alle `sdu_*`-Werte als ungültig, und die Oberfläche zeigt „–“ statt 0.
 - **Abhängigkeiten:** VCU-REQ-003, VCU-REQ-004
-- **Umsetzung:** Firmware umgesetzt 2026-10-28 (VCU-DEC-006): Empfangszeit je Botschaft, `stale`-Liste in `/api/live`, Zeitgrenze 500 ms (Entwurf). Die PWA wertet `stale` bisher nur auf der Engineering-Seite „Signals“ aus (VCU-REQ-022).
+- **Umsetzung:** Firmware umgesetzt 2026-10-28 (VCU-DEC-006): Empfangszeit je Botschaft, `stale`-Liste in `/api/live`, Zeitgrenze 500 ms (Entwurf). PWA seit 2026-11-17 (Nutzer): Jeder Wert in `stale` erscheint auf allen Seiten als „--“ mit Einheit (z. B. „-- V“), auch Ein/Aus- und Enum-Werte, nie als letzte Zahl oder 0; keine graue Durchstreichung mehr. Prüfstand 2026-11-17: ohne Umrichter zeigt Engine „-- kW/V/A/rpm/%“. Test `test_missing_values_show_dash`.
 - **Offen:** Zeitgrenze je Botschaft (Vorschlag: 3 × Zykluszeit, mindestens 300 ms) und Darstellung im JSON.
 
 ### Netzwerk und Sicherheit
@@ -263,9 +263,10 @@ Die VCU ersetzt im elektrifizierten Porsche 986 das Verbrennungs-Motorsteuerger�
 ### VCU-REQ-023 – Verlaufsdiagramm beim Antippen eines Werts
 - **Typ:** funktional / Bedienung
 - **Priorität:** should
-- **Status:** draft (Nutzerwunsch 2026-11-15, Befund Testfahrt 2026-11-14)
+- **Status:** implemented (Nutzerwunsch 2026-11-15, Befund Testfahrt 2026-11-14; umgesetzt 2026-11-17)
 - **Anforderung:** Tippt der Nutzer auf einen Zahlenwert der Touch-Oberfläche, muss ein Diagramm mit dem Verlauf dieses Werts seit dem Öffnen der Seite erscheinen; es aktualisiert sich mit jeder Abfrage und lässt sich wieder schließen. Werte mit Bedienelement (z. B. Regler) öffnen stattdessen ihr Bedienelement.
 - **Akzeptanz:** Gegeben die Touch-Oberfläche auf dem Navi-Display (Chrome) mit laufender VCU; wenn ein Zahlenwert ohne Bedienelement angetippt wird; dann erscheint innerhalb von 1 s ein Diagramm dieses Werts, das bei jeder neuen Abfrage einen Punkt ergänzt, und es schließt sich per Schließen-Schaltfläche.
-- **Befund 2026-11-14:** Auf dem Radio öffnet das Antippen keine Diagramme mehr. Der Diagrammcode ist in `pwa/src/js/app.js` noch vorhanden (`chartKey`, `rowCanOpenChart`); offen ist, ob die neuen Seiten im Porsche-Stil ihn nicht anbinden oder ob es am Radio liegt.
+- **Befund 2026-11-14:** Auf dem Radio öffnet das Antippen keine Diagramme mehr. Ursache: Die Seiten im Porsche-Stil banden den Diagrammcode nur für „Battery power“ an.
+- **Umsetzung 2026-11-17:** Jede Zahlenzeile ohne eigenes Menü (Fahrzeugseiten, Engineering-Signale) öffnet beim Antippen das Diagramm bildschirmfüllend mit Schließen-Knopf; fehlende Werte werden nicht eingezeichnet (`openValueChart` in `pwa/src/js/app.js`). Test `test_value_tap_opens_graph`; auf dem Radio noch nicht geprüft.
 - **Abhängigkeiten:** VCU-REQ-010, -011
 

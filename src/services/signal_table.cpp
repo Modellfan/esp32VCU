@@ -191,6 +191,7 @@ const SignalDef kSignals[] = {
     SIG("cluster_needle_offset", G_CLUSTER, params::ClusterSignals, needle_offset, F_UINT, 0, RX_NONE, W_ECU),
     SIG("cluster_needle_drive_max", G_CLUSTER, params::ClusterSignals, needle_drive_max, F_UINT, 0, RX_NONE, W_ECU),
     SIG("cluster_needle_regen_min", G_CLUSTER, params::ClusterSignals, needle_regen_min, F_UINT, 0, RX_NONE, W_ECU),
+    SIG("cluster_needle_drive_offset", G_CLUSTER, params::ClusterSignals, needle_drive_offset, F_INT, 0, RX_NONE, W_ECU),
     SIG("cluster_heatsink_critical_c", G_CLUSTER, params::ClusterSignals, heatsink_critical_c, F_INT, 0, RX_NONE, W_ECU),
     SIG("cluster_motor_critical_c", G_CLUSTER, params::ClusterSignals, motor_critical_c, F_INT, 0, RX_NONE, W_ECU),
     SIG("target_charge_pct", G_CHARGING, params::ChargingSignals, target_charge_pct, F_NUM, 0, RX_NONE, 0),

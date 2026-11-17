@@ -459,8 +459,7 @@ Referenz README (CAN-Hardware), VCU-DEC-016. Anzeige heute nur auf der Testseite
 | API-Name | Bedeutung | UI heute | Bemerkung |
 |---|---|---|---|
 | `uptime_ms`, `free_heap`, `gvret_dropped` | Laufzeit, freier Speicher, verlorene GVRET-Frames | – | Engineering |
-| `sta_connected`, `sta_ssid`, `sta_ip`, `ap_ssid`, `ap_ip`, `ap_clients`, `network_mode`, `network_label` | WLAN-Zustand | Netzwerkfenster (Uhrzeit oben rechts), [E]Adjust, [E]Cluster/State | |
-| `lte_connected`, `lte_operator`, `lte_signal` | LTE | – | entfällt (Radio nur per WLAN), Kandidat zum Entfernen |
+| `sta_connected`, `sta_ssid`, `sta_ip`, `ap_ssid`, `ap_ip`, `ap_clients` | WLAN-Zustand | Netzwerkfenster (Uhrzeit oben rechts), [E]ECU/Wi-Fi | |
 | `rpm_override`, `coolant_override`, `coolant_warning_override`, `fuel_override`, `set_rpm_active`, `set_coolant_active`, `set_oil_active` | aktive Overrides der DME-Emulation | – | Engineering |
 | `stale` | Liste der veralteten Felder | UI blendet veraltete Werte aus | |
 

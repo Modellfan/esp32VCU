@@ -198,9 +198,8 @@ def test_every_field_on_one_engineering_page(page, server, api):
 
     page.route(re.compile(r"/api/live\?"), add_stale)
     page.wait_for_timeout(1500)
-    stale = page.evaluate("() => Array.from(document.querySelectorAll('.pt-row'))"
-                          ".filter(r => r.querySelector('.is-stale')).map(r => r.querySelector('strong').textContent)")
-    assert stale == ["battery_soh_pct"], stale
+    value = page.evaluate("() => document.querySelector(\"[data-chart-key='battery_soh_pct']\").textContent")
+    assert value == "--%", value  # missing value: dash with unit, no strike-through
     for section, count in (("ecu", 4), ("devices", 2)):
         goto_section(page, section)
         assert len(visible_tabs(page)) == count
@@ -612,34 +611,63 @@ def test_android_radio_chrome_flag_offline(browser, tmp_path, api):
         srv.shutdown()
 
 def test_needle_calibration_popup(page, server, api):
-    """ECU > Needle: row opens the Target-charge style popup; slider, +/- and reset reach the VCU."""
+    """ECU > Needle: row opens the Target-charge style popup; slider and reset reach the VCU.
+    ECU > Emulation: "Override" switches between calculated values and manual menus."""
     open_app(page, server)
     enable_engineering(page)
     goto_section(page, "ecu")
     page.click(".tab[data-tab-index='2']")  # Needle
     page.click(".pt-row[data-pt-menu-key='val:cluster_needle_neutral']")
-    slider = page.wait_for_selector(".pt-vertical-slider[data-pt-vertical-slider-key='val:cluster_needle_neutral']")
-    box = slider.bounding_box()
+    page.wait_for_selector(".pt-vertical-slider[data-pt-vertical-slider-key='val:cluster_needle_neutral']")
+    box = page.locator(".pt-vertical-slider[data-pt-vertical-slider-key='val:cluster_needle_neutral']").bounding_box()
     page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] * 0.5)
     assert wait_until(lambda: any(s["path"] == "/api/set-ecu" and s["key"] == "cluster_needle_neutral"
                                   for s in api.stats()["sets"]), 5)
     sent = [s for s in api.stats()["sets"] if s["key"] == "cluster_needle_neutral"][-1]["value"]
     assert 4400 <= float(sent) <= 4600, sent
-    page.click("[data-ecu-step='1'][data-ecu-key='cluster_needle_neutral']")
-    assert wait_until(lambda: any(s["key"] == "cluster_needle_neutral" and float(s["value"]) == float(sent) + 10
-                                  for s in api.stats()["sets"]), 5)
-    assert page.query_selector(".pt-popup-layer"), "popup must stay open after +/-"
     screenshot(page, "ecu-needle-popup")
     page.mouse.click(160, 300)  # outside the panel: close
+    assert page.query_selector(".pt-row[data-pt-menu-key='val:cluster_needle_drive_offset']")
     page.click(".pt-row[data-pt-menu-key='opt:reset_calibration']")
     page.click(".pt-popup-option[data-pt-option-value='1']")
     assert wait_until(lambda: any(s["path"] == "/api/set" and s["key"] == "reset_calibration" for s in api.stats()["sets"]), 5)
 
     page.click(".tab[data-tab-index='1']")  # Emulation
+    assert not page.query_selector(".pt-row[data-pt-menu-key='val:engine_speed_rpm']"), "override off: no menus"
+    page.click(".pt-row:has([data-pt-checkbox='emu:override'])")
     page.click("[data-pt-checkbox='ecu:check_engine_light']")
     assert wait_until(lambda: any(s["key"] == "check_engine_light" and s["value"] == "1" for s in api.stats()["sets"]), 5)
-    page.click(".pt-row[data-pt-menu-key='val:engine_speed_rpm']")
-    page.click("[data-ecu-auto='engine_speed_rpm']")
-    assert wait_until(lambda: any(s["key"] == "engine_speed_rpm" and s["value"] == "auto" for s in api.stats()["sets"]), 5)
+    assert page.query_selector(".pt-row[data-pt-menu-key='val:engine_speed_rpm']")
     screenshot(page, "ecu-emulation")
+    page.click(".pt-row:has([data-pt-checkbox='emu:override'])")  # off: every override back to auto
+    assert wait_until(lambda: any(s["key"] == "engine_speed_rpm" and s["value"] == "auto" for s in api.stats()["sets"]), 5)
     assert not page.probe.errors
+
+
+def test_value_tap_opens_graph(page, server, api):
+    """VCU-REQ-023: tapping a value row opens its live graph, the close button closes it."""
+    open_app(page, server)
+    goto_section(page, "vehicle")
+    page.click(".pt-row:has([data-chart-key='sdu_udc'])")
+    page.wait_for_selector(".pt-style-chart #metricChartCanvas")
+    page.wait_for_timeout(2500)
+    assert page.evaluate("() => document.querySelector('.metric-chart-label').textContent") == "DC voltage"
+    page.click("[data-chart-close]")
+    assert not page.query_selector(".pt-style-chart")
+    assert not page.probe.errors
+
+
+def test_missing_values_show_dash(page, server, api):
+    """VCU-REQ-013: values listed in "stale" show "--" with their unit, never the old number."""
+    def add_stale(route):
+        response = route.fetch()
+        body = response.json()
+        body["stale"] = ["sdu_udc"]
+        route.fulfill(response=response, json=body)
+
+    page.route(re.compile(r"/api/live\?"), add_stale)
+    open_app(page, server)
+    goto_section(page, "vehicle")
+    page.wait_for_timeout(1500)
+    text = page.evaluate("() => document.querySelector(\"[data-chart-key='sdu_udc']\").textContent")
+    assert text == "--V", text

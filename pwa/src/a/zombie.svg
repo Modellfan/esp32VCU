@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Zombie VCU / DC-DC page (own drawing 2026-11-17): outline head, cross eye, stitched mouth and scar. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M6.2 9.6C6.2 5.9 8.8 3.5 12.3 3.5s5.6 2.3 5.6 5.6v3.2c0 1-.4 1.7-1 2.2v2.6c0 1.9-1.6 3.4-3.6 3.4h-2.6c-2 0-3.6-1.5-3.6-3.4v-2.4c-.6-.5-.9-1.2-.9-2.1z"/>
+  <path d="M8.6 9.6l2 2M10.6 9.6l-2 2"/>
+  <circle cx="15" cy="10.6" r="1.1"/>
+  <path d="M9.2 16.2h5.6M10.2 15.4v1.6M12 15.4v1.6M13.8 15.4v1.6"/>
+  <path d="M13.6 4.4l-1.4 2.4M12.4 5.2l1.1.6M12.9 5.9l-1.1-.6"/>
+</svg>

@@ -33,6 +33,7 @@ PersistentDataStorage::PersistentData collect() {
     d.needle_offset = params::cluster.needle_offset;
     d.needle_drive_max = params::cluster.needle_drive_max;
     d.needle_regen_min = params::cluster.needle_regen_min;
+    d.needle_drive_offset = params::cluster.needle_drive_offset;
     d.heatsink_critical_c = params::cluster.heatsink_critical_c;
     d.motor_critical_c = params::cluster.motor_critical_c;
     return d;
@@ -70,6 +71,9 @@ void apply(const PersistentDataStorage::PersistentData &d) {
         params::cluster.needle_drive_max = d.needle_drive_max;
         params::cluster.needle_regen_min = d.needle_regen_min;
     }
+    if (d.needle_drive_offset >= -1000 && d.needle_drive_offset <= 1000) {
+        params::cluster.needle_drive_offset = d.needle_drive_offset;
+    }
     if (d.heatsink_critical_c >= 20 && d.heatsink_critical_c <= 150 && d.motor_critical_c >= 20 && d.motor_critical_c <= 250) {
         params::cluster.heatsink_critical_c = d.heatsink_critical_c;
         params::cluster.motor_critical_c = d.motor_critical_c;
@@ -97,9 +101,9 @@ void persistenceBegin() {
             gSaved.target_charge_pct, gSaved.ac_current_limit_a, gSaved.fan_mode, gSaved.fan_level_manual,
             gSaved.acceleration_0_50_valid ? gSaved.acceleration_0_50_best_s : 0.0f,
             gSaved.acceleration_0_100_valid ? gSaved.acceleration_0_100_best_s : 0.0f);
-    VCU_LOG("[PERSIST] needle R %u N %u 0 %u max %u regen %u, critical heatsink %d C motor %d C\n",
+    VCU_LOG("[PERSIST] needle R %u N %u 0 %u max %u regen %u offset %d, critical heatsink %d C motor %d C\n",
             gSaved.needle_reverse, gSaved.needle_neutral, gSaved.needle_offset, gSaved.needle_drive_max,
-            gSaved.needle_regen_min, gSaved.heatsink_critical_c, gSaved.motor_critical_c);
+            gSaved.needle_regen_min, gSaved.needle_drive_offset, gSaved.heatsink_critical_c, gSaved.motor_critical_c);
 }
 
 void persistenceService(uint32_t nowMs) {

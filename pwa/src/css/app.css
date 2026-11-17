@@ -497,11 +497,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 44px;
+  gap: 0;  /* exact centre between the left edge and the car */
   min-width: 0;
   min-height: 0;
   height: 100%;
-  padding: 0 0 0 12px;
+  padding: 0;
   background: #000000;
 }
 
@@ -525,16 +525,14 @@ body {
   background: #000000;
 }
 
+/* Battery centred between the left edge and the car (2026-11-17): the slot takes the free
+   width left of the car, the battery sits in its middle. */
 .home-battery-slot {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
-}
-
-.screen.is-home .home-battery-slot {
-  transform: translateX(-80px);
 }
 
 .home-hero {
@@ -1497,7 +1495,7 @@ body {
   padding-top: 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  touch-action: pan-y;
+  touch-action: none;  /* JS drag: snapping only after the finger is lifted (2026-11-17) */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   cursor: grab;
@@ -2230,7 +2228,7 @@ body {
 .pt-vertical-slider-content {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 172px;
+  grid-template-columns: minmax(0, 1fr) 210px;
   gap: 22px;
   padding: 26px 30px 28px;
 }
@@ -2269,7 +2267,7 @@ body {
 
 .pt-vertical-slider {
   position: relative;
-  width: 132px;
+  width: 200px;
   height: 100%;
   min-height: 322px;
   cursor: ns-resize;
@@ -2280,10 +2278,12 @@ body {
 .pt-vertical-slider-track {
   position: absolute;
   top: 0;
-  right: 35px;
+  left: 50%;
   bottom: 0;
-  width: 62px;
+  width: 104px;
+  transform: translateX(-50%);
   background:
+    linear-gradient(0deg, rgba(24, 202, 255, 0.20) 0 var(--pt-vertical-slider-fill, 0%), transparent var(--pt-vertical-slider-fill, 0%)),
     linear-gradient(90deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.26) 48%, rgba(255, 255, 255, 0.09)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
   border-left: 1px solid rgba(255, 255, 255, 0.10);
@@ -2294,7 +2294,7 @@ body {
 .pt-vertical-slider-line {
   position: absolute;
   top: var(--pt-vertical-slider-y, 20%);
-  right: 65px;
+  left: calc(50% - 1px);
   bottom: 6%;
   width: 2px;
   background: #18caff;
@@ -2304,14 +2304,14 @@ body {
 .pt-vertical-slider-badge {
   position: absolute;
   top: var(--pt-vertical-slider-y, 20%);
-  right: 28px;
-  min-width: 76px;
+  left: 50%;
+  min-width: 112px;
   height: 50px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
   border: 1px solid rgba(75, 211, 255, 0.9);
   background: linear-gradient(180deg, rgba(11, 112, 167, 0.96), rgba(8, 84, 130, 0.98));
   color: #c8f6ff;
@@ -2747,37 +2747,36 @@ body {
   white-space: nowrap;
 }
 
-.pt-popup-actions {
-  display: flex;
-  flex-wrap: wrap;
-  max-width: 150px;
-  gap: 12px;
-  margin-top: 24px;
+.pt-vertical-slider-copy .pt-vertical-slider-range {
+  margin-top: 18px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 16px;
 }
 
-.pt-popup-action {
-  min-width: 64px;
+.pt-chart-close {
+  width: 56px;
   height: 56px;
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  margin-left: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  background: transparent;
   color: #ffffff;
   font: inherit;
-  font-size: 26px;
-  -webkit-touch-callout: none;
-  user-select: none;
+  font-size: 30px;
+  line-height: 1;
 }
 
-.pt-popup-action.is-wide {
-  flex: 0 0 140px;
-  font-size: 22px;
+.pt-live-value[data-chart-key] {
+  cursor: pointer;
 }
 
-/* Engineering page "Flow": Simulink-like live block diagrams (js/flow.js) */
+/* Engineering page "Flow": Simulink-like live block diagrams (js/flow.js).
+   One title (white), one value (green), one detail (grey) per block; blue only for the
+   active signal path, amber only for warnings. */
 .fl-page {
   width: 100%;
   height: 100%;
+  padding: 8px 12px 0;
   background: #000000;
 }
 
@@ -2789,67 +2788,69 @@ body {
 }
 
 .fl-block rect {
-  fill: #0d1114;
-  stroke: rgba(255, 255, 255, 0.45);
-  stroke-width: 1.5;
-}
-
-.fl-block.is-port rect {
-  fill: #0a1a22;
-  stroke: rgba(24, 202, 255, 0.55);
+  fill: #0b0e10;
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.2;
 }
 
 .fl-block.is-active rect {
-  stroke: #18caff;
-  stroke-width: 2;
+  stroke: rgba(24, 202, 255, 0.85);
 }
 
 .fl-block text {
   text-anchor: middle;
-  fill: rgba(255, 255, 255, 0.72);
-  font-size: 13px;
 }
 
-.fl-block .fl-title {
-  fill: #ffffff;
+.fl-title {
+  fill: rgba(255, 255, 255, 0.92);
   font-size: 14px;
   font-weight: 600;
 }
 
-.fl-block .fl-big {
+.fl-big {
   fill: #b6ff00;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.fl-block .is-on {
+.fl-big.is-warn {
+  fill: #ffb020;
+}
+
+.fl-detail {
+  fill: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.fl-block .fl-cell {
+  text-anchor: start;
+  fill: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fl-block .fl-cell.is-value {
+  text-anchor: end;
+}
+
+.fl-block .fl-cell.is-on {
   fill: #18caff;
   font-weight: 600;
 }
 
-.fl-block .is-warn {
-  fill: #ffb020;
-}
-
 .fl-wire {
   fill: none;
-  stroke: #8a9399;
-  stroke-width: 1.6;
+  stroke: #4d5459;
+  stroke-width: 1.5;
 }
 
 .fl-wire.is-active {
   stroke: #18caff;
-  stroke-width: 2.2;
-}
-
-.fl-value {
-  text-anchor: middle;
-  fill: #b6ff00;
-  font-size: 12px;
-  font-weight: 600;
+  stroke-width: 2;
 }
 
 .fl-note {
-  fill: rgba(255, 255, 255, 0.62);
+  fill: rgba(255, 255, 255, 0.5);
   font-size: 13px;
 }

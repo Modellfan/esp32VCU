@@ -50,7 +50,6 @@
 
 // Needle values
 // Needle calibration: params::cluster.needle_* (settable in engineering mode, not stored).
-#define NEEDLE_LAG 30
 
 // Fuel simulation for MO5 consumption.
 #define FUEL_STEP_UL 500U
@@ -204,7 +203,7 @@ int needleFromPercent(int8_t dir, float percentSigned) {
 
     if (p > 0.0f) {
         const int base = (int)lroundf(lerpf((float)c.needle_offset, (float)c.needle_drive_max, p));
-        const int lagged = base + NEEDLE_LAG;
+        const int lagged = base + c.needle_drive_offset;
         return (lagged > c.needle_drive_max) ? c.needle_drive_max : lagged;
     }
     return (int)lroundf(lerpf((float)c.needle_offset, (float)c.needle_regen_min, -p));
@@ -276,6 +275,7 @@ void clusterResetCalibration() {
     params::cluster.needle_offset = defaults.needle_offset;
     params::cluster.needle_drive_max = defaults.needle_drive_max;
     params::cluster.needle_regen_min = defaults.needle_regen_min;
+    params::cluster.needle_drive_offset = defaults.needle_drive_offset;
     params::cluster.heatsink_critical_c = defaults.heatsink_critical_c;
     params::cluster.motor_critical_c = defaults.motor_critical_c;
 }

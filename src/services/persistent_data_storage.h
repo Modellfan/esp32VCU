@@ -32,7 +32,7 @@ public:
         uint16_t needle_regen_min = 1600;
         int16_t heatsink_critical_c = 80;
         int16_t motor_critical_c = 160;
-        uint16_t reserved2 = 0;
+        int16_t needle_drive_offset = 30;  // version 3 (2026-11-17); version 2 had 0 here
     };
     static_assert(sizeof(PersistentData) == 32, "PersistentData must not contain padding");
     static constexpr size_t kV1PayloadSize = 16U;
@@ -78,7 +78,7 @@ private:
     };
 
     static constexpr uint32_t kMagic = 0x45564355UL;  // 'EVCU'
-    static constexpr uint16_t kVersion = 2U;
+    static constexpr uint16_t kVersion = 3U;  // version 2: same layout, drive offset unused
     static constexpr size_t kSlotCount = 16U;
     static constexpr uint32_t kBaseAddress = 1024U;   // version 2: 16 slots of 48 bytes
     static constexpr uint32_t kV1BaseAddress = 0U;    // version 1: 16 slots of 32 bytes, read once
@@ -158,14 +158,20 @@ private:
 
     bool read_slot(size_t index, RecordHeader &header, PersistentData &data) const {
         const uint32_t base = kBaseAddress + index * slot_size();
-        if (!eepromRead(base, &header, sizeof header) || header.magic != kMagic || header.version != kVersion ||
-            header.payload_size != sizeof(PersistentData)) {
+        if (!eepromRead(base, &header, sizeof header) || header.magic != kMagic ||
+            (header.version != kVersion && header.version != 2U) || header.payload_size != sizeof(PersistentData)) {
             return false;
         }
         if (!eepromRead(base + sizeof(RecordHeader), &data, sizeof data)) {
             return false;
         }
-        return compute_crc(header, data) == header.crc;
+        if (compute_crc(header, data) != header.crc) {
+            return false;
+        }
+        if (header.version == 2U) {
+            data.needle_drive_offset = PersistentData{}.needle_drive_offset;
+        }
+        return true;
     }
 
     bool write_slot(size_t index, uint32_t sequence, const PersistentData &data) {

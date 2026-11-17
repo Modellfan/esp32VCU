@@ -1,19 +1,29 @@
 // Engineering page "Flow" (2026-11-17): Simulink-like block diagrams of the firmware
-// calculation in src/app/cluster_calc.cpp, with the live values on every wire.
+// calculation in src/app/cluster_calc.cpp, with the live values in the blocks.
 // Needle: inverter DC power -> power share -> needle map -> override -> 0x280 engine speed.
 // Fuel:   fixed step every 30 ms -> total fuel -> 15-bit counter + overflow flag -> 0x4E0.
+//
+// Layout rules (keep when changing): 5 columns (COL) and 4 rows (ROW) on a fixed grid; blocks
+// 150 x 64 (tables taller); inputs/outputs are pills, calculations rectangles; wires only
+// horizontal/vertical; per block one title, one value (green), at most one grey line;
+// blue = active signal path only, amber = warning only.
 // The constants below mirror the firmware; change both together.
 (function () {
   const FW = {
-    refVoltage: 348, driveCurrent: 300, regenCurrent: 100, deadband: 0.05, lag: 30,
+    refVoltage: 348, driveCurrent: 300, regenCurrent: 100, deadband: 0.05,
     fuelStepUl: 500, fuelSliceMs: 30, fuelMaxL: 20, counterWrap: 32768, overflowCycles: 5
   };
   const KEYS = {
     Needle: ["sdu_udc", "sdu_idc", "sdu_seldir", "cluster_sdu_data_ok", "cluster_power_percent_max",
       "cluster_needle_position", "cluster_needle_reverse", "cluster_needle_neutral", "cluster_needle_offset",
-      "cluster_needle_drive_max", "cluster_needle_regen_min", "rpm_override", "engine_speed_rpm", "stale"],
+      "cluster_needle_drive_max", "cluster_needle_regen_min", "cluster_needle_drive_offset", "rpm_override",
+      "engine_speed_rpm", "stale"],
     Fuel: ["cluster_total_fuel_l", "mo5_verbrauch_ul", "mo5_ueberlverb", "fuel_override", "stale"]
   };
+  const W = 150;        // block width
+  const H = 64;         // block height
+  const COL = [20, 205, 390, 575, 760];  // left edge of the columns
+  const ROW = [88, 200, 312, 424];       // vertical centre of the rows
 
   function esc(text) {
     return String(text).replace(/[&<>"']/g, function (c) {
@@ -22,6 +32,9 @@
   }
 
   function num(live, key) {
+    if (live && Array.isArray(live.stale) && live.stale.indexOf(key) !== -1) {
+      return null;  // not received / too old: "--"
+    }
     const value = Number((live || {})[key]);
     return Number.isFinite(value) ? value : null;
   }
@@ -31,37 +44,57 @@
   }
 
   // ---------------------------------------------------------------- SVG helpers
-  function block(x, y, w, h, title, lines, opts) {
+  // Block on the grid: column c, vertical centre cy; one title, one value, one grey line below.
+  function block(c, cy, title, value, detail, opts) {
     const o = opts || {};
-    let out = "<g class=\"fl-block" + (o.active ? " is-active" : "") + (o.dim ? " is-dim" : "") + (o.port ? " is-port" : "") + "\">" +
-      "<rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + h + "\" rx=\"" + (o.port ? h / 2 : 6) + "\"/>" +
-      "<text class=\"fl-title\" x=\"" + (x + w / 2) + "\" y=\"" + (y + 18) + "\">" + esc(title) + "</text>";
-    (lines || []).forEach(function (line, i) {
-      const cls = line.cls || "fl-line";
-      out += "<text class=\"" + cls + "\" x=\"" + (x + w / 2) + "\" y=\"" + (y + 38 + i * 17) + "\">" + esc(line.text) + "</text>";
+    const h = o.h || H;
+    const w = o.w || W;
+    const x = COL[c];
+    const y = cy - h / 2;
+    return "<g class=\"fl-block" + (o.active ? " is-active" : "") + (o.port ? " is-port" : "") + "\">" +
+      "<rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + w + "\" height=\"" + h + "\" rx=\"" + (o.port ? h / 2 : 4) + "\"/>" +
+      "<text class=\"fl-title\" x=\"" + (x + w / 2) + "\" y=\"" + (cy - 8) + "\">" + esc(title) + "</text>" +
+      "<text class=\"fl-big" + (o.warn ? " is-warn" : "") + "\" x=\"" + (x + w / 2) + "\" y=\"" + (cy + 14) + "\">" + esc(value) + "</text>" +
+      (detail ? "<text class=\"fl-detail\" x=\"" + (x + w / 2) + "\" y=\"" + (y + h + 16) + "\">" + esc(detail) + "</text>" : "") +
+    "</g>";
+  }
+
+  // Table block (needle map): title, then label left / value right; `on` marks the active lines.
+  function table(c, top, h, w, title, lines, on) {
+    const x = COL[c];
+    let out = "<g class=\"fl-block is-active\"><rect x=\"" + x + "\" y=\"" + top + "\" width=\"" + w + "\" height=\"" + h + "\" rx=\"4\"/>" +
+      "<text class=\"fl-title\" x=\"" + (x + w / 2) + "\" y=\"" + (top + 24) + "\">" + esc(title) + "</text>";
+    lines.forEach(function (line, i) {
+      const y = top + 52 + i * 25;
+      const cls = line[0] === on ? " is-on" : "";
+      out += "<text class=\"fl-cell" + cls + "\" x=\"" + (x + 12) + "\" y=\"" + y + "\">" + esc(line[1]) + "</text>" +
+        "<text class=\"fl-cell is-value" + cls + "\" x=\"" + (x + w - 12) + "\" y=\"" + y + "\">" + esc(line[2]) + "</text>";
     });
     return out + "</g>";
   }
 
-  // Wire through the points, arrow at the end, live value as label near `labelAt`.
-  function wire(points, label, opts) {
-    const o = opts || {};
+  // Orthogonal wire through the points (horizontal/vertical segments only), arrow at the end.
+  function wire(points, active) {
     const d = points.map(function (p, i) { return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ");
-    let out = "<path class=\"fl-wire" + (o.active ? " is-active" : "") + (o.dim ? " is-dim" : "") + "\" d=\"" + d + "\" marker-end=\"url(#flArrow" + (o.active ? "On" : "") + ")\"/>";
-    if (label) {
-      const at = o.labelAt || points[0];
-      out += "<text class=\"fl-value\" x=\"" + at[0] + "\" y=\"" + at[1] + "\">" + esc(label) + "</text>";
-    }
-    return out;
+    return "<path class=\"fl-wire" + (active ? " is-active" : "") + "\" d=\"" + d + "\" marker-end=\"url(#flArrow" + (active ? "On" : "") + ")\"/>";
+  }
+
+  function notes(x, y, lines) {
+    return lines.map(function (line, i) {
+      return "<text class=\"fl-note\" x=\"" + x + "\" y=\"" + (y + i * 20) + "\">" + esc(line) + "</text>";
+    }).join("");
   }
 
   function svg(content) {
-    return "<svg class=\"fl-svg\" viewBox=\"0 0 940 520\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\">" +
+    return "<svg class=\"fl-svg\" viewBox=\"0 44 940 432\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\">" +
       "<defs>" +
-        "<marker id=\"flArrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0 L10 5 L0 10 Z\" fill=\"#8a9399\"/></marker>" +
-        "<marker id=\"flArrowOn\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto\"><path d=\"M0 0 L10 5 L0 10 Z\" fill=\"#18caff\"/></marker>" +
+        "<marker id=\"flArrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto\"><path d=\"M0 0 L10 5 L0 10 Z\" fill=\"#6d757a\"/></marker>" +
+        "<marker id=\"flArrowOn\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto\"><path d=\"M0 0 L10 5 L0 10 Z\" fill=\"#18caff\"/></marker>" +
       "</defs>" + content + "</svg>";
   }
+
+  function right(c, w) { return COL[c] + (w || W); }
+  function mid(c, w) { return COL[c] + (w || W) / 2; }
 
   // ---------------------------------------------------------------- needle
   function needleMarkup(live) {
@@ -78,65 +111,68 @@
     const share = num(live, "cluster_power_percent_max");
     const cal = {
       r: num(live, "cluster_needle_reverse"), n: num(live, "cluster_needle_neutral"), o: num(live, "cluster_needle_offset"),
-      max: num(live, "cluster_needle_drive_max"), regen: num(live, "cluster_needle_regen_min")
+      max: num(live, "cluster_needle_drive_max"), regen: num(live, "cluster_needle_regen_min"),
+      lag: num(live, "cluster_needle_drive_offset")
     };
     const needle = num(live, "cluster_needle_position");
     const override = live.rpm_override === true;
     const out = num(live, "engine_speed_rpm");
-    // active branch of the needle map (same order as needleFromPercent)
     const branch = dir === null ? "" : dir > 0 ? "R" : dir === 0 ? "N"
       : share === null ? "" : Math.abs(share) < FW.deadband ? "0" : share > 0 ? "D" : "G";
-    const mapLines = [
-      { text: "dir > 0 (R):  " + fmt(cal.r, 0), cls: branch === "R" ? "fl-line is-on" : "fl-line" },
-      { text: "dir = 0 (N):  " + fmt(cal.n, 0), cls: branch === "N" ? "fl-line is-on" : "fl-line" },
-      { text: "|p| < 5 %:  " + fmt(cal.o, 0), cls: branch === "0" ? "fl-line is-on" : "fl-line" },
-      { text: "p > 0:  " + fmt(cal.o, 0) + " → " + fmt(cal.max, 0), cls: branch === "D" ? "fl-line is-on" : "fl-line" },
-      { text: "      + " + FW.lag + ", max " + fmt(cal.max, 0), cls: branch === "D" ? "fl-line is-on" : "fl-line" },
-      { text: "p < 0:  " + fmt(cal.o, 0) + " → " + fmt(cal.regen, 0), cls: branch === "G" ? "fl-line is-on" : "fl-line" }
-    ];
+    const shareText = share === null ? "--" : (share * 100).toFixed(0) + " %";
+    const top = ROW[0] - H / 2;
+    const shareY = (ROW[0] + ROW[1]) / 2;
+    const mapW = 170;
+    const mapH = 200;
+    const busX = right(2) + 17;          // vertical bus between columns 2 and 3
+    const dirX = COL[4] - 18;            // vertical lane of the direction wire
+    const outW = mapW;
     return svg(
-      // inputs
-      block(10, 30, 130, 52, "DC voltage", [{ text: fmt(udc, 1, "V"), cls: "fl-big" }], { port: true }) +
-      block(10, 110, 130, 52, "DC current", [{ text: fmt(idc, 1, "A"), cls: "fl-big" }], { port: true }) +
-      block(10, 330, 130, 52, "Direction", [{ text: dirRaw === null ? "--" : String(dirRaw), cls: "fl-big" }], { port: true }) +
-      block(10, 420, 130, 52, "Inverter data", [{ text: ok ? "fresh" : "missing", cls: ok ? "fl-big" : "fl-big is-warn" }], { port: true }) +
-      // data valid switch
-      block(180, 40, 120, 360, "Data valid?", [
-        { text: ok ? "yes: pass" : "no: 0 V, 0 A," }, { text: ok ? "U, I, dir" : "dir = 0 (N)" },
-        { text: "" }, { text: "0x500 / 0x504" }, { text: "younger than" }, { text: "500 ms" }
-      ], { active: !ok }) +
-      wire([[140, 56], [180, 56]], "", { active: true }) +
-      wire([[140, 136], [180, 136]], "", { active: true }) +
-      wire([[140, 356], [180, 356]], "", { active: true }) +
-      wire([[140, 446], [240, 446], [240, 400]], "", { active: true }) +
-      // product and reference
-      block(340, 30, 120, 70, "U × I", [{ text: fmt(pKw, 1, "kW"), cls: "fl-big" }]) +
-      wire([[300, 56], [340, 56]], fmt(u, 0, "V"), { labelAt: [320, 48], active: true }) +
-      wire([[300, 80], [340, 80]], fmt(i, 0, "A"), { labelAt: [320, 96], active: true }) +
-      block(340, 140, 120, 86, "Reference", [
-        { text: FW.refVoltage + " V ×" }, { text: (regen ? FW.regenCurrent + " A (regen)" : FW.driveCurrent + " A (drive)") },
-        { text: "= " + pRefKw.toFixed(1) + " kW", cls: "fl-line is-on" }
-      ]) +
-      // divide + saturation
-      block(500, 60, 120, 110, "P ÷ Pref", [{ text: "limit ±1" }, { text: "p = " + (share === null ? "--" : (share * 100).toFixed(0) + " %"), cls: "fl-big" }]) +
-      wire([[460, 66], [500, 90]], fmt(pKw, 1, "kW"), { labelAt: [476, 62], active: true }) +
-      wire([[460, 183], [480, 183], [480, 140], [500, 140]], fmt(pRefKw, 1, "kW"), { labelAt: [470, 200], active: true }) +
-      // needle map
-      block(650, 30, 160, 210, "Needle map", mapLines, { active: true }) +
-      wire([[620, 115], [650, 115]], share === null ? "--" : (share * 100).toFixed(0) + " %", { labelAt: [634, 108], active: true }) +
-      wire([[300, 356], [630, 356], [630, 200], [650, 200]], "dir " + (dir === null ? "--" : String(dir)), { labelAt: [470, 348], active: true }) +
-      // override switch
-      block(650, 300, 160, 90, "Override", [
-        { text: override ? "fixed value" : "auto: map", cls: override ? "fl-line is-warn" : "fl-line" },
-        { text: "Emulation > Engine speed" }
-      ], { active: override }) +
-      wire([[730, 240], [730, 300]], fmt(needle, 0), { labelAt: [770, 274], active: !override }) +
-      // output
-      block(840, 300, 90, 90, "0x280", [{ text: "engine speed" }, { text: fmt(out, 0, "rpm"), cls: "fl-big" }], { port: true }) +
-      wire([[810, 345], [840, 345]], "", { active: true }) +
-      "<text class=\"fl-note\" x=\"380\" y=\"440\">Needle = engine speed in 0x280 (0.25 rpm per bit).</text>" +
-      "<text class=\"fl-note\" x=\"380\" y=\"462\">Calibration: ECU > Needle (stored).</text>" +
-      "<text class=\"fl-note\" x=\"380\" y=\"484\">Blue = active path.</text>"
+      // column 0: inputs
+      block(0, ROW[0], "DC voltage", fmt(udc, 1, "V"), "", { port: true, active: true }) +
+      block(0, ROW[1], "DC current", fmt(idc, 1, "A"), "", { port: true, active: true }) +
+      block(0, ROW[2], "Direction", dirRaw === null ? "--" : String(dirRaw), "", { port: true, active: true }) +
+      block(0, ROW[3], "Inverter data", ok ? "fresh" : "missing", "", { port: true, active: true, warn: !ok }) +
+      // column 1: validity gate over all rows
+      "<g class=\"fl-block" + (ok ? "" : " is-active") + "\"><rect x=\"" + COL[1] + "\" y=\"" + top + "\" width=\"" + W + "\" height=\"" + (ROW[3] + H / 2 - top) + "\" rx=\"4\"/>" +
+        "<text class=\"fl-title\" x=\"" + mid(1) + "\" y=\"" + (ROW[0] - 8) + "\">Data valid?</text>" +
+        "<text class=\"fl-big" + (ok ? "" : " is-warn") + "\" x=\"" + mid(1) + "\" y=\"" + (ROW[0] + 14) + "\">" + (ok ? "yes" : "no") + "</text>" +
+        "<text class=\"fl-detail\" x=\"" + mid(1) + "\" y=\"" + (ROW[3] - 8) + "\">0x500 / 0x504 younger</text>" +
+        "<text class=\"fl-detail\" x=\"" + mid(1) + "\" y=\"" + (ROW[3] + 10) + "\">than 500 ms, else</text>" +
+        "<text class=\"fl-detail\" x=\"" + mid(1) + "\" y=\"" + (ROW[3] + 28) + "\">0 V, 0 A, N</text>" +
+      "</g>" +
+      [0, 1, 2, 3].map(function (r) { return wire([[right(0), ROW[r]], [COL[1], ROW[r]]], true); }).join("") +
+      // column 2: power and reference
+      block(2, ROW[0], "U × I", fmt(pKw, 1, "kW"), "", { active: true }) +
+      block(2, ROW[1], "Reference", pRefKw.toFixed(1) + " kW", FW.refVoltage + " V × " + (regen ? FW.regenCurrent + " A regen" : FW.driveCurrent + " A drive")) +
+      wire([[right(1), ROW[0]], [COL[2], ROW[0]]], true) +
+      wire([[right(1), ROW[1]], [COL[2], ROW[1]]], true) +
+      // column 3: share
+      block(3, shareY, "P ÷ Pref", shareText, "limited to ±100 %", { active: true }) +
+      wire([[right(2), ROW[0]], [busX, ROW[0]], [busX, shareY - 12], [COL[3], shareY - 12]], true) +
+      wire([[right(2), ROW[1]], [busX, ROW[1]], [busX, shareY + 12], [COL[3], shareY + 12]], true) +
+      // column 4: needle map, override, output
+      table(4, top, mapH, mapW, "Needle map", [
+        ["R", "R  (dir > 0)", fmt(cal.r, 0)],
+        ["N", "N  (dir = 0)", fmt(cal.n, 0)],
+        ["0", "|p| < 5 %", fmt(cal.o, 0)],
+        ["D", "p > 0", fmt(cal.o, 0) + " → " + fmt(cal.max, 0)],
+        ["D", "+ drive offset", fmt(cal.lag, 0)],
+        ["G", "p < 0", fmt(cal.o, 0) + " → " + fmt(cal.regen, 0)]
+      ], branch) +
+      wire([[right(3), shareY], [COL[4], shareY]], true) +
+      wire([[right(1), ROW[2]], [dirX, ROW[2]], [dirX, top + mapH - 24], [COL[4], top + mapH - 24]], true) +
+      block(4, ROW[2] + 34, "Override", override ? "fixed" : "auto", "", { w: outW, active: override, warn: override }) +
+      wire([[mid(4, outW), top + mapH], [mid(4, outW), ROW[2] + 34 - H / 2]], !override) +
+      block(4, ROW[3] + 22, "0x280 speed", fmt(out, 0, "rpm"), "", { w: outW, port: true, active: true }) +
+      wire([[mid(4, outW), ROW[2] + 34 + H / 2], [mid(4, outW), ROW[3] + 22 - H / 2]], true) +
+      notes(COL[2], ROW[2] + 44, [
+        "Map value: " + fmt(needle, 0),
+        "Needle = engine speed in 0x280 (0.25 rpm/bit).",
+        "Calibration: ECU > Needle (stored).",
+        "Override: ECU > Emulation.",
+        "Blue = active signal path."
+      ])
     );
   }
 
@@ -151,29 +187,38 @@
     const wraps = totalUl === null ? null : Math.floor(totalUl / FW.counterWrap);
     const raw = totalUl === null ? null : totalUl % FW.counterWrap;
     const perMinute = FW.fuelStepUl / FW.fuelSliceMs * 60000 / 1e6;
+    const y = ROW[0];
+    const y2 = ROW[1] + 20;
+    const y3 = ROW[3];
     return svg(
-      block(10, 60, 130, 70, "Clock", [{ text: "every " + FW.fuelSliceMs + " ms" }, { text: "(time, not power)", cls: "fl-line is-warn" }], { port: true }) +
-      block(180, 60, 120, 70, "Step", [{ text: "+ " + FW.fuelStepUl + " µl" }, { text: perMinute.toFixed(1) + " l/min" }]) +
-      wire([[140, 95], [180, 95]], "", { active: !full }) +
-      block(340, 40, 140, 110, "Total fuel", [{ text: "sum, stops at" }, { text: FW.fuelMaxL + " l", cls: full ? "fl-line is-warn" : "fl-line" }, { text: fmt(total, 3, "l"), cls: "fl-big" }], { active: !full }) +
-      wire([[300, 95], [340, 95]], "", { active: !full }) +
-      block(520, 40, 140, 110, "× 1 000 000", [{ text: "litre → µl" }, { text: totalUl === null ? "--" : String(totalUl), cls: "fl-big" }]) +
-      wire([[480, 95], [520, 95]], fmt(total, 3, "l"), { labelAt: [500, 87], active: true }) +
-      block(700, 30, 130, 80, "mod 32768", [{ text: "15-bit counter" }, { text: raw === null ? "--" : String(raw), cls: "fl-big" }]) +
-      block(520, 200, 140, 100, "÷ 32768", [{ text: "wraps: " + (wraps === null ? "--" : wraps) }, { text: "on change:" }, { text: "flag for " + FW.overflowCycles + " cycles" }]) +
-      wire([[660, 70], [700, 70]], "", { active: true }) +
-      wire([[590, 150], [590, 200]], "", { active: true }) +
-      block(700, 330, 130, 90, "Override", [{ text: override ? "fixed value" : "auto: counter", cls: override ? "fl-line is-warn" : "fl-line" }, { text: "Emulation > Fuel" }], { active: override }) +
-      wire([[765, 110], [765, 330]], raw === null ? "--" : String(raw) + " µl", { labelAt: [800, 300], active: !override }) +
-      block(860, 330, 70, 90, "0x4E0", [{ text: "counter" }, { text: fmt(counter, 0), cls: "fl-big" }], { port: true }) +
-      wire([[830, 375], [860, 375]], "", { active: true }) +
-      block(540, 360, 100, 80, "0x4E0", [{ text: "overflow" }, { text: flag ? "1" : "0", cls: flag ? "fl-big is-warn" : "fl-big" }], { port: true }) +
-      wire([[590, 300], [590, 360]], "", { active: flag }) +
-      "<text class=\"fl-note\" x=\"20\" y=\"200\">The fuel gauge counter does not depend on power:</text>" +
-      "<text class=\"fl-note\" x=\"20\" y=\"222\">the VCU adds " + FW.fuelStepUl + " µl every " + FW.fuelSliceMs + " ms from start-up</text>" +
-      "<text class=\"fl-note\" x=\"20\" y=\"244\">and stops at " + FW.fuelMaxL + " l (after about " + Math.round(FW.fuelMaxL / perMinute) + " min).</text>" +
-      "<text class=\"fl-note\" x=\"20\" y=\"266\">The cluster derives consumption from the counter steps.</text>" +
-      "<text class=\"fl-note\" x=\"20\" y=\"300\">Blue = active path.</text>"
+      // row 0: the chain
+      block(0, y, "Clock", "every " + FW.fuelSliceMs + " ms", "time, not power", { port: true, active: !full }) +
+      block(1, y, "Step", "+ " + FW.fuelStepUl + " µl", perMinute.toFixed(1) + " l/min", { active: !full }) +
+      block(2, y, "Total fuel", fmt(total, 3, "l"), "stops at " + FW.fuelMaxL + " l", { active: !full, warn: full }) +
+      block(3, y, "litre → µl", totalUl === null ? "--" : String(totalUl), "", { active: true }) +
+      block(4, y, "mod 32768", raw === null ? "--" : String(raw), "", { active: true }) +
+      [0, 1, 2, 3].map(function (c) { return wire([[right(c), y], [COL[c + 1], y]], c >= 2 || !full); }).join("") +
+      // column 3: overflow
+      block(3, y2, "÷ 32768", "wraps " + (wraps === null ? "--" : wraps), "flag " + FW.overflowCycles + " cycles on change", { active: flag }) +
+      wire([[mid(3), y + H / 2], [mid(3), y2 - H / 2]], true) +
+      block(3, y3, "0x4E0 overflow", flag ? "1" : "0", "", { port: true, active: flag, warn: flag }) +
+      wire([[mid(3), y2 + H / 2], [mid(3), y3 - H / 2]], flag) +
+      // column 4: override and counter
+      block(4, y2, "Override", override ? "fixed" : "auto", "", { active: override, warn: override }) +
+      wire([[mid(4), y + H / 2], [mid(4), y2 - H / 2]], !override) +
+      block(4, y3, "0x4E0 counter", fmt(counter, 0), "", { port: true, active: true }) +
+      wire([[mid(4), y2 + H / 2], [mid(4), y3 - H / 2]], true) +
+      notes(COL[0], ROW[1] + 4, [
+        "The counter does not depend on power:",
+        "the VCU adds " + FW.fuelStepUl + " µl every " + FW.fuelSliceMs + " ms",
+        "from start-up and stops at " + FW.fuelMaxL + " l",
+        "(after about " + Math.round(FW.fuelMaxL / perMinute) + " min).",
+        "The cluster derives consumption",
+        "from the counter steps.",
+        "",
+        "Override: ECU > Emulation.",
+        "Blue = active signal path."
+      ])
     );
   }
 

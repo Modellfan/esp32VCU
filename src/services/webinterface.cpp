@@ -177,12 +177,6 @@ String buildLiveJson(const FieldFilter &filter, const String &extra) {
     addStr("sta_ssid", VCU_WIFI_HOME_SSID);
     addBool("sta_connected", staConnected);
     addStr("sta_ip", staConnected ? ipToString(WiFi.localIP()) : String(""));
-    addBool("lte_connected", false);
-    addStr("lte_operator", "");
-    addUInt("lte_signal", 0);
-    // Values known to the touch UI: wifi, lte, offline ("offline" = no home network).
-    addStr("network_mode", staConnected ? "wifi" : "offline");
-    addStr("network_label", staConnected ? "WiFi" : "Offline");
 
     // Diagnostics (CAN manager settings and status: params::can in the signal table)
     addUInt("uptime_ms", now);
