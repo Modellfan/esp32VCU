@@ -209,7 +209,7 @@
     }
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index];
-      if (!Object.prototype.hasOwnProperty.call(live, key)) {
+      if (!Object.prototype.hasOwnProperty.call(live, key) || isStaleField(live, key)) {
         continue;
       }
       return !!live[key];
@@ -217,39 +217,19 @@
     return null;
   }
 
+  // Charging only from the Zombie-Slave (0x437 state CHARGE, 0x438 charge power). The former
+  // fallback "standstill and inverter current < -1 A" lit the plug at every stop: the SDU reads
+  // about -4 A at standstill (logs 2026-11-19).
   function resolveChargePowerKw(live) {
-    const explicitChargePower = firstNumericField(live, [
-      "charge_power_kw",
-      "ac_charge_power_kw",
-      "charger_power_kw"
-    ]);
-    if (explicitChargePower !== null && explicitChargePower > 0) {
-      return explicitChargePower;
+    const chargePowerW = firstNumericField(live, ["battery_charge_power_w"]);
+    if (chargePowerW !== null && chargePowerW > 0) {
+      return chargePowerW / 1000;
     }
-
-    const vehicleSpeed = firstNumericField(live, ["vehicle_speed_510"]);
-    const dcCurrent = firstNumericField(live, ["sdu_idc"]);
-    const dcVoltage = firstNumericField(live, ["sdu_udc"]);
-    if (
-      vehicleSpeed !== null &&
-      vehicleSpeed < 1 &&
-      dcCurrent !== null &&
-      dcVoltage !== null &&
-      dcCurrent < -1
-    ) {
-      return Math.abs((dcVoltage * dcCurrent) / 1000);
-    }
-
     return 0;
   }
 
   function resolveChargeActive(live) {
-    const explicitState = firstBooleanField(live, [
-      "charging",
-      "is_charging",
-      "charge_active",
-      "ac_charging_active"
-    ]);
+    const explicitState = firstBooleanField(live, ["battery_charging_active"]);
     if (explicitState !== null) {
       return explicitState;
     }
@@ -257,15 +237,7 @@
   }
 
   function resolveChargeCableConnected(live) {
-    const explicitState = firstBooleanField(live, [
-      "charge_cable_connected",
-      "charging_cable_connected",
-      "plug_connected",
-      "charge_plug_connected",
-      "charger_connected",
-      "evse_connected",
-      "ac_plug_connected"
-    ]);
+    const explicitState = firstBooleanField(live, ["battery_plug_connected"]);
     if (explicitState !== null) {
       return explicitState;
     }

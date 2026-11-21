@@ -23,3 +23,6 @@ src/secrets.h
 
 # pioarduino build artefact
 src/idf_component.yml.orig
+
+# Parsed CAN log cache (tools/can_log_tool.py)
+documentation/can_logs/.cache/
